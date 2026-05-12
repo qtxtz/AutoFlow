@@ -2,18 +2,25 @@ package com.auto.master.auto;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.*;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.*;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.os.SystemClock;
+import android.widget.TextView;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
+
+import com.auto.master.R;
 
 public class SelectionOverlayView extends FrameLayout {
 
@@ -67,7 +74,20 @@ public class SelectionOverlayView extends FrameLayout {
 
     // buttons
     private LinearLayout actionBar;
-    private Button btnOk, btnCancel, btnReset, btnFull, btnRefine;
+    private LinearLayout actionContentRow;
+    private LinearLayout actionButtonColumn;
+    private LinearLayout moreMenuPanel;
+    private FrameLayout previewCard;
+    private ImageView previewImage;
+    private TextView previewBadge;
+    private Button btnOk;
+    private Button btnMore;
+    private Button btnReset;
+    private Button btnFull;
+    private Button btnRefine;
+    private Button btnCancel;
+    private Bitmap previewBitmap;
+    private boolean moreMenuExpanded = false;
 
     // magnifier (Android 9+)
     private android.widget.Magnifier magnifier;
@@ -106,6 +126,7 @@ public class SelectionOverlayView extends FrameLayout {
         releaseFrozenBackground();
         this.frozenBackground = bmp;
         this.ownsFrozenBackground = ownsBitmap;
+        updateSelectionPreview();
         canvasView.invalidate();
     }
 
@@ -139,84 +160,112 @@ public class SelectionOverlayView extends FrameLayout {
         canvasView = new OverlayCanvasView(context);
         addView(canvasView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        // 按钮条
+        // 预览式工具条
         actionBar = new LinearLayout(context);
-        actionBar.setOrientation(LinearLayout.HORIZONTAL);
-        actionBar.setPadding(dp(8), dp(6), dp(8), dp(6));
-        actionBar.setBackground(makeRoundBg(0xCC222222, dp(10)));
+        actionBar.setOrientation(LinearLayout.VERTICAL);
+        actionBar.setPadding(dp(10), dp(10), dp(10), dp(10));
+        actionBar.setBackground(makeToolbarBackground());
         actionBar.setVisibility(GONE);
+        actionBar.setClickable(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            actionBar.setElevation(dp(8));
+        }
 
-        btnCancel = new Button(context);
-        btnCancel.setText("取消");
+        actionContentRow = new LinearLayout(context);
+        actionContentRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionContentRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        previewCard = new FrameLayout(context);
+        previewCard.setBackground(makePreviewCardBackground());
+        previewCard.setClipToOutline(true);
+
+        previewImage = new ImageView(context);
+        previewImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        previewImage.setBackgroundColor(0xFFEEF3F8);
+        previewCard.addView(previewImage, new FrameLayout.LayoutParams(dp(92), dp(64)));
+
+        previewBadge = new TextView(context);
+        previewBadge.setTextColor(Color.WHITE);
+        previewBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        previewBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
+        previewBadge.setBackground(makeRoundBg(0xB3121A24, dp(10)));
+        previewBadge.setText("未选区");
+        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+        );
+        badgeLp.gravity = Gravity.END | Gravity.BOTTOM;
+        badgeLp.rightMargin = dp(6);
+        badgeLp.bottomMargin = dp(6);
+        previewCard.addView(previewBadge, badgeLp);
+
+        actionButtonColumn = new LinearLayout(context);
+        actionButtonColumn.setOrientation(LinearLayout.VERTICAL);
+
+        btnOk = new Button(context);
+        btnOk.setText("确认");
+        btnMore = new Button(context);
+        btnMore.setText("更多");
         btnReset = new Button(context);
         btnReset.setText("重选");
         btnFull = new Button(context);
         btnFull.setText("全屏");
         btnRefine = new Button(context);
         btnRefine.setText("精选");
-        btnOk = new Button(context);
-        btnOk.setText("确定");
+        btnCancel = new Button(context);
+        btnCancel.setText("取消");
 
-        btnCancel.setMinHeight(0);
-        btnReset.setMinHeight(0);
-        btnFull.setMinHeight(0);
-        btnRefine.setMinHeight(0);
-        btnOk.setMinHeight(0);
-        btnCancel.setMinimumHeight(0);
-        btnReset.setMinimumHeight(0);
-        btnFull.setMinimumHeight(0);
-        btnRefine.setMinimumHeight(0);
-        btnOk.setMinimumHeight(0);
-        btnCancel.setPadding(dp(10), dp(6), dp(10), dp(6));
-        btnReset.setPadding(dp(10), dp(6), dp(10), dp(6));
-        btnFull.setPadding(dp(10), dp(6), dp(10), dp(6));
-        btnRefine.setPadding(dp(10), dp(6), dp(10), dp(6));
-        btnOk.setPadding(dp(10), dp(6), dp(10), dp(6));
+        styleCaptureActionButton(btnOk, true, R.drawable.ic_overlay_check);
+        styleCaptureActionButton(btnMore, false, R.drawable.ic_more_vert);
+        styleSecondaryMenuButton(btnReset);
+        styleSecondaryMenuButton(btnFull);
+        styleSecondaryMenuButton(btnRefine);
+        styleSecondaryMenuButton(btnCancel);
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        actionBar.addView(btnCancel, lp);
+        actionButtonColumn.addView(btnOk, new LinearLayout.LayoutParams(dp(96), dp(40)));
+        LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(dp(96), dp(36));
+        moreLp.topMargin = dp(8);
+        actionButtonColumn.addView(btnMore, moreLp);
 
-        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        lp2.leftMargin = dp(8);
-        actionBar.addView(btnReset, lp2);
+        actionContentRow.addView(previewCard, new LinearLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+        ));
+        LinearLayout.LayoutParams actionColumnLp = new LinearLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+        );
+        actionColumnLp.leftMargin = dp(10);
+        actionContentRow.addView(actionButtonColumn, actionColumnLp);
 
-        LinearLayout.LayoutParams lp3 = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        lp3.leftMargin = dp(8);
-        actionBar.addView(btnFull, lp3);
+        moreMenuPanel = new LinearLayout(context);
+        moreMenuPanel.setOrientation(LinearLayout.VERTICAL);
+        moreMenuPanel.setVisibility(GONE);
+        LinearLayout.LayoutParams menuLp = new LinearLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.WRAP_CONTENT
+        );
+        menuLp.topMargin = dp(10);
+        moreMenuPanel.addView(btnReset, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(36)));
+        LinearLayout.LayoutParams fullLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(36));
+        fullLp.topMargin = dp(6);
+        moreMenuPanel.addView(btnFull, fullLp);
+        LinearLayout.LayoutParams refineLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(36));
+        refineLp.topMargin = dp(6);
+        moreMenuPanel.addView(btnRefine, refineLp);
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(36));
+        cancelLp.topMargin = dp(6);
+        moreMenuPanel.addView(btnCancel, cancelLp);
+        btnRefine.setVisibility(refineEnabled ? VISIBLE : GONE);
 
-        LinearLayout.LayoutParams lp4 = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        lp4.leftMargin = dp(8);
-        actionBar.addView(btnRefine, lp4);
+        actionBar.addView(actionContentRow, new LinearLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+        ));
+        actionBar.addView(moreMenuPanel, menuLp);
 
-        LinearLayout.LayoutParams lp5 = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        lp5.leftMargin = dp(8);
-        actionBar.addView(btnOk, lp5);
-
-        btnRefine.setVisibility(GONE);
-
-        addView(actionBar, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
-
-        btnCancel.setOnClickListener(v -> {
-            hideMagnifier();
-            if (listener != null) listener.onCancel();
-            // 兼容旧接口：取消不回调 onSelected
-        });
-
-        btnReset.setOnClickListener(v -> {
-            hasSelection = false;
-            selection.setEmpty();
-            actionBar.setVisibility(GONE);
-            hideMagnifier();
-            canvasView.invalidate();
-        });
-
-        btnFull.setOnClickListener(v -> {
-            selection.set(0, 0, getWidth(), getHeight());
-            hasSelection = true;
-            positionActionBarNearSelection();
-            hideMagnifier();
-            canvasView.invalidate();
-        });
+        LayoutParams actionLp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        addView(actionBar, actionLp);
 
         btnOk.setOnClickListener(v -> {
             if (!hasSelection) return;
@@ -228,16 +277,11 @@ public class SelectionOverlayView extends FrameLayout {
             if (listener != null) listener.onConfirm(normalized, null);
             if (oldListener != null) oldListener.onSelected(normalized, null);
         });
-
-        btnRefine.setOnClickListener(v -> {
-            if (!hasSelection || !refineEnabled || refineRequestedListener == null) {
-                return;
-            }
-            hideMagnifier();
-            Rect normalized = new Rect(selection);
-            normalize(normalized);
-            refineRequestedListener.onRefineRequested(normalized);
-        });
+        btnMore.setOnClickListener(v -> toggleMoreMenu());
+        btnReset.setOnClickListener(v -> resetSelection());
+        btnFull.setOnClickListener(v -> selectFullScreen());
+        btnRefine.setOnClickListener(v -> requestRefine());
+        btnCancel.setOnClickListener(v -> cancelSelection());
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             magnifier = new android.widget.Magnifier(canvasView);
@@ -268,6 +312,7 @@ public class SelectionOverlayView extends FrameLayout {
         if (ownsFrozenBackground && frozenBackground != null && !frozenBackground.isRecycled()) {
             frozenBackground.recycle();
         }
+        releasePreviewBitmap();
         frozenBackground = null;
         ownsFrozenBackground = false;
     }
@@ -285,6 +330,7 @@ public class SelectionOverlayView extends FrameLayout {
         private void hideActionBarIfNeeded() {
             if (!actionBarHidden) {
                 actionBar.setVisibility(GONE);
+                hideMoreMenu();
                 actionBarHidden = true;
             }
         }
@@ -477,12 +523,15 @@ public class SelectionOverlayView extends FrameLayout {
                         if (selection.width() < minSize || selection.height() < minSize) {
                             hasSelection = false;
                             actionBar.setVisibility(GONE);
+                            hideMoreMenu();
                             actionBarHidden = true;
+                            releasePreviewBitmap();
                             postInvalidateOnAnimation();
                             mode = Mode.NONE;
                             return true;
                         }
 
+                        updateSelectionPreview();
                         positionActionBarNearSelection();
                         actionBar.setVisibility(VISIBLE);
                         actionBarHidden = false;
@@ -654,13 +703,157 @@ public class SelectionOverlayView extends FrameLayout {
             y = selection.top + margin;
         }
 
+        if (y + barH > getHeight() - margin) {
+            y = Math.max(margin, getHeight() - margin - barH);
+        }
         if (x < margin) x = margin;
         if (x + barW > getWidth() - margin) x = getWidth() - margin - barW;
+        if (x < margin) x = margin;
 
         LayoutParams lp = (LayoutParams) actionBar.getLayoutParams();
         lp.leftMargin = x;
         lp.topMargin = y;
+        lp.gravity = Gravity.TOP | Gravity.START;
         actionBar.setLayoutParams(lp);
+    }
+
+    private void styleCaptureActionButton(Button button, boolean primary, int iconRes) {
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 13 : 12);
+        button.setTextColor(primary ? Color.WHITE : 0xFFF1F5F9);
+        button.setBackgroundTintList(ColorStateList.valueOf(primary ? 0xFF2563EB : 0xFF263445));
+        button.setBackground(makeRoundBg(primary ? 0xFF2563EB : 0xFF263445, dp(12)));
+        button.setPadding(dp(12), 0, dp(12), 0);
+        Drawable icon = ContextCompat.getDrawable(getContext(), iconRes);
+        if (icon != null) {
+            icon = icon.mutate();
+            icon.setTint(primary ? Color.WHITE : 0xFFF1F5F9);
+            icon.setBounds(0, 0, dp(16), dp(16));
+            button.setCompoundDrawablesRelative(icon, null, null, null);
+            button.setCompoundDrawablePadding(dp(6));
+        }
+    }
+
+    private void styleSecondaryMenuButton(Button button) {
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setAllCaps(false);
+        button.setGravity(Gravity.CENTER_VERTICAL);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        button.setTextColor(0xFFF8FAFC);
+        button.setBackground(makeRoundBg(0xFF223041, dp(10)));
+        button.setPadding(dp(12), 0, dp(12), 0);
+    }
+
+    private void toggleMoreMenu() {
+        moreMenuExpanded = !moreMenuExpanded;
+        moreMenuPanel.setVisibility(moreMenuExpanded ? VISIBLE : GONE);
+        btnMore.setText(moreMenuExpanded ? "收起" : "更多");
+        positionActionBarNearSelection();
+    }
+
+    private void hideMoreMenu() {
+        moreMenuExpanded = false;
+        if (moreMenuPanel != null) {
+            moreMenuPanel.setVisibility(GONE);
+        }
+        if (btnMore != null) {
+            btnMore.setText("更多");
+        }
+    }
+
+    private void resetSelection() {
+        hasSelection = false;
+        selection.setEmpty();
+        actionBar.setVisibility(GONE);
+        hideMoreMenu();
+        hideMagnifier();
+        releasePreviewBitmap();
+        canvasView.invalidate();
+    }
+
+    private void selectFullScreen() {
+        selection.set(0, 0, getWidth(), getHeight());
+        hasSelection = true;
+        hideMoreMenu();
+        updateSelectionPreview();
+        positionActionBarNearSelection();
+        actionBar.setVisibility(VISIBLE);
+        hideMagnifier();
+        canvasView.invalidate();
+    }
+
+    private void requestRefine() {
+        if (!hasSelection || !refineEnabled || refineRequestedListener == null) {
+            return;
+        }
+        hideMoreMenu();
+        hideMagnifier();
+        Rect normalized = new Rect(selection);
+        normalize(normalized);
+        refineRequestedListener.onRefineRequested(normalized);
+    }
+
+    private void cancelSelection() {
+        hideMoreMenu();
+        hideMagnifier();
+        if (listener != null) {
+            listener.onCancel();
+        }
+    }
+
+    private void updateSelectionPreview() {
+        if (previewImage == null || previewBadge == null) {
+            return;
+        }
+        if (!hasSelection || selection.isEmpty() || selection.width() <= 0 || selection.height() <= 0) {
+            releasePreviewBitmap();
+            previewImage.setImageDrawable(null);
+            previewImage.setBackgroundColor(0xFFEEF3F8);
+            previewBadge.setText("未选区");
+            return;
+        }
+
+        releasePreviewBitmap();
+        previewBitmap = captureAndCrop(new Rect(selection));
+        if (previewBitmap != null) {
+            previewImage.setImageBitmap(previewBitmap);
+            previewImage.setBackgroundColor(Color.TRANSPARENT);
+        } else {
+            previewImage.setImageDrawable(null);
+            previewImage.setBackgroundColor(0xFFEEF3F8);
+        }
+        previewBadge.setText(selection.width() + " × " + selection.height());
+    }
+
+    private void releasePreviewBitmap() {
+        if (previewBitmap != null && !previewBitmap.isRecycled()) {
+            previewBitmap.recycle();
+        }
+        previewBitmap = null;
+    }
+
+    private Drawable makeToolbarBackground() {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(0xE916202C);
+        background.setCornerRadius(dp(16));
+        background.setStroke(dp(1), 0x4DFFFFFF);
+        return background;
+    }
+
+    private Drawable makePreviewCardBackground() {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(0xFFFFFFFF);
+        background.setCornerRadius(dp(14));
+        background.setStroke(dp(1), 0x1F0F172A);
+        return background;
     }
 
     // ===================== capture & crop =====================
@@ -671,11 +864,14 @@ public class SelectionOverlayView extends FrameLayout {
             return null; // 或者返回 null
         }
 
-        // selRectInOverlay is in view coordinates.  The overlay covers the full physical screen
-        // (no fitsSystemWindows padding), so view coords == screen coords.
-        // frozenBackground is captured at CAPTURE_SCALE, so we must map view→screen→bitmap.
-        // That conversion is done by saveTemplateFromRect; here we just pass-through the rect.
-        Rect crop = new Rect(selRectInOverlay);
+        float scaleX = getWidth() > 0 ? (float) frozenBackground.getWidth() / (float) getWidth() : 1f;
+        float scaleY = getHeight() > 0 ? (float) frozenBackground.getHeight() / (float) getHeight() : 1f;
+        Rect crop = new Rect(
+                Math.round(selRectInOverlay.left * scaleX),
+                Math.round(selRectInOverlay.top * scaleY),
+                Math.round(selRectInOverlay.right * scaleX),
+                Math.round(selRectInOverlay.bottom * scaleY)
+        );
 
         crop.left   = clamp(crop.left,   0, frozenBackground.getWidth());
         crop.right  = clamp(crop.right,  0, frozenBackground.getWidth());
