@@ -91,6 +91,11 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
         } else {
             projectName = "fallback";
         }
+        String targetTaskName = "";
+        Object targetTask = inputMap.get(MetaOperation.TASK);
+        if (targetTask instanceof String) {
+            targetTaskName = ((String) targetTask).trim();
+        }
 
         // 优先用 Service 自身 Context，避免依赖 Activity（Activity 可能为 null）
         final Context appCtx = svc.getApplicationContext();
@@ -103,18 +108,21 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
         }
 
         //
-        for (File task : taskDirs) {
-            if (task == null || !task.isDirectory()) {
+        for (File taskDir : taskDirs) {
+            if (taskDir == null || !taskDir.isDirectory()) {
                 continue;
             }
-            String taskName = task.getName();
-            long snapshotToken = computeTaskSnapshot(task);
+            String taskName = taskDir.getName();
+            if (!targetTaskName.isEmpty() && !targetTaskName.equals(taskName)) {
+                continue;
+            }
+            long snapshotToken = computeTaskSnapshot(taskDir);
             if (!Template.shouldReloadTaskCache(projectName, taskName, snapshotToken)) {
                 continue;
             }
             //这里写一个
-            File imgDir = new File(task, "img");
-            File gestureDir = new File(task, "gesture");
+            File imgDir = new File(taskDir, "img");
+            File gestureDir = new File(taskDir, "gesture");
             File[] gestureFiles = gestureDir.listFiles();
             Map<String, GestureOverlayView.GestureNode> taskGestureNodes = new HashMap<>();
             if (gestureFiles != null) {

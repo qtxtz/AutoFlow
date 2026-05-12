@@ -11,10 +11,12 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
@@ -23,15 +25,29 @@ import android.view.View;
 import android.view.ViewPropertyAnimator;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import androidx.annotation.NonNull;
 import androidx.core.util.Consumer;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class AutoAccessibilityService extends AccessibilityService {
     private static final long CLICK_GESTURE_DURATION_MS = 16L;
     private static final long CLICK_RETRY_DELAY_MS = 500L;
+    private static final long MEDIA_PROJECTION_AUTO_CONFIRM_WINDOW_MS = 5500L;
+    private static final long MEDIA_PROJECTION_AUTO_CONFIRM_SCAN_MS = 250L;
+    private static final String[] MEDIA_PROJECTION_SCOPE_TEXTS = {
+            "整个屏幕", "全屏幕", "整个", "Entire screen", "Full screen"
+    };
+    private static final String[] MEDIA_PROJECTION_CONFIRM_TEXTS = {
+            "立即开始", "立即", "允许", "开始", "开始录制", "现在开始", "Start now", "Start", "Allow"
+    };
+    private static final String[] MEDIA_PROJECTION_NEGATIVE_TEXTS = {
+            "取消", "禁止", "拒绝", "Cancel", "Deny"
+    };
 
     private static final String TAG = "AutoAccService";
     private static volatile AutoAccessibilityService sInstance;
@@ -132,6 +148,213 @@ public class AutoAccessibilityService extends AccessibilityService {
 
     // 在 onServiceConnected 或需要时初始化 handler（如果你还没）
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private long mediaProjectionAutoConfirmUntilMs = 0L;
+    private boolean mediaProjectionAutoConfirmFinished = false;
+    private final Runnable mediaProjectionAutoConfirmScanRunnable = new Runnable() {
+        @Override
+        public void run() {
+            scanMediaProjectionPermissionDialog();
+        }
+    };
+
+    public static boolean armMediaProjectionAutoConfirm() {
+        AutoAccessibilityService service = get();
+        if (service == null) {
+            Log.w(TAG, "无障碍未连接，无法自动确认录屏授权");
+            return false;
+        }
+        service.startMediaProjectionAutoConfirm();
+        return true;
+    }
+
+    private void startMediaProjectionAutoConfirm() {
+        mainHandler.post(() -> {
+            mediaProjectionAutoConfirmUntilMs = SystemClock.uptimeMillis() + MEDIA_PROJECTION_AUTO_CONFIRM_WINDOW_MS;
+            mediaProjectionAutoConfirmFinished = false;
+            mainHandler.removeCallbacks(mediaProjectionAutoConfirmScanRunnable);
+            mainHandler.postDelayed(mediaProjectionAutoConfirmScanRunnable, MEDIA_PROJECTION_AUTO_CONFIRM_SCAN_MS);
+            Log.d(TAG, "armed media projection auto confirm");
+        });
+    }
+
+    private void scanMediaProjectionPermissionDialog() {
+        if (mediaProjectionAutoConfirmFinished || SystemClock.uptimeMillis() > mediaProjectionAutoConfirmUntilMs) {
+            mediaProjectionAutoConfirmFinished = true;
+            return;
+        }
+        try {
+            List<AccessibilityNodeInfo> roots = getCurrentWindowRoots();
+            AccessibilityNodeInfo scopeNode = findFirstMatchingNode(roots, MEDIA_PROJECTION_SCOPE_TEXTS, false);
+            if (scopeNode != null && clickAccessibilityNode(scopeNode)) {
+                Log.d(TAG, "clicked media projection scope option");
+                recycleNodes(roots);
+                mainHandler.postDelayed(mediaProjectionAutoConfirmScanRunnable, MEDIA_PROJECTION_AUTO_CONFIRM_SCAN_MS);
+                return;
+            }
+
+            AccessibilityNodeInfo confirmNode = findFirstMatchingNode(roots, MEDIA_PROJECTION_CONFIRM_TEXTS, true);
+            if (confirmNode != null && clickAccessibilityNode(confirmNode)) {
+                mediaProjectionAutoConfirmFinished = true;
+                Log.d(TAG, "clicked media projection confirm button");
+                recycleNodes(roots);
+                return;
+            }
+            recycleNodes(roots);
+        } catch (Throwable t) {
+            Log.w(TAG, "scan media projection dialog failed", t);
+        }
+        mainHandler.postDelayed(mediaProjectionAutoConfirmScanRunnable, MEDIA_PROJECTION_AUTO_CONFIRM_SCAN_MS);
+    }
+
+    private List<AccessibilityNodeInfo> getCurrentWindowRoots() {
+        List<AccessibilityNodeInfo> roots = new ArrayList<>();
+        try {
+            List<AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null) {
+                for (int i = windows.size() - 1; i >= 0; i--) {
+                    AccessibilityWindowInfo window = windows.get(i);
+                    if (window == null) {
+                        continue;
+                    }
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root != null) {
+                        roots.add(root);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        AccessibilityNodeInfo activeRoot = getRootInActiveWindow();
+        if (activeRoot != null) {
+            roots.add(activeRoot);
+        }
+        return roots;
+    }
+
+    private AccessibilityNodeInfo findFirstMatchingNode(List<AccessibilityNodeInfo> roots,
+                                                       String[] targets,
+                                                       boolean requireActionable) {
+        if (roots == null || targets == null) {
+            return null;
+        }
+        for (AccessibilityNodeInfo root : roots) {
+            AccessibilityNodeInfo found = findFirstMatchingNode(root, targets, requireActionable);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private AccessibilityNodeInfo findFirstMatchingNode(AccessibilityNodeInfo node,
+                                                       String[] targets,
+                                                       boolean requireActionable) {
+        if (node == null) {
+            return null;
+        }
+        if (matchesAny(node, targets)
+                && !matchesAny(node, MEDIA_PROJECTION_NEGATIVE_TEXTS)
+                && (!requireActionable || findClickableNode(node) != null)) {
+            return AccessibilityNodeInfo.obtain(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = null;
+            try {
+                child = node.getChild(i);
+                AccessibilityNodeInfo found = findFirstMatchingNode(child, targets, requireActionable);
+                if (found != null) {
+                    return found;
+                }
+            } finally {
+                if (child != null) {
+                    child.recycle();
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesAny(AccessibilityNodeInfo node, String[] targets) {
+        if (node == null || targets == null) {
+            return false;
+        }
+        CharSequence text = node.getText();
+        CharSequence desc = node.getContentDescription();
+        return textMatches(text, targets) || textMatches(desc, targets);
+    }
+
+    private boolean textMatches(CharSequence text, String[] targets) {
+        if (text == null) {
+            return false;
+        }
+        String value = text.toString().trim();
+        if (value.isEmpty()) {
+            return false;
+        }
+        for (String target : targets) {
+            if (target != null && !target.isEmpty() && value.contains(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean clickAccessibilityNode(AccessibilityNodeInfo node) {
+        if (node == null) {
+            return false;
+        }
+        AccessibilityNodeInfo clickable = findClickableNode(node);
+        if (clickable != null) {
+            try {
+                if (clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    clickable.recycle();
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            clickable.recycle();
+        }
+        Rect bounds = new Rect();
+        node.getBoundsInScreen(bounds);
+        return clickPoint(bounds.centerX(), bounds.centerY());
+    }
+
+    private AccessibilityNodeInfo findClickableNode(AccessibilityNodeInfo node) {
+        AccessibilityNodeInfo cursor = node == null ? null : AccessibilityNodeInfo.obtain(node);
+        while (cursor != null) {
+            if (cursor.isClickable() && cursor.isEnabled() && cursor.isVisibleToUser()) {
+                return cursor;
+            }
+            AccessibilityNodeInfo parent = cursor.getParent();
+            cursor.recycle();
+            cursor = parent;
+        }
+        return null;
+    }
+
+    private boolean clickPoint(float x, float y) {
+        Path path = new Path();
+        path.moveTo(x, y);
+        path.lineTo(x, y);
+        GestureDescription gesture = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0L, 120L))
+                .build();
+        return dispatchGesture(gesture, null, null);
+    }
+
+    private void recycleNodes(List<AccessibilityNodeInfo> nodes) {
+        if (nodes == null) {
+            return;
+        }
+        for (AccessibilityNodeInfo node : nodes) {
+            if (node != null) {
+                try {
+                    node.recycle();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
 
 
 
@@ -622,7 +845,11 @@ public class AutoAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // 这里不强依赖事件；你后续可以在这里做窗口变化监听、节点缓存等
+        if (!mediaProjectionAutoConfirmFinished
+                && SystemClock.uptimeMillis() <= mediaProjectionAutoConfirmUntilMs) {
+            mainHandler.removeCallbacks(mediaProjectionAutoConfirmScanRunnable);
+            mainHandler.postDelayed(mediaProjectionAutoConfirmScanRunnable, 80L);
+        }
     }
 
     @Override
@@ -640,6 +867,7 @@ public class AutoAccessibilityService extends AccessibilityService {
     public void onDestroy() {
         super.onDestroy();
         mainHandler.removeCallbacks(hideRectFeedbackRunnable);
+        mainHandler.removeCallbacks(mediaProjectionAutoConfirmScanRunnable);
         if (rectFeedbackView != null) {
             try {
                 WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);

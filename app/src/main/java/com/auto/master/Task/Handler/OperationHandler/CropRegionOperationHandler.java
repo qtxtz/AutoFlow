@@ -68,6 +68,8 @@ import java.util.Map;
 public class CropRegionOperationHandler extends OperationHandler {
 
     private static final String TAG = "CropRegionOpHandler";
+    private static final long TEMPLATE_CAPTURE_TIMEOUT_MS = 2200L;
+    private static final long TEMPLATE_CAPTURE_INTERVAL_MS = 80L;
     public static Integer inited = 0;
     // 静态复用，Gson 线程安全，避免 saveManifestToFile/saveImg 每次 new 触发反射初始化
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -706,22 +708,29 @@ public class CropRegionOperationHandler extends OperationHandler {
         String targetScaleDir = targetScaleDirObj instanceof String
                 ? (String) targetScaleDirObj : null;
 
-        final Activity a = ActivityHolder.getTopActivity();
-
         AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.get();
         if (autoAccessibilityService==null){
             return false;
         }
+        final Activity a = ActivityHolder.getTopActivity();
+        final Context captureContext = a != null ? a : autoAccessibilityService;
 //        int currentPhysicalRotation = AutoAccessibilityService.getCurrentPhysicalRotation(autoAccessibilityService);
 
         /**
          * 然后这里需要注意的是 如果有 bbox 直接给它裁剪一下
          */
         Bitmap cropped = null;
-        if (a == null) return false;
 
-        Bitmap full = ScreenCapture.captureLatestBitmap(null, 480L, 80L);
+        Bitmap full = ScreenCapture.captureLatestBitmap(
+                null,
+                TEMPLATE_CAPTURE_TIMEOUT_MS,
+                TEMPLATE_CAPTURE_INTERVAL_MS
+        );
         if (full == null || full.isRecycled()) {
+            Log.w(TAG, "模板制作失败：未能获取有效截图，captureRunning="
+                    + ScreenCaptureManager.getInstance().isRunning());
+            toastOnMain("截图失败：录屏会话可能已失效，请重新授权后再试");
+            notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
             return false;
         }
         List<Integer> stdBbox = new ArrayList<>();
@@ -756,7 +765,7 @@ public class CropRegionOperationHandler extends OperationHandler {
         } else if (responseType==null||responseType==2) {
             //这里比上一种多了一步操作 -->> 保存图片
 //            保存图片
-            saveImg(cropped,a,projectName,taskName,saveFileName,stdBbox);
+            saveImg(cropped,captureContext,projectName,taskName,saveFileName,stdBbox);
 
             Map<String, Object> res = new HashMap<>();
             res.put(MetaOperation.BBOX, stdBbox.isEmpty() ? null : stdBbox);
@@ -860,8 +869,10 @@ public class CropRegionOperationHandler extends OperationHandler {
                     recycleBitmap(finalFull);
                     Log.e(TAG, "addView failed", t);
                     toastOnMain("创建选区失败：" + t.getMessage());
+                    notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
                 }
             });
+            return true;
         }
 
 

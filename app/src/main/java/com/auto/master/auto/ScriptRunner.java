@@ -374,12 +374,20 @@ public final class ScriptRunner {
                         loadImgToMatOperation.setResponseType(1);
                         HashMap<String, Object> tmpInputMap = new HashMap<>();
                         String projectName = "";
+                        String entryTaskName = "";
                         if (scriptExecuteContext.sharedContext != null
                                 && scriptExecuteContext.sharedContext.anchorProject != null
                                 && scriptExecuteContext.sharedContext.anchorProject.getProjectName() != null) {
                             projectName = scriptExecuteContext.sharedContext.anchorProject.getProjectName();
                         }
+                        MetaOperation entryOperation = scriptExecuteContext.tobeHandledOperation;
+                        if (entryOperation != null && entryOperation.taskId != null) {
+                            entryTaskName = entryOperation.taskId;
+                        }
                         tmpInputMap.put(MetaOperation.PROJECT, projectName);
+                        if (!entryTaskName.isEmpty()) {
+                            tmpInputMap.put(MetaOperation.TASK, entryTaskName);
+                        }
                         loadImgToMatOperation.setInputMap(tmpInputMap);
                         new LoadImgToMatOperationHandler().handle(loadImgToMatOperation, new OperationContext());
 //                    *************************************************

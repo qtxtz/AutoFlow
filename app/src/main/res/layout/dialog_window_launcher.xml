@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="实验性窗口启动器"
+        android:textColor="#111827"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_window_launch_selected_app"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@android:drawable/dialog_holo_light_frame"
+        android:drawablePadding="10dp"
+        android:gravity="center_vertical"
+        android:minHeight="56dp"
+        android:padding="14dp"
+        android:text="未选择应用"
+        android:textColor="#111827"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_pick_app"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="#E5E7EB"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:text="选择目标应用"
+        android:textColor="#111827"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_window_launch_support_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:lineSpacingExtra="2dp"
+        android:textColor="#4B5563"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_capabilities"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="#F3F4F6"
+        android:gravity="center"
+        android:minHeight="42dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:text="刷新能力检测"
+        android:textColor="#374151"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tv_window_launch_capability_report"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@android:drawable/dialog_holo_light_frame"
+        android:lineSpacingExtra="2dp"
+        android:padding="12dp"
+        android:textColor="#4B5563"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_normal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:backgroundTint="#111827"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:text="普通启动"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_split"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="#D1FAE5"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:text="尝试分屏相邻启动"
+        android:textColor="#065F46"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_freeform"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="#DBEAFE"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:text="尝试 0.4 倍实验小窗"
+        android:textColor="#1D4ED8"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_desktop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="#FDE68A"
+        android:gravity="center"
+        android:minHeight="48dp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:text="尝试电脑模式窗体启动"
+        android:textColor="#92400E"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/btn_window_launch_dev_options"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:minHeight="40dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:text="打开开发者选项"
+        android:textColor="#6B7280"
+        android:textStyle="bold" />
+
+</LinearLayout>

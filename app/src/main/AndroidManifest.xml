@@ -64,6 +64,15 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTask" />
 
+        <activity
+            android:name=".capture.ScreenCapturePermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:taskAffinity="${applicationId}.capture_permission"
+            android:theme="@style/Theme.ScreenCapture.Permission" />
+
         <!-- 新页面：网格视图页 -->
         <activity
             android:name=".GridPageActivity"
