@@ -6,8 +6,6 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.media.projection.MediaProjectionManager;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -17,126 +15,38 @@ import com.auto.master.utils.OpenCVHelper;
 
 import org.opencv.core.Mat;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public final class ScreenCapture {
 
     private static final String TAG = "ScreenCapture";
     private static final long DEFAULT_WAIT_TIMEOUT_MS = 3000L;
     private static final long DEFAULT_WAIT_INTERVAL_MS = 80L;
-    private static final long AUTO_PERMISSION_WAIT_TIMEOUT_MS = 9000L;
-    private static final long POST_PERMISSION_CAPTURE_DELAY_MS = 260L;
-    private static final long POST_SESSION_START_SETTLE_MS = 140L;
 
     // 静态保存授权（保持兼容）
     private static volatile int sResultCode = 0;
     private static volatile Intent sResultData = null;
-    private static volatile long sLastProjectionGrantUptimeMs = 0L;
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    private static final Object PERMISSION_LOCK = new Object();
-    private static final List<ProjectionPermissionCallback> PENDING_PERMISSION_CALLBACKS = new ArrayList<>();
-    private static boolean permissionRequestInFlight = false;
-
-    public interface ProjectionPermissionCallback {
-        void onResult(boolean granted);
-    }
 
     public static Intent createProjectionIntent(Activity a) {
-        return createProjectionIntent((Context) a);
-    }
-
-    public static Intent createProjectionIntent(Context context) {
-        MediaProjectionManager mpm = (MediaProjectionManager) context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        MediaProjectionManager mpm = (MediaProjectionManager) a.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         return mpm.createScreenCaptureIntent();
     }
 
     public static void saveProjectionPermission(int resultCode, Intent data) {
         sResultCode = resultCode;
         sResultData = data;
-        sLastProjectionGrantUptimeMs = SystemClock.uptimeMillis();
     }
 
     public static boolean hasProjectionPermission() {
         return sResultCode != 0 && sResultData != null;
     }
 
-    public static void requestProjectionPermission(Context context,
-                                                   boolean autoConfirm,
-                                                   ProjectionPermissionCallback callback) {
-        if (context == null) {
-            if (callback != null) {
-                MAIN.post(() -> callback.onResult(false));
-            }
-            return;
-        }
-        if (hasProjectionPermission()) {
-            if (callback != null) {
-                MAIN.post(() -> callback.onResult(true));
-            }
-            return;
-        }
-
-        boolean shouldStartActivity;
-        synchronized (PERMISSION_LOCK) {
-            if (callback != null) {
-                PENDING_PERMISSION_CALLBACKS.add(callback);
-            }
-            shouldStartActivity = !permissionRequestInFlight;
-            permissionRequestInFlight = true;
-        }
-        if (!shouldStartActivity) {
-            return;
-        }
-
-        Intent intent = new Intent(context.getApplicationContext(), ScreenCapturePermissionActivity.class);
-        intent.putExtra(ScreenCapturePermissionActivity.EXTRA_AUTO_CONFIRM, autoConfirm);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-                | Intent.FLAG_ACTIVITY_NO_ANIMATION
-                | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
-        context.getApplicationContext().startActivity(intent);
-    }
-
-    static void deliverProjectionPermissionResult(boolean granted) {
-        List<ProjectionPermissionCallback> callbacks;
-        synchronized (PERMISSION_LOCK) {
-            permissionRequestInFlight = false;
-            callbacks = new ArrayList<>(PENDING_PERMISSION_CALLBACKS);
-            PENDING_PERMISSION_CALLBACKS.clear();
-        }
-        for (ProjectionPermissionCallback callback : callbacks) {
-            if (callback != null) {
-                MAIN.post(() -> callback.onResult(granted));
-            }
-        }
-    }
-
-    private static void waitForPostPermissionCooldown() {
-        long remainingMs = (sLastProjectionGrantUptimeMs + POST_PERMISSION_CAPTURE_DELAY_MS)
-                - SystemClock.uptimeMillis();
-        if (remainingMs > 0L) {
-            SystemClock.sleep(remainingMs);
-        }
-    }
-
     private static boolean ensureCaptureSession(Activity activity) {
         if (!hasProjectionPermission()) {
-            Context context = activity != null ? activity : ActivityHolder.getTopActivity();
-            if (!requestProjectionPermissionBlocking(context, true, AUTO_PERMISSION_WAIT_TIMEOUT_MS)) {
-                Log.e(TAG, "缺少录屏权限");
-                return false;
-            }
+            Log.e(TAG, "缺少录屏权限");
+            return false;
         }
-        waitForPostPermissionCooldown();
         ScreenCaptureManager manager = ScreenCaptureManager.getInstance();
         if (activity != null) {
             manager.init(activity);
-        } else {
-            Activity topActivity = ActivityHolder.getTopActivity();
-            if (topActivity != null) {
-                manager.init(topActivity);
-            }
         }
         if (manager.isRunning()) {
             return true;
@@ -148,41 +58,8 @@ public final class ScreenCapture {
         boolean started = manager.startCapture(sResultCode, sResultData);
         if (!started) {
             Log.e(TAG, "启动录屏失败");
-        } else {
-            SystemClock.sleep(POST_SESSION_START_SETTLE_MS);
         }
         return started;
-    }
-
-    public static boolean requestProjectionPermissionBlocking(Context context,
-                                                              boolean autoConfirm,
-                                                              long timeoutMs) {
-        if (hasProjectionPermission()) {
-            return true;
-        }
-        final Object lock = new Object();
-        final boolean[] done = {false};
-        final boolean[] granted = {false};
-        requestProjectionPermission(context, autoConfirm, result -> {
-            synchronized (lock) {
-                granted[0] = result;
-                done[0] = true;
-                lock.notifyAll();
-            }
-        });
-
-        long deadline = SystemClock.uptimeMillis() + Math.max(1000L, timeoutMs);
-        synchronized (lock) {
-            while (!done[0] && SystemClock.uptimeMillis() < deadline) {
-                try {
-                    lock.wait(Math.max(50L, deadline - SystemClock.uptimeMillis()));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
-        return granted[0] || hasProjectionPermission();
     }
 
     /**

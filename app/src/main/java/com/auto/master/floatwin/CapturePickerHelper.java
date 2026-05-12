@@ -35,7 +35,6 @@ public class CapturePickerHelper {
         Handler getUiHandler();
         int dp(int value);
         void showToast(String message);
-        void ensureProjectionPermission(@Nullable Runnable onGranted, @Nullable Runnable onDenied);
         @Nullable Bitmap captureFreshScreenBitmap();
         @Nullable View getProjectPanelView();
         Runnable hideViewsForCapture(View... viewsToHide);
@@ -59,139 +58,135 @@ public class CapturePickerHelper {
 
     public void showScreenPointPicker(OnPointPickedListener listener, View... viewsToHide) {
         List<View> hideTargets = buildHideTargets(viewsToHide);
+        Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
         postToUiDelayed(() -> {
-            host.ensureProjectionPermission(() -> {
-                Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
-                try {
-                    Bitmap fullBitmap = host.captureFreshScreenBitmap();
-                    if (fullBitmap == null || fullBitmap.isRecycled()) {
-                        restoreViews.run();
-                        host.showToast("截图失败，无法取点");
+            try {
+                Bitmap fullBitmap = host.captureFreshScreenBitmap();
+                if (fullBitmap == null || fullBitmap.isRecycled()) {
+                    restoreViews.run();
+                    host.showToast("截图失败，无法取点");
+                    return;
+                }
+
+                WindowManager overlayWm = getPickerOverlayWindowManager();
+                Context overlayContext = getPickerOverlayContext();
+                View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_point_overlay, null);
+                WindowManager.LayoutParams lp = buildPickerOverlayParams();
+                ColorPointPickerView pickerView = overlay.findViewById(R.id.point_picker_view);
+                View floatingPanel = overlay.findViewById(R.id.pick_point_floating_panel);
+                TextView tvCoord = overlay.findViewById(R.id.tv_pick_point_coord);
+                pickerView.setOnSelectionChangedListener((x, y, color) -> {
+                    if (tvCoord != null) {
+                        tvCoord.setText("x=" + x + ", y=" + y);
+                    }
+                });
+                pickerView.setOnMagnifierLayoutChangedListener(rect ->
+                        updateFloatingPickerPanelPosition(floatingPanel, rect));
+                pickerView.setScreenshot(fullBitmap, true);
+
+                overlay.findViewById(R.id.btn_pick_point_cancel).setOnClickListener(v -> {
+                    pickerView.release();
+                    safeRemoveView(overlayWm, overlay);
+                    restoreViews.run();
+                });
+                overlay.findViewById(R.id.btn_pick_point_confirm).setOnClickListener(v -> {
+                    if (!pickerView.hasSelection()) {
+                        host.showToast("请先移动到目标位置");
                         return;
                     }
-
-                    WindowManager overlayWm = getPickerOverlayWindowManager();
-                    Context overlayContext = getPickerOverlayContext();
-                    View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_point_overlay, null);
-                    WindowManager.LayoutParams lp = buildPickerOverlayParams();
-                    ColorPointPickerView pickerView = overlay.findViewById(R.id.point_picker_view);
-                    View floatingPanel = overlay.findViewById(R.id.pick_point_floating_panel);
-                    TextView tvCoord = overlay.findViewById(R.id.tv_pick_point_coord);
-                    pickerView.setOnSelectionChangedListener((x, y, color) -> {
-                        if (tvCoord != null) {
-                            tvCoord.setText("x=" + x + ", y=" + y);
-                        }
-                    });
-                    pickerView.setOnMagnifierLayoutChangedListener(rect ->
-                            updateFloatingPickerPanelPosition(floatingPanel, rect));
-                    pickerView.setScreenshot(fullBitmap, true);
-
-                    overlay.findViewById(R.id.btn_pick_point_cancel).setOnClickListener(v -> {
-                        pickerView.release();
-                        safeRemoveView(overlayWm, overlay);
-                        restoreViews.run();
-                    });
-                    overlay.findViewById(R.id.btn_pick_point_confirm).setOnClickListener(v -> {
-                        if (!pickerView.hasSelection()) {
-                            host.showToast("请先移动到目标位置");
-                            return;
-                        }
-                        if (listener != null) {
-                            com.auto.master.capture.ScreenCaptureManager captureManager =
-                                    com.auto.master.capture.ScreenCaptureManager.getInstance();
-                            int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
-                            int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
-                            listener.onPointPicked(screenX, screenY);
-                        }
-                        pickerView.release();
-                        safeRemoveView(overlayWm, overlay);
-                        restoreViews.run();
-                    });
-
-                    try {
-                        overlayWm.addView(overlay, lp);
-                    } catch (Throwable t) {
-                        pickerView.release();
-                        throw t;
+                    if (listener != null) {
+                        com.auto.master.capture.ScreenCaptureManager captureManager =
+                                com.auto.master.capture.ScreenCaptureManager.getInstance();
+                        int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
+                        int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
+                        listener.onPointPicked(screenX, screenY);
                     }
-                } catch (Exception e) {
+                    pickerView.release();
+                    safeRemoveView(overlayWm, overlay);
                     restoreViews.run();
-                    host.showToast("打开取点器失败: " + e.getMessage());
+                });
+
+                try {
+                    overlayWm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    pickerView.release();
+                    throw t;
                 }
-            }, null);
+            } catch (Exception e) {
+                restoreViews.run();
+                host.showToast("打开取点器失败: " + e.getMessage());
+            }
         }, PICKER_SETTLE_DELAY_MS);
     }
 
     public void showColorPointPicker(OnColorPointPickedListener listener, View... viewsToHide) {
         List<View> hideTargets = buildHideTargets(viewsToHide);
+        Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
         postToUiDelayed(() -> {
-            host.ensureProjectionPermission(() -> {
-                Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
-                try {
-                    Bitmap fullBitmap = host.captureFreshScreenBitmap();
-                    if (fullBitmap == null || fullBitmap.isRecycled()) {
-                        restoreViews.run();
-                        host.showToast("截图失败，无法取色");
+            try {
+                Bitmap fullBitmap = host.captureFreshScreenBitmap();
+                if (fullBitmap == null || fullBitmap.isRecycled()) {
+                    restoreViews.run();
+                    host.showToast("截图失败，无法取色");
+                    return;
+                }
+
+                WindowManager overlayWm = getPickerOverlayWindowManager();
+                Context overlayContext = getPickerOverlayContext();
+                View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_color_overlay, null);
+                WindowManager.LayoutParams lp = buildPickerOverlayParams();
+                ColorPointPickerView pickerView = overlay.findViewById(R.id.color_picker_view);
+                View floatingPanel = overlay.findViewById(R.id.pick_color_floating_panel);
+                TextView tvColorValue = overlay.findViewById(R.id.tv_pick_color_value);
+                TextView tvCoord = overlay.findViewById(R.id.tv_pick_color_coord);
+                View preview = overlay.findViewById(R.id.view_pick_color_preview);
+                pickerView.setOnSelectionChangedListener((x, y, color) -> {
+                    if (tvColorValue != null) {
+                        tvColorValue.setText(String.format(Locale.getDefault(), "#%06X", 0xFFFFFF & color));
+                    }
+                    if (tvCoord != null) {
+                        tvCoord.setText("x=" + x + ", y=" + y);
+                    }
+                    if (preview != null) {
+                        preview.setBackgroundColor(color);
+                    }
+                });
+                pickerView.setOnMagnifierLayoutChangedListener(rect ->
+                        updateFloatingPickerPanelPosition(floatingPanel, rect));
+                pickerView.setScreenshot(fullBitmap, true);
+
+                overlay.findViewById(R.id.btn_pick_color_cancel).setOnClickListener(v -> {
+                    pickerView.release();
+                    safeRemoveView(overlayWm, overlay);
+                    restoreViews.run();
+                });
+                overlay.findViewById(R.id.btn_pick_color_confirm).setOnClickListener(v -> {
+                    if (!pickerView.hasSelection()) {
+                        host.showToast("请先移动到目标像素");
                         return;
                     }
-
-                    WindowManager overlayWm = getPickerOverlayWindowManager();
-                    Context overlayContext = getPickerOverlayContext();
-                    View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_color_overlay, null);
-                    WindowManager.LayoutParams lp = buildPickerOverlayParams();
-                    ColorPointPickerView pickerView = overlay.findViewById(R.id.color_picker_view);
-                    View floatingPanel = overlay.findViewById(R.id.pick_color_floating_panel);
-                    TextView tvColorValue = overlay.findViewById(R.id.tv_pick_color_value);
-                    TextView tvCoord = overlay.findViewById(R.id.tv_pick_color_coord);
-                    View preview = overlay.findViewById(R.id.view_pick_color_preview);
-                    pickerView.setOnSelectionChangedListener((x, y, color) -> {
-                        if (tvColorValue != null) {
-                            tvColorValue.setText(String.format(Locale.getDefault(), "#%06X", 0xFFFFFF & color));
-                        }
-                        if (tvCoord != null) {
-                            tvCoord.setText("x=" + x + ", y=" + y);
-                        }
-                        if (preview != null) {
-                            preview.setBackgroundColor(color);
-                        }
-                    });
-                    pickerView.setOnMagnifierLayoutChangedListener(rect ->
-                            updateFloatingPickerPanelPosition(floatingPanel, rect));
-                    pickerView.setScreenshot(fullBitmap, true);
-
-                    overlay.findViewById(R.id.btn_pick_color_cancel).setOnClickListener(v -> {
-                        pickerView.release();
-                        safeRemoveView(overlayWm, overlay);
-                        restoreViews.run();
-                    });
-                    overlay.findViewById(R.id.btn_pick_color_confirm).setOnClickListener(v -> {
-                        if (!pickerView.hasSelection()) {
-                            host.showToast("请先移动到目标像素");
-                            return;
-                        }
-                        if (listener != null) {
-                            com.auto.master.capture.ScreenCaptureManager captureManager =
-                                    com.auto.master.capture.ScreenCaptureManager.getInstance();
-                            int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
-                            int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
-                            listener.onColorPointPicked(screenX, screenY, pickerView.getSelectedColor());
-                        }
-                        pickerView.release();
-                        safeRemoveView(overlayWm, overlay);
-                        restoreViews.run();
-                    });
-
-                    try {
-                        overlayWm.addView(overlay, lp);
-                    } catch (Throwable t) {
-                        pickerView.release();
-                        throw t;
+                    if (listener != null) {
+                        com.auto.master.capture.ScreenCaptureManager captureManager =
+                                com.auto.master.capture.ScreenCaptureManager.getInstance();
+                        int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
+                        int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
+                        listener.onColorPointPicked(screenX, screenY, pickerView.getSelectedColor());
                     }
-                } catch (Exception e) {
+                    pickerView.release();
+                    safeRemoveView(overlayWm, overlay);
                     restoreViews.run();
-                    host.showToast("打开取色器失败: " + e.getMessage());
+                });
+
+                try {
+                    overlayWm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    pickerView.release();
+                    throw t;
                 }
-            }, null);
+            } catch (Exception e) {
+                restoreViews.run();
+                host.showToast("打开取色器失败: " + e.getMessage());
+            }
         }, PICKER_SETTLE_DELAY_MS);
     }
 

@@ -227,7 +227,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final int OPERATION_CLIPBOARD_LIMIT = 24;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService panelDataExecutor = Executors.newSingleThreadExecutor();
-    private final ExecutorService templateCaptureExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger panelDataLoadToken = new AtomicInteger();
     /** Service 存活标志：onDestroy 后置 false，后台线程回调据此短路，避免访问已销毁状态 */
     private volatile boolean serviceAlive = true;
@@ -1334,7 +1333,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             fileIOManager = null;
         }
         panelDataExecutor.shutdownNow();
-        templateCaptureExecutor.shutdownNow();
     }
 
     private void scheduleServiceRestart(long delayMs) {
@@ -1445,9 +1443,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showRuntimeAwareProjectPanel() {
-        if (syncProjectPanelToRunningTask(true)) {
-            currentLevel = NavigationLevel.OPERATION;
-        } else if (currentTaskDir != null) {
+        if (currentTaskDir != null) {
             currentLevel = NavigationLevel.OPERATION;
         }
         projectPanelUiHelper.showRuntimeAwareProjectPanel();
@@ -1463,76 +1459,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void prepareProjectPanel() {
         projectPanelUiHelper.prepareProjectPanel();
-    }
-
-    @Nullable
-    private File resolveCurrentRunningProjectDir() {
-        if (!TextUtils.isEmpty(currentRunningProject)) {
-            File projectDir = new File(getProjectsRootDir(), currentRunningProject);
-            if (projectDir.isDirectory()) {
-                return projectDir;
-            }
-        }
-        if (currentProjectDir != null && currentProjectDir.isDirectory()) {
-            return currentProjectDir;
-        }
-        return null;
-    }
-
-    @Nullable
-    private File resolveCurrentRunningTaskDir() {
-        if (TextUtils.isEmpty(currentRunningTask)) {
-            return null;
-        }
-        File projectDir = resolveCurrentRunningProjectDir();
-        if (projectDir == null) {
-            return null;
-        }
-        File taskDir = new File(projectDir, currentRunningTask);
-        return taskDir.isDirectory() ? taskDir : null;
-    }
-
-    private boolean syncProjectPanelToRunningTask(boolean forceReload) {
-        File runningProjectDir = resolveCurrentRunningProjectDir();
-        File runningTaskDir = resolveCurrentRunningTaskDir();
-        if (runningProjectDir == null || runningTaskDir == null) {
-            return false;
-        }
-
-        boolean taskChanged = !isSameFile(currentTaskDir, runningTaskDir);
-        currentProjectDir = runningProjectDir;
-        currentTaskDir = runningTaskDir;
-        currentLevel = NavigationLevel.OPERATION;
-
-        if (taskChanged) {
-            clearProjectPanelSearch();
-            invalidateOperationListCache(runningTaskDir);
-        }
-
-        if (projectPanelView != null && (taskChanged || forceReload)) {
-            pendingSelectedOperationId = currentRunningOperationId;
-            loadOperations(runningTaskDir, true);
-            updateUIForLevel();
-        }
-        return true;
-    }
-
-    private void focusCurrentRunningOperationInPanel() {
-        if (projectPanelView == null || currentLevel != NavigationLevel.OPERATION) {
-            return;
-        }
-        if (!TextUtils.equals(currentRunningTask, currentTaskDir == null ? null : currentTaskDir.getName())) {
-            return;
-        }
-        if (currentOperationAdapter == null || TextUtils.isEmpty(currentRunningOperationId)) {
-            return;
-        }
-        currentOperationAdapter.selectById(currentRunningOperationId);
-        RecyclerView recyclerView = getProjectPanelRecyclerView();
-        int position = currentOperationAdapter.findPositionById(currentRunningOperationId);
-        if (recyclerView != null && position >= 0) {
-            recyclerView.post(() -> recyclerView.scrollToPosition(position));
-        }
     }
 
     private boolean isProjectPanelAttached() {
@@ -2205,11 +2131,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             @Override
             public void showToast(String message) {
                 Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void ensureProjectionPermission(@Nullable Runnable onGranted, @Nullable Runnable onDenied) {
-                FloatWindowService.this.ensureProjectionPermission(onGranted, onDenied);
             }
 
             @Override
@@ -3264,10 +3185,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (!TextUtils.isEmpty(currentRunningOperationId)) {
             operationPanelAdapter.setRunningPosition(currentRunningOperationId);
         }
-        if (!TextUtils.isEmpty(currentRunningOperationId)
-                && TextUtils.equals(currentRunningTask, taskDir.getName())) {
-            rv.post(this::focusCurrentRunningOperationInPanel);
-        }
         lastRenderedOperationTaskKey = taskKey;
         projectPanelContentDirty = false;
         syncProjectPanelRuntimeUi();
@@ -4105,10 +4022,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "请先输入模板文件名", Toast.LENGTH_SHORT).show();
             return;
         }
-        uiHandler.postDelayed(() -> {
-                    showToast("正在准备截图...");
-                    templateCaptureExecutor.execute(() -> launchTemplateCaptureInScaleDir(normalizedName, scaleDirName));
-                },
+        uiHandler.postDelayed(() -> launchTemplateCaptureInScaleDir(normalizedName, scaleDirName),
                 CAPTURE_UI_SETTLE_DELAY_MS);
     }
 
@@ -4784,10 +4698,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             postToUi(() -> currentOperationAdapter.setRunningPosition(operationId));
         }
         syncProjectPanelRuntimeUi();
-        postToUi(() -> {
-            syncProjectPanelToRunningTask(false);
-            focusCurrentRunningOperationInPanel();
-        });
         maybeStartDelayProgress(opItem);
 
         // 2. 更新悬浮球状态：运行中切为贴边 handle
@@ -6681,37 +6591,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         String fileName = edtTemplateFile.getText() == null ? "" : edtTemplateFile.getText().toString().trim();
         String normalizedName = normalizeTemplateFileName(fileName);
         edtTemplateFile.setText(normalizedName, false);
+        Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
+        registerTemplateCaptureDialogRefresh(dialogView, edtTemplateFile, restoreViews);
 
         postToUiDelayed(() -> {
             long startedAt = System.currentTimeMillis();
-            showToast("正在准备截图...");
-            ensureProjectionPermission(() -> {
-                Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
-                registerTemplateCaptureDialogRefresh(dialogView, edtTemplateFile, restoreViews);
-                startTemplateCaptureWorker(normalizedName, dialogView, edtTemplateFile, startedAt, restoreViews);
-            }, () -> {
+            boolean started = launchTemplateCapture(normalizedName);
+            if (!started) {
                 CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
-                showToast("录屏授权已取消，无法制作模板");
-            });
+                restoreViews.run();
+                return;
+            }
+            waitAndRefreshTemplatePreview(dialogView, edtTemplateFile, startedAt, restoreViews);
         }, CAPTURE_UI_SETTLE_DELAY_MS);
-    }
-
-    private void startTemplateCaptureWorker(String normalizedName,
-                                            View dialogView,
-                                            AutoCompleteTextView edtTemplateFile,
-                                            long startedAt,
-                                            Runnable restoreViews) {
-            templateCaptureExecutor.execute(() -> {
-                boolean started = launchTemplateCapture(normalizedName);
-                if (!started) {
-                    postToUi(() -> {
-                        CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
-                        restoreViews.run();
-                    });
-                    return;
-                }
-                postToUi(() -> waitAndRefreshTemplatePreview(dialogView, edtTemplateFile, startedAt, restoreViews));
-            });
     }
 
     private void waitAndRefreshTemplatePreview(View dialogView,
@@ -7220,7 +7112,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
 
         if (needProjection && !com.auto.master.capture.ScreenCapture.hasProjectionPermission()) {
-            result.warnings.add("- 当前脚本涉及模板/截图操作，运行时会自动申请录屏授权");
+            result.blocking.add("- 当前脚本涉及模板/截图操作，但录屏授权未开启");
             if (result.fixAction == 0) {
                 result.fixAction = 3;
             }
@@ -7628,24 +7520,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private void ensureProjectionPermission(@Nullable Runnable onGranted, @Nullable Runnable onDenied) {
-        if (ScreenCapture.hasProjectionPermission()) {
-            postToUi(onGranted);
-            return;
-        }
-        showToast("正在申请录屏权限...");
-        ScreenCapture.requestProjectionPermission(this, true, granted -> {
-            if (granted) {
-                showToast("录屏权限已开启");
-                postToUi(onGranted);
-            } else {
-                if (onDenied != null) {
-                    postToUi(onDenied);
-                }
-            }
-        });
-    }
-
     private void setupAdvancedMatchSection(View dialogView, JSONObject operationObject, String excludeId) {
         View toggle = dialogView.findViewById(R.id.ly_advanced_toggle);
         LinearLayout panel = dialogView.findViewById(R.id.ly_advanced_panel);
@@ -7788,37 +7662,21 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private boolean launchTemplateCaptureInScaleDir(String templateFileName,
                                                      @Nullable String scaleDirName) {
         if (currentProjectDir == null || currentTaskDir == null) {
-            postToUi(() -> showToast("当前 Project/Task 无效"));
+            Toast.makeText(this, "当前 Project/Task 无效", Toast.LENGTH_SHORT).show();
             return false;
         }
         if (TextUtils.isEmpty(templateFileName)) {
-            postToUi(() -> showToast("请先输入模板文件名"));
+            Toast.makeText(this, "请先输入模板文件名", Toast.LENGTH_SHORT).show();
             return false;
         }
 
         String finalName = templateFileName.endsWith(".png") ? templateFileName : templateFileName + ".png";
-        File projectDir = currentProjectDir;
-        File taskDir = currentTaskDir;
-        if (projectDir == null || taskDir == null) {
-            postToUi(() -> showToast("当前 Project/Task 已切换，请重新打开模板制作"));
-            return false;
-        }
-        if (!ScreenCapture.hasProjectionPermission()) {
-            ScreenCapture.requestProjectionPermission(this, true, granted -> {
-                if (granted) {
-                    templateCaptureExecutor.execute(() -> launchTemplateCaptureInScaleDir(templateFileName, scaleDirName));
-                } else {
-                    showToast("录屏授权已取消，无法截图");
-                }
-            });
-            return true;
-        }
         CropRegionOperation cropOperation = new CropRegionOperation();
         cropOperation.setId("capture_template_" + System.currentTimeMillis());
         cropOperation.setResponseType(3);
         Map<String, Object> inputMap = new HashMap<>();
-        inputMap.put(MetaOperation.PROJECT, projectDir.getName());
-        inputMap.put(MetaOperation.TASK, taskDir.getName());
+        inputMap.put(MetaOperation.PROJECT, currentProjectDir.getName());
+        inputMap.put(MetaOperation.TASK, currentTaskDir.getName());
         inputMap.put(MetaOperation.SAVEFILENAME, finalName);
         if (!TextUtils.isEmpty(scaleDirName)) {
             // 替换截图时指定目标目录，确保覆盖同 scale 下的旧模板
@@ -7828,10 +7686,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         OperationHandler handler = OperationHandlerManager.getOperationHandler(3);
         if (handler == null) {
-            postToUi(() -> showToast("截图功能不可用"));
+            Toast.makeText(this, "截图功能不可用", Toast.LENGTH_SHORT).show();
             return false;
         }
-        return handler.handle(cropOperation, new OperationContext());
+        handler.handle(cropOperation, new OperationContext());
+        Toast.makeText(this, "已进入框选截图，请在屏幕上选择模板区域", Toast.LENGTH_SHORT).show();
+        return true;
     }
 
     private String normalizeClickTarget(String raw) {
@@ -8081,77 +7941,76 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         Context ctx = svc;
         WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
+        Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
         postToUiDelayed(() -> {
-            ensureProjectionPermission(() -> {
-                Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
-                try {
-                    Bitmap fullBitmap = captureFreshScreenBitmap();
-                    if (fullBitmap == null || fullBitmap.isRecycled()) {
-                        restoreViews.run();
-                        toastOnMain("截图失败，无法框选");
-                        return;
-                    }
+            try {
+                Bitmap fullBitmap = captureFreshScreenBitmap();
+                if (fullBitmap == null || fullBitmap.isRecycled()) {
+                    restoreViews.run();
+//                    Toast.makeText(this, "截图失败，无法框选", Toast.LENGTH_SHORT).show();
+                    toastOnMain("截图失败，无法框选");
+                    return;
+                }
 
-                    final int layoutType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
-                    final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                            WindowManager.LayoutParams.MATCH_PARENT,
-                            WindowManager.LayoutParams.MATCH_PARENT,
-                            layoutType,
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                    | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                                    | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                                    | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
-                            PixelFormat.TRANSLUCENT
-                    );
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        lp.layoutInDisplayCutoutMode =
-                                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-                    }
+                final int layoutType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+                final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        layoutType,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                                | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
+                        PixelFormat.TRANSLUCENT
+                );
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    lp.layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                }
 
 
-                    SelectionOverlayView overlay = new SelectionOverlayView(ctx);
-                    overlay.setFrozenBackground(fullBitmap, true);
-                    overlay.setListener(new SelectionOverlayView.Listener() {
-                        @Override
-                        public void onConfirm(Rect rectInOverlay, Bitmap croppedBitmap) {
-                            try {
-                                int x = rectInOverlay.left;
-                                int y = rectInOverlay.top;
-                                int w = rectInOverlay.width();
-                                int h = rectInOverlay.height();
-                                if (w <= 1 || h <= 1) {
-                                    toastOnMain("选区太小");
-                                } else {
-                                    String text = x + "," + y + "," + w + "," + h;
-                                    edtBbox.setText(text);
-                                    updateOcrBboxStatus(statusView, parseBboxInput(text));
-                                }
-                            } finally {
-                                safeRemoveView(overlay);
-                                restoreViews.run();
+                SelectionOverlayView overlay = new SelectionOverlayView(ctx);
+                overlay.setFrozenBackground(fullBitmap, true);
+                overlay.setListener(new SelectionOverlayView.Listener() {
+                    @Override
+                    public void onConfirm(Rect rectInOverlay, Bitmap croppedBitmap) {
+                        try {
+                            int x = rectInOverlay.left;
+                            int y = rectInOverlay.top;
+                            int w = rectInOverlay.width();
+                            int h = rectInOverlay.height();
+                            if (w <= 1 || h <= 1) {
+                                toastOnMain("选区太小");
+                            } else {
+                                String text = x + "," + y + "," + w + "," + h;
+                                edtBbox.setText(text);
+                                updateOcrBboxStatus(statusView, parseBboxInput(text));
                             }
-                        }
-
-                        @Override
-                        public void onCancel() {
+                        } finally {
                             safeRemoveView(overlay);
                             restoreViews.run();
                         }
-                    });
-                    try {
-                        wm.addView(overlay, lp);
-                    } catch (Throwable t) {
-                        if (!fullBitmap.isRecycled()) {
-                            fullBitmap.recycle();
-                        }
-                        throw t;
                     }
-                    toastOnMain("请拖动框选OCR区域，然后点确定");
-                } catch (Exception e) {
-                    restoreViews.run();
-                    toastOnMain("框选失败: " + e.getMessage());
+
+                    @Override
+                    public void onCancel() {
+                        safeRemoveView(overlay);
+                        restoreViews.run();
+                    }
+                });
+                try {
+                    wm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    if (!fullBitmap.isRecycled()) {
+                        fullBitmap.recycle();
+                    }
+                    throw t;
                 }
-            }, () -> toastOnMain("录屏授权已取消，无法框选"));
+                toastOnMain("请拖动框选OCR区域，然后点确定");
+            } catch (Exception e) {
+                restoreViews.run();
+                toastOnMain("框选失败: " + e.getMessage());
+            }
         }, 220);
     }
 
@@ -8282,15 +8141,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         
         // 重置索引
         currentOperationIndex = 0;
-        currentRunningTask = TextUtils.isEmpty(taskId) ? taskName : taskId;
+        currentRunningTask = taskName;
         CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
         
         // 在主线程刷新当前节点面板的运行态
-        postToUi(() -> {
-            syncProjectPanelToRunningTask(true);
-            syncProjectPanelRuntimeUi();
-            focusCurrentRunningOperationInPanel();
-        });
+        postToUi(this::syncProjectPanelRuntimeUi);
         
         // 更新通知栏
         updateNotification("已切换到: " + taskName);

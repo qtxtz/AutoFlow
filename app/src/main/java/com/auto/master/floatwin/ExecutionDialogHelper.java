@@ -87,11 +87,10 @@ public class ExecutionDialogHelper {
                 return;
             }
             if (fixAction == 3) {
-                com.auto.master.capture.ScreenCapture.requestProjectionPermission(
-                        host.getContext(),
-                        true,
-                        granted -> host.showToast(granted ? "录屏授权已开启" : "录屏授权已取消")
-                );
+                Intent i = new Intent(host.getContext(), com.auto.master.MainActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                host.getContext().startActivity(i);
+                host.showToast("请在首页点击“录屏授权”");
                 return;
             }
         } catch (Exception e) {
