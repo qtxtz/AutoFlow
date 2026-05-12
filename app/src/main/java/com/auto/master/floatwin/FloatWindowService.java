@@ -3097,9 +3097,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         String taskKey = buildFileCacheKey(taskDir);
         boolean shouldAnimate = !TextUtils.equals(lastRenderedOperationTaskKey, taskKey)
                 && TextUtils.isEmpty(normalizeQuery(currentSearchQuery));
-        rv.setLayoutAnimation(shouldAnimate
-                ? android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.op_layout_enter)
-                : null);
+        if (shouldAnimate) {
+            rv.setLayoutAnimation(android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.op_layout_enter));
+        } else {
+            rv.post(() -> rv.setLayoutAnimation(null));
+        }
         List<OperationItem> allOperations;
         if (!forceReload
                 && taskDir.equals(operationListCacheTaskDir)
@@ -3425,7 +3427,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        rv.setLayoutAnimation(null);
+        rv.post(() -> rv.setLayoutAnimation(null));
         switchProjectPanelAdapter(projectPanelAdapter);
         projectPanelAdapter.submitProjects(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建项目");
@@ -3436,7 +3438,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        rv.setLayoutAnimation(null);
+        rv.post(() -> rv.setLayoutAnimation(null));
         switchProjectPanelAdapter(taskPanelAdapter);
         taskPanelAdapter.submitItems(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建 Task");
