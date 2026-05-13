@@ -20,7 +20,6 @@ import com.auto.master.auto.ColorPointPickerView;
 import com.auto.master.auto.AutoAccessibilityService;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -38,6 +37,7 @@ public class CapturePickerHelper {
         @Nullable Bitmap captureFreshScreenBitmap();
         @Nullable View getProjectPanelView();
         Runnable hideViewsForCapture(View... viewsToHide);
+        void runAfterScreenCaptureReady(String purpose, Runnable onReady, Runnable onCancelled);
     }
 
     public interface OnPointPickedListener {
@@ -59,7 +59,7 @@ public class CapturePickerHelper {
     public void showScreenPointPicker(OnPointPickedListener listener, View... viewsToHide) {
         List<View> hideTargets = buildHideTargets(viewsToHide);
         Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
-        postToUiDelayed(() -> {
+        host.runAfterScreenCaptureReady("取点", () -> postToUiDelayed(() -> {
             try {
                 Bitmap fullBitmap = host.captureFreshScreenBitmap();
                 if (fullBitmap == null || fullBitmap.isRecycled()) {
@@ -116,13 +116,13 @@ public class CapturePickerHelper {
                 restoreViews.run();
                 host.showToast("打开取点器失败: " + e.getMessage());
             }
-        }, PICKER_SETTLE_DELAY_MS);
+        }, PICKER_SETTLE_DELAY_MS), restoreViews);
     }
 
     public void showColorPointPicker(OnColorPointPickedListener listener, View... viewsToHide) {
         List<View> hideTargets = buildHideTargets(viewsToHide);
         Runnable restoreViews = host.hideViewsForCapture(hideTargets.toArray(new View[0]));
-        postToUiDelayed(() -> {
+        host.runAfterScreenCaptureReady("取色", () -> postToUiDelayed(() -> {
             try {
                 Bitmap fullBitmap = host.captureFreshScreenBitmap();
                 if (fullBitmap == null || fullBitmap.isRecycled()) {
@@ -187,16 +187,24 @@ public class CapturePickerHelper {
                 restoreViews.run();
                 host.showToast("打开取色器失败: " + e.getMessage());
             }
-        }, PICKER_SETTLE_DELAY_MS);
+        }, PICKER_SETTLE_DELAY_MS), restoreViews);
     }
 
     private List<View> buildHideTargets(View... viewsToHide) {
         List<View> hideTargets = new ArrayList<>();
-        hideTargets.add(host.getProjectPanelView());
+        addHideTarget(hideTargets, host.getProjectPanelView());
         if (viewsToHide != null) {
-            Collections.addAll(hideTargets, viewsToHide);
+            for (View view : viewsToHide) {
+                addHideTarget(hideTargets, view);
+            }
         }
         return hideTargets;
+    }
+
+    private void addHideTarget(List<View> hideTargets, @Nullable View view) {
+        if (view != null && !hideTargets.contains(view)) {
+            hideTargets.add(view);
+        }
     }
 
     private void postToUiDelayed(Runnable action, long delayMs) {

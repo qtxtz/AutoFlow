@@ -126,6 +126,7 @@ import com.auto.master.auto.ScriptRunner;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.capture.ScreenCapturePermissionActivity;
 import com.auto.master.ocr.OcrEngine;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
@@ -201,6 +202,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final int PROJECT_PANEL_DOCK_TRIGGER_DP = 18;
     private static final int PROJECT_PANEL_DOCK_MARGIN_DP = 6;
     private static final long CAPTURE_UI_SETTLE_DELAY_MS = 320L;
+    private static final long CAPTURE_PERMISSION_SETTLE_DELAY_MS = 900L;
+    private static final long CAPTURE_READY_TIMEOUT_MS = 3200L;
     private static final int TEMPLATE_CAPTURE_PREVIEW_MAX_RETRIES = 240;
 
     // ========== 运行状态数据 ==========
@@ -2147,6 +2150,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             public Runnable hideViewsForCapture(View... viewsToHide) {
                 return FloatWindowService.this.hideViewsForCapture(viewsToHide);
             }
+
+            @Override
+            public void runAfterScreenCaptureReady(String purpose, Runnable onReady, Runnable onCancelled) {
+                FloatWindowService.this.runAfterScreenCaptureReady(purpose, onReady, onCancelled);
+            }
         });
         triggerDialogHelper = new TriggerDialogHelper(this, dialogHelpers, appLaunchTriggerManager);
         executionDialogHelper = new ExecutionDialogHelper(this, dialogHelpers);
@@ -4024,8 +4032,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "请先输入模板文件名", Toast.LENGTH_SHORT).show();
             return;
         }
-        uiHandler.postDelayed(() -> launchTemplateCaptureInScaleDir(normalizedName, scaleDirName),
-                CAPTURE_UI_SETTLE_DELAY_MS);
+        Runnable restoreViews = hideViewsForCapture(projectPanelView);
+        registerTemplateCaptureRestore(restoreViews);
+        runAfterScreenCaptureReady("制作模板", () -> uiHandler.postDelayed(() -> {
+                    boolean started = launchTemplateCaptureInScaleDir(normalizedName, scaleDirName);
+                    if (!started) {
+                        CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
+                        restoreViews.run();
+                    }
+                }, CAPTURE_UI_SETTLE_DELAY_MS),
+                () -> {
+                    CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
+                    restoreViews.run();
+                });
     }
 
     private void refreshTemplateSelectionAfterCapture(View dialogView,
@@ -4061,6 +4080,32 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                 return;
                             }
                             refreshTemplateSelectionAfterCapture(dialogView, templateInput, saveFileName);
+                            if (restoreViews != null) {
+                                restoreViews.run();
+                            }
+                            CropRegionOperationHandler.clearTemplateCaptureEventListener(this);
+                        });
+                    }
+
+                    @Override
+                    public void onTemplateCaptureCancelled(String projectName, String taskName, String saveFileName) {
+                        uiHandler.post(() -> {
+                            if (restoreViews != null) {
+                                restoreViews.run();
+                            }
+                            CropRegionOperationHandler.clearTemplateCaptureEventListener(this);
+                        });
+                    }
+                };
+        CropRegionOperationHandler.setTemplateCaptureEventListener(listener);
+    }
+
+    private void registerTemplateCaptureRestore(Runnable restoreViews) {
+        CropRegionOperationHandler.TemplateCaptureEventListener listener =
+                new CropRegionOperationHandler.TemplateCaptureEventListener() {
+                    @Override
+                    public void onTemplateSaved(String projectName, String taskName, String saveFileName, Rect rect) {
+                        uiHandler.post(() -> {
                             if (restoreViews != null) {
                                 restoreViews.run();
                             }
@@ -6600,7 +6645,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
         registerTemplateCaptureDialogRefresh(dialogView, edtTemplateFile, restoreViews);
 
-        postToUiDelayed(() -> {
+        runAfterScreenCaptureReady("制作模板", () -> postToUiDelayed(() -> {
             long startedAt = System.currentTimeMillis();
             boolean started = launchTemplateCapture(normalizedName);
             if (!started) {
@@ -6609,7 +6654,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             }
             waitAndRefreshTemplatePreview(dialogView, edtTemplateFile, startedAt, restoreViews);
-        }, CAPTURE_UI_SETTLE_DELAY_MS);
+        }, CAPTURE_UI_SETTLE_DELAY_MS), () -> {
+            CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
+            restoreViews.run();
+        });
     }
 
     private void waitAndRefreshTemplatePreview(View dialogView,
@@ -7514,6 +7562,70 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return ScreenCapture.captureLatestBitmap(null, 480L, 80L);
     }
 
+    private void runAfterScreenCaptureReady(String purpose, Runnable onReady, Runnable onCancelled) {
+        if (onReady == null) {
+            return;
+        }
+        if (ScreenCapture.hasProjectionPermission()) {
+            waitForCleanCaptureFrame(onReady, onCancelled, false);
+            return;
+        }
+        Toast.makeText(this,
+                TextUtils.isEmpty(purpose) ? "请先授予录屏权限" : purpose + "需要先授予录屏权限",
+                Toast.LENGTH_SHORT).show();
+        ScreenCapturePermissionActivity.request(this, granted -> postToUi(() -> {
+            if (!granted) {
+                Toast.makeText(this, "录屏授权已取消，无法继续截图", Toast.LENGTH_SHORT).show();
+                if (onCancelled != null) {
+                    onCancelled.run();
+                }
+                return;
+            }
+            waitForCleanCaptureFrame(onReady, onCancelled, true);
+        }));
+    }
+
+    private void waitForCleanCaptureFrame(Runnable onReady,
+                                          @Nullable Runnable onCancelled,
+                                          boolean afterPermissionDialog) {
+        final int startFrameSeq = ScreenCapture.getFrameSequence();
+        final long minReadyAt = SystemClock.uptimeMillis()
+                + (afterPermissionDialog ? CAPTURE_PERMISSION_SETTLE_DELAY_MS : CAPTURE_UI_SETTLE_DELAY_MS);
+        final long deadline = SystemClock.uptimeMillis() + CAPTURE_READY_TIMEOUT_MS;
+        panelDataExecutor.execute(() -> {
+            boolean ready = false;
+            while (serviceAlive && SystemClock.uptimeMillis() <= deadline) {
+                ScreenCapture.waitForLatestFrame(null, 180L, 45L);
+                int currentSeq = ScreenCapture.getFrameSequence();
+                long now = SystemClock.uptimeMillis();
+                if (ScreenCaptureManager.getInstance().isRunning()
+                        && currentSeq > startFrameSeq
+                        && now >= minReadyAt) {
+                    ready = true;
+                    break;
+                }
+                SystemClock.sleep(80L);
+            }
+            final boolean finalReady = ready;
+            postToUi(() -> {
+                if (!serviceAlive) {
+                    if (onCancelled != null) {
+                        onCancelled.run();
+                    }
+                    return;
+                }
+                if (finalReady) {
+                    onReady.run();
+                } else {
+                    Toast.makeText(this, "录屏会话启动失败，请重新授权后再试", Toast.LENGTH_SHORT).show();
+                    if (onCancelled != null) {
+                        onCancelled.run();
+                    }
+                }
+            });
+        });
+    }
+
     private void postToUi(Runnable action) {
         if (action != null) {
             uiHandler.post(action);
@@ -7948,7 +8060,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         Context ctx = svc;
         WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
-        postToUiDelayed(() -> {
+        runAfterScreenCaptureReady("框选区域", () -> postToUiDelayed(() -> {
             try {
                 Bitmap fullBitmap = captureFreshScreenBitmap();
                 if (fullBitmap == null || fullBitmap.isRecycled()) {
@@ -8017,7 +8129,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 restoreViews.run();
                 toastOnMain("框选失败: " + e.getMessage());
             }
-        }, 220);
+        }, 220), restoreViews);
     }
 
     private void testOcrFromDialog(EditText edtBbox, EditText edtTimeout, AutoCompleteTextView edtEngine, TextView resultView) {

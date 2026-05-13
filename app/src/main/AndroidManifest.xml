@@ -64,6 +64,12 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTask" />
 
+        <activity
+            android:name=".capture.ScreenCapturePermissionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Crop.Transparent"
+            android:excludeFromRecents="true" />
+
         <!-- 新页面：网格视图页 -->
         <activity
             android:name=".GridPageActivity"
