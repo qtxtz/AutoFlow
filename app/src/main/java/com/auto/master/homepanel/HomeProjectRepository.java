@@ -369,9 +369,6 @@ public class HomeProjectRepository {
         if ("click".equalsIgnoreCase(type)) {
             return "点击节点";
         }
-        if ("ocr".equalsIgnoreCase(type)) {
-            return "OCR 识别";
-        }
         if ("swipe".equalsIgnoreCase(type)) {
             return "滑动节点";
         }

@@ -127,7 +127,6 @@ import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.capture.ScreenCapturePermissionActivity;
-import com.auto.master.ocr.OcrEngine;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.utils.BitmapManager;
@@ -2249,10 +2248,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         });
 
-        dialogFactory.setOcrHelper(new OperationDialogFactory.OcrHelper() {
-            @Override public void updateOcrBboxStatus(android.widget.TextView s, java.util.List<Integer> b) { FloatWindowService.this.updateOcrBboxStatus(s, b); }
-            @Override public void beginOcrRegionPickFromDialog(View d, android.widget.EditText e, android.widget.TextView s) { FloatWindowService.this.beginRegionPickFromDialog(d, e, s); }
-            @Override public void testOcrFromDialog(android.widget.EditText b, android.widget.EditText t, android.widget.AutoCompleteTextView en, android.widget.TextView r) { FloatWindowService.this.testOcrFromDialog(b, t, en, r); }
+        dialogFactory.setRegionPickHelper(new OperationDialogFactory.RegionPickHelper() {
+            @Override public void beginRegionPickFromDialog(View d, android.widget.EditText e, android.widget.TextView s) { FloatWindowService.this.beginRegionPickFromDialog(d, e, s); }
             @Override public java.util.List<Integer> parseBboxInput(String raw) { return FloatWindowService.this.parseBboxInput(raw); }
         });
 
@@ -2359,8 +2356,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         new AddOperationMenuAdapter.MenuItem("match_template", "模板匹配", "识别单张模板图片", "图", R.color.op_match_template, true),
                         new AddOperationMenuAdapter.MenuItem("match_map_template", "图集匹配", "在图集中查找可命中的模板", "集", R.color.op_match_map, true),
                         new AddOperationMenuAdapter.MenuItem("color_match", "颜色匹配", "按坐标组校验颜色", "色", R.color.op_color_match, true),
-                        new AddOperationMenuAdapter.MenuItem("color_search", "找色", "在区域中搜索目标颜色", "找", R.color.op_color_search, true),
-                        new AddOperationMenuAdapter.MenuItem("ocr", "OCR 识别", "识别屏幕文字并输出结果", "文", R.color.op_ocr, true)
+                        new AddOperationMenuAdapter.MenuItem("color_search", "找色", "在区域中搜索目标颜色", "找", R.color.op_color_search, true)
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
@@ -2437,9 +2433,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "color_search":
                 dialogFactory.showAddColorSearchDialog();
-                return;
-            case "ocr":
-                dialogFactory.showAddOcrDialog();
                 return;
             case "jump_task":
                 dialogFactory.showAddJumpTaskDialog();
@@ -8037,7 +8030,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private void updateOcrBboxStatus(TextView statusView, @Nullable List<Integer> bbox) {
+    private void updateRegionPickStatus(TextView statusView, @Nullable List<Integer> bbox) {
         if (statusView == null) {
             return;
         }
@@ -8102,7 +8095,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                             } else {
                                 String text = x + "," + y + "," + w + "," + h;
                                 edtBbox.setText(text);
-                                updateOcrBboxStatus(statusView, parseBboxInput(text));
+                                updateRegionPickStatus(statusView, parseBboxInput(text));
                             }
                         } finally {
                             safeRemoveView(overlay);
@@ -8124,124 +8117,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     }
                     throw t;
                 }
-                toastOnMain("请拖动框选OCR区域，然后点确定");
+                toastOnMain("请拖动框选区域，然后点确定");
             } catch (Exception e) {
                 restoreViews.run();
                 toastOnMain("框选失败: " + e.getMessage());
             }
         }, 220), restoreViews);
-    }
-
-    private void testOcrFromDialog(EditText edtBbox, EditText edtTimeout, AutoCompleteTextView edtEngine, TextView resultView) {
-        List<Integer> bbox = parseBboxInput(edtBbox.getText() == null ? "" : edtBbox.getText().toString());
-        if (bbox == null) {
-            edtBbox.setError("请先框选或输入 x,y,w,h");
-            return;
-        }
-        long timeout;
-        try {
-            timeout = Long.parseLong(edtTimeout.getText() == null ? "5000" : edtTimeout.getText().toString().trim());
-        } catch (Exception e) {
-            timeout = 5000L;
-        }
-        if (timeout <= 0) {
-            timeout = 5000L;
-        }
-        String engine = edtEngine == null || edtEngine.getText() == null ? "paddle" : edtEngine.getText().toString().trim();
-        boolean accurateMode = !"fast".equalsIgnoreCase(engine);
-        if (resultView != null) {
-            resultView.setText("测试结果：识别中...");
-        }
-
-        final long finalTimeout = timeout;
-        final boolean finalAccurateMode = accurateMode;
-        new Thread(() -> {
-            String text = recognizeOcrTextForRegion(bbox, finalTimeout, finalAccurateMode, engine);
-            postToUi(() -> {
-                if (TextUtils.isEmpty(text)) {
-                    if (resultView != null) {
-                        resultView.setText("测试结果：未识别到文本");
-                    }
-                    Toast.makeText(this, "测试识别为空", Toast.LENGTH_SHORT).show();
-                    showOcrTestResultDialog("测试结果", "未识别到文本");
-                } else {
-                    if (resultView != null) {
-                        String preview = text.length() > 120 ? text.substring(0, 120) + "..." : text;
-                        resultView.setText("测试结果预览：\n" + preview + "\n\n(点击“测试识别结果”可再次查看完整内容)");
-                    }
-                    Toast.makeText(this, "测试识别完成", Toast.LENGTH_SHORT).show();
-                    showOcrTestResultDialog("测试结果", text);
-                }
-            });
-        }, "ocr-test").start();
-    }
-
-    private void showOcrTestResultDialog(String title, String content) {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_edit_json, null);
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-        WindowManager.LayoutParams dialogLp = new WindowManager.LayoutParams(
-                dp(360), WindowManager.LayoutParams.WRAP_CONTENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT
-        );
-        dialogLp.gravity = Gravity.CENTER;
-
-        TextView tvOpId = dialogView.findViewById(R.id.tv_op_id);
-        EditText edtJson = dialogView.findViewById(R.id.edt_json);
-        tvOpId.setText(title);
-        edtJson.setText(content == null ? "" : content);
-        edtJson.setSelection(0);
-
-        TextView btnSave = dialogView.findViewById(R.id.btn_save);
-        TextView btnCancel = dialogView.findViewById(R.id.btn_cancel);
-        btnSave.setText("复制");
-        btnCancel.setText("关闭");
-
-        btnSave.setOnClickListener(v -> {
-            try {
-                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                if (cm != null) {
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("ocr_result", edtJson.getText().toString()));
-                    Toast.makeText(this, "已复制测试结果", Toast.LENGTH_SHORT).show();
-                }
-            } catch (Exception e) {
-                Toast.makeText(this, "复制失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        });
-        btnCancel.setOnClickListener(v -> safeRemoveView(dialogView));
-
-        wm.addView(dialogView, dialogLp);
-    }
-
-    @Nullable
-    private String recognizeOcrTextForRegion(List<Integer> bbox, long timeoutMs, boolean accurateMode, String engine) {
-        try {
-            Bitmap fullBitmap = captureFreshScreenBitmap();
-            if (fullBitmap == null || fullBitmap.isRecycled()) {
-                Toast.makeText(this, "截图失败，无法取色", Toast.LENGTH_SHORT).show();
-                return null;
-            }
-
-            int x = Math.max(0, bbox.get(0));
-            int y = Math.max(0, bbox.get(1));
-            int w = Math.max(1, bbox.get(2));
-            int h = Math.max(1, bbox.get(3));
-            x = Math.min(x, fullBitmap.getWidth() - 1);
-            y = Math.min(y, fullBitmap.getHeight() - 1);
-            w = Math.min(w, fullBitmap.getWidth() - x);
-            h = Math.min(h, fullBitmap.getHeight() - y);
-            if (w <= 1 || h <= 1) {
-                return null;
-            }
-            Bitmap crop = Bitmap.createBitmap(fullBitmap, x, y, w, h);
-            return OcrEngine.recognize(this, crop, engine, accurateMode, timeoutMs);
-        } catch (Exception e) {
-            Log.e(TAG, "OCR测试异常", e);
-            return null;
-        }
     }
 
     @Override
@@ -8486,7 +8367,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             case 6: return "模板匹配";
             case 7: return "多模板匹配";
             case 8: return "跳转Task";
-            case 9: return "OCR识别(已弃用)";
             case 10: return "条件分支";
             case 11: return "变量脚本";
             case 12: return "变量运算";

@@ -174,7 +174,6 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
             case 6: return "模板匹配";
             case 7: return "多模板匹配";
             case 8: return "跳转Task";
-            case 9: return "OCR识别(已弃用)";
             case 10: return "条件分支";
             case 11: return "变量脚本";
             case 12: return "变量运算";

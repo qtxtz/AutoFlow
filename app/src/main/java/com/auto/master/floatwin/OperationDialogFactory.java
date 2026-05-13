@@ -107,10 +107,8 @@ public class OperationDialogFactory {
         void beginTemplateCaptureFromDialog(View dialogView, android.widget.AutoCompleteTextView edtTemplateFile);
     }
 
-    public interface OcrHelper {
-        void updateOcrBboxStatus(android.widget.TextView statusView, java.util.List<Integer> bbox);
-        void beginOcrRegionPickFromDialog(View dialogView, android.widget.EditText edtBbox, android.widget.TextView statusView);
-        void testOcrFromDialog(android.widget.EditText edtBbox, android.widget.EditText edtTimeout, android.widget.AutoCompleteTextView edtEngine, android.widget.TextView resultView);
+    public interface RegionPickHelper {
+        void beginRegionPickFromDialog(View dialogView, android.widget.EditText edtBbox, android.widget.TextView statusView);
         java.util.List<Integer> parseBboxInput(String raw);
     }
 
@@ -164,7 +162,7 @@ public class OperationDialogFactory {
     private GestureHelper gestureHelper;
     private TaskOperationHelper taskOperationHelper;
     private TemplateHelper templateHelper;
-    private OcrHelper ocrHelper;
+    private RegionPickHelper regionPickHelper;
     private VariableHelper variableHelper;
     private VariableMathHelper variableMathHelper;
     private LaunchAppHelper launchAppHelper;
@@ -223,8 +221,8 @@ public class OperationDialogFactory {
         this.templateHelper = helper;
     }
 
-    public void setOcrHelper(OcrHelper helper) {
-        this.ocrHelper = helper;
+    public void setRegionPickHelper(RegionPickHelper helper) {
+        this.regionPickHelper = helper;
     }
 
     public void setVariableHelper(VariableHelper helper) {
@@ -2687,277 +2685,6 @@ public class OperationDialogFactory {
         return isOperationReferenceField(view) ? extractOperationReferenceId(raw) : raw;
     }
 
-    public void showAddOcrDialog() {
-        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr, null);
-        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
-        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
-        wm.addView(dialogView, dialogLp);
-        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 430, null);
-
-        EditText edtName = dialogView.findViewById(R.id.edt_name);
-        EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
-        EditText edtOutputVar = dialogView.findViewById(R.id.edt_output_var);
-        EditText edtTimeout = dialogView.findViewById(R.id.edt_timeout);
-        AutoCompleteTextView edtEngine = dialogView.findViewById(R.id.edt_ocr_engine);
-        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
-        android.widget.TextView tvBboxStatus = dialogView.findViewById(R.id.tv_bbox_status);
-        android.widget.TextView tvOcrResult = dialogView.findViewById(R.id.tv_ocr_test_result);
-
-        edtTimeout.setText("5000");
-        edtOutputVar.setText("ocr_text");
-        dialogHelpers.bindAutoComplete(edtEngine, java.util.Arrays.asList("paddle", "accurate", "fast"));
-        edtEngine.setText("paddle", false);
-
-        if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
-        }
-        if (ocrHelper != null) {
-            ocrHelper.updateOcrBboxStatus(tvBboxStatus, null);
-        }
-
-        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
-            dialogHelpers.safeRemoveView(dialogView));
-
-        dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.beginOcrRegionPickFromDialog(dialogView, edtBbox, tvBboxStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_test_ocr).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.testOcrFromDialog(edtBbox, edtTimeout, edtEngine, tvOcrResult);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
-            if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", null, edtNextOperation);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
-            dialogHelpers.safeRemoveView(dialogView));
-
-        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
-            String name = edtName.getText().toString().trim();
-            String bboxText = edtBbox.getText().toString().trim();
-            String outputVar = edtOutputVar.getText().toString().trim();
-            String timeoutText = edtTimeout.getText().toString().trim();
-            String engine = edtEngine.getText() == null ? "paddle" : edtEngine.getText().toString().trim();
-            String nextOp = safeText(edtNextOperation);
-
-            if (TextUtils.isEmpty(name)) {
-                edtName.setError("请填写操作名称");
-                return;
-            }
-
-            java.util.List<Integer> bbox = null;
-            if (ocrHelper != null) {
-                bbox = ocrHelper.parseBboxInput(bboxText);
-            }
-            if (bbox == null) {
-                edtBbox.setError("请先框选或输入 x,y,w,h");
-                return;
-            }
-
-            long timeout;
-            try {
-                timeout = Long.parseLong(timeoutText);
-            } catch (Exception e) {
-                edtTimeout.setError("请输入有效超时(毫秒)");
-                return;
-            }
-            if (timeout <= 0) {
-                edtTimeout.setError("超时必须大于0");
-                return;
-            }
-
-            try {
-                JSONObject operationObject = new JSONObject();
-                if (idGenerator != null) {
-                    operationObject.put("id", idGenerator.generateId());
-                }
-                operationObject.put("name", name);
-                operationObject.put("type", 9);
-                operationObject.put("responseType", 1);
-
-                JSONObject inputMap = new JSONObject();
-                inputMap.put(MetaOperation.BBOX, new org.json.JSONArray(bbox));
-                inputMap.put(MetaOperation.OCR_TIMEOUT, timeout);
-                inputMap.put(MetaOperation.OCR_OUTPUT_VAR, outputVar);
-                inputMap.put(MetaOperation.OCR_ENGINE, TextUtils.isEmpty(engine) ? "paddle" : engine);
-                if (!TextUtils.isEmpty(nextOp)) {
-                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
-                }
-                operationObject.put("inputMap", inputMap);
-
-                try {
-                    JSONArray operations = crudHelper.readOperationsArray();
-                    operations.put(operationObject);
-                    String message = TextUtils.isEmpty(nextOp) ? "已保存OCR节点（无下一节点）" : ("已保存OCR节点，下一节点: " + nextOp);
-                    if (crudHelper.writeOperationsArray(operations, message, () -> {
-                        dialogHelpers.safeRemoveView(dialogView);
-                        if (addListener != null) {
-                            addListener.onOperationAdded();
-                        }
-                    })) {
-                        // Success handled in callback
-                    }
-                } catch (Exception e) {
-                    host.showToast("添加操作失败: " + e.getMessage());
-                }
-            } catch (Exception e) {
-                host.showToast("构建OCR操作失败: " + e.getMessage());
-            }
-        });
-    }
-
-    public void showEditOcrDialog(String operationId, JSONObject operationObject) {
-        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr, null);
-        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
-        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
-        wm.addView(dialogView, dialogLp);
-        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 430, null);
-
-        EditText edtName = dialogView.findViewById(R.id.edt_name);
-        EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
-        EditText edtOutputVar = dialogView.findViewById(R.id.edt_output_var);
-        EditText edtTimeout = dialogView.findViewById(R.id.edt_timeout);
-        AutoCompleteTextView edtEngine = dialogView.findViewById(R.id.edt_ocr_engine);
-        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
-        android.widget.TextView tvBboxStatus = dialogView.findViewById(R.id.tv_bbox_status);
-        android.widget.TextView tvOcrResult = dialogView.findViewById(R.id.tv_ocr_test_result);
-        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
-        btnConfirm.setText("保存");
-
-        if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
-        }
-        dialogHelpers.bindAutoComplete(edtEngine, java.util.Arrays.asList("paddle", "accurate", "fast"));
-
-        // Pre-fill with existing data
-        try {
-            edtName.setText(operationObject.optString("name", ""));
-            JSONObject inputMapObj = operationObject.optJSONObject("inputMap");
-            String bboxText = "";
-            if (inputMapObj != null) {
-                org.json.JSONArray arr = inputMapObj.optJSONArray(MetaOperation.BBOX);
-                if (arr != null && arr.length() >= 4) {
-                    bboxText = arr.optInt(0) + "," + arr.optInt(1) + "," + arr.optInt(2) + "," + arr.optInt(3);
-                }
-                edtOutputVar.setText(inputMapObj.optString(MetaOperation.OCR_OUTPUT_VAR, ""));
-                edtTimeout.setText(String.valueOf(inputMapObj.optLong(MetaOperation.OCR_TIMEOUT, 5000L)));
-                String savedEngine = inputMapObj.optString(MetaOperation.OCR_ENGINE, "");
-                edtEngine.setText(TextUtils.isEmpty(savedEngine) ? "paddle" : savedEngine, false);
-                setOperationReferenceText(edtNextOperation, inputMapObj.optString(MetaOperation.NEXT_OPERATION_ID, ""));
-            } else {
-                edtTimeout.setText("5000");
-                edtEngine.setText("paddle", false);
-            }
-            edtBbox.setText(bboxText);
-
-            if (ocrHelper != null) {
-                java.util.List<Integer> bbox = ocrHelper.parseBboxInput(bboxText);
-                ocrHelper.updateOcrBboxStatus(tvBboxStatus, bbox);
-            }
-        } catch (Exception e) {
-            host.showToast("加载操作数据失败: " + e.getMessage());
-        }
-
-        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
-            dialogHelpers.safeRemoveView(dialogView));
-
-        dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.beginOcrRegionPickFromDialog(dialogView, edtBbox, tvBboxStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_test_ocr).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.testOcrFromDialog(edtBbox, edtTimeout, edtEngine, tvOcrResult);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
-            if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
-            dialogHelpers.safeRemoveView(dialogView));
-
-        btnConfirm.setOnClickListener(v -> {
-            String name = edtName.getText().toString().trim();
-            String bboxStr = edtBbox.getText().toString().trim();
-            String outputVar = edtOutputVar.getText().toString().trim();
-            String timeoutText = edtTimeout.getText().toString().trim();
-            String engine = edtEngine.getText() == null ? "paddle" : edtEngine.getText().toString().trim();
-            String nextOp = safeText(edtNextOperation);
-
-            if (TextUtils.isEmpty(name)) {
-                edtName.setError("请填写操作名称");
-                return;
-            }
-
-            java.util.List<Integer> bbox = null;
-            if (ocrHelper != null) {
-                bbox = ocrHelper.parseBboxInput(bboxStr);
-            }
-            if (bbox == null) {
-                edtBbox.setError("请先框选或输入 x,y,w,h");
-                return;
-            }
-
-            long timeout;
-            try {
-                timeout = Long.parseLong(timeoutText);
-            } catch (Exception e) {
-                edtTimeout.setError("请输入有效超时(毫秒)");
-                return;
-            }
-            if (timeout <= 0) {
-                edtTimeout.setError("超时必须大于0");
-                return;
-            }
-
-            try {
-                JSONObject updatedOperation = new JSONObject();
-                updatedOperation.put("id", operationId);
-                updatedOperation.put("name", name);
-                updatedOperation.put("type", 9);
-                updatedOperation.put("responseType", 1);
-
-                JSONObject inputMap = new JSONObject();
-                inputMap.put(MetaOperation.BBOX, new org.json.JSONArray(bbox));
-                inputMap.put(MetaOperation.OCR_TIMEOUT, timeout);
-                inputMap.put(MetaOperation.OCR_OUTPUT_VAR, outputVar);
-                inputMap.put(MetaOperation.OCR_ENGINE, TextUtils.isEmpty(engine) ? "paddle" : engine);
-                if (!TextUtils.isEmpty(nextOp)) {
-                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
-                }
-                updatedOperation.put("inputMap", inputMap);
-
-                if (operationUpdater != null) {
-                    String message = TextUtils.isEmpty(nextOp) ? "已保存OCR节点（无下一节点）" : ("已保存OCR节点，下一节点: " + nextOp);
-                    if (operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
-                        host.showToast(message);
-                        dialogHelpers.safeRemoveView(dialogView);
-                        if (updateListener != null) {
-                            updateListener.onOperationUpdated();
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                host.showToast("保存失败: " + e.getMessage());
-            }
-        });
-    }
-
-
-
     public void showAddVariableSetDialog() {
         View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_variable_set, null);
         WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
@@ -4385,8 +4112,8 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
 
         dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.beginOcrRegionPickFromDialog(dialogView, edtBbox, null);
+            if (regionPickHelper != null) {
+                regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, null);
             }
         });
 
@@ -4439,7 +4166,7 @@ public class OperationDialogFactory {
                 return;
             }
 
-            java.util.List<Integer> bbox = ocrHelper != null ? ocrHelper.parseBboxInput(bboxText) : null;
+            java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : null;
             if (bbox == null || bbox.size() < 4) {
                 edtBbox.setError("区域格式应为 x,y,w,h");
                 return;
@@ -4564,8 +4291,8 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
 
         dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
-            if (ocrHelper != null) {
-                ocrHelper.beginOcrRegionPickFromDialog(dialogView, edtBbox, null);
+            if (regionPickHelper != null) {
+                regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, null);
             }
         });
 
@@ -4618,7 +4345,7 @@ public class OperationDialogFactory {
                 return;
             }
 
-            java.util.List<Integer> bbox = ocrHelper != null ? ocrHelper.parseBboxInput(bboxText) : null;
+            java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : null;
             if (bbox == null || bbox.size() < 4) {
                 edtBbox.setError("区域格式应为 x,y,w,h");
                 return;

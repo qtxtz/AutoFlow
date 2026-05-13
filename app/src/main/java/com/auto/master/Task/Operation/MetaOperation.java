@@ -94,13 +94,6 @@ public abstract class MetaOperation {
 
     public static String MATCHED = "MATCHED";
 
-    public static String OCR_TEXT = "OCR_TEXT";
-    public static String OCR_TARGET_TEXT = "OCR_TARGET_TEXT";
-    public static String OCR_MATCH_MODE = "OCR_MATCH_MODE";
-    public static String OCR_TIMEOUT = "OCR_TIMEOUT";
-    public static String OCR_OUTPUT_VAR = "OCR_OUTPUT_VAR";
-    public static String OCR_ENGINE = "OCR_ENGINE";
-
     public static String VAR_NAME = "VAR_NAME";
     public static String VAR_TYPE = "VAR_TYPE";
     public static String VAR_SOURCE_MODE = "VAR_SOURCE_MODE";

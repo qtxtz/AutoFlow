@@ -6,10 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Built-in project templates for common automation scenarios.
- * OCR-related presets are intentionally removed for now.
- */
+/** Built-in project templates for common automation scenarios. */
 public class ProjectTemplate {
 
     public final String id;

@@ -22,7 +22,6 @@ import com.auto.master.Task.Operation.LoopOperation;
 import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
-import com.auto.master.Task.Operation.OcrOperation;
 import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.Task.Operation.SetCaptureScaleOperation;
 import com.auto.master.Task.Operation.SwitchBranchOperation;
@@ -53,7 +52,6 @@ public class OperationHandlerManager {
         register(OperationType.MATCH_TEMPLATE, MatchTemplateOperation.class, MatchTemplateOperation::new, MatchtemplateOperationHandler::new, "match", "match_template");
         register(OperationType.MATCH_MAP_TEMPLATE, MatchMapTemplateOperation.class, MatchMapTemplateOperation::new, MatchMaptemplateOperationHandler::new, "matchmap", "match_map_template");
         register(OperationType.JUMP_TASK, JumpTaskOperation.class, JumpTaskOperation::new, JumpTaskOperationHandler::new, "jump", "jump_task");
-        register(OperationType.OCR, OcrOperation.class, OcrOperation::new, OcrOperationHandler::new, "ocr");
         register(OperationType.VARIABLE_SCRIPT, VariableSetOperation.class, VariableSetOperation::new, VariableOperationHandler::new,
                 "var_set", "variable_set", "var_script", "variable_script");
         linkOperationClass(OperationType.VARIABLE_SCRIPT.getCode(), VariableScriptOperation.class);
@@ -80,7 +78,6 @@ public class OperationHandlerManager {
         registerResponse(OperationType.MATCH_MAP_TEMPLATE.getCode(), 1, MatchTemplateDynamicJumpResponseHandler::new);
         registerResponse(OperationType.JUMP_TASK.getCode(), 1, JumpTaskResponseHandler::new);
         registerResponse(OperationType.JUMP_TASK.getCode(), 2, JumpTaskResponseHandler::new);
-        registerResponse(OperationType.OCR.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.VARIABLE_SCRIPT.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.VARIABLE_MATH.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.VARIABLE_TEMPLATE.getCode(), 1, JumpToNextOperationResponseHandler::new);
