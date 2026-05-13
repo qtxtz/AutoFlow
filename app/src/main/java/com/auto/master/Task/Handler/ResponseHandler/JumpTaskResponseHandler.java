@@ -155,11 +155,11 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
                 }
             }
             
-            listener.onTaskSwitch(
+            MAIN_HANDLER.post(() -> listener.onTaskSwitch(
                 targetTask.getId(),
                 targetTask.getName(),
                 operationItems
-            );
+            ));
         }
     }
 

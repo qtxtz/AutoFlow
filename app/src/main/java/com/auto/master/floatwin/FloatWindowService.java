@@ -4696,9 +4696,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             currentOperationIndex = runningPos + 1;
         }
 
-        if (currentOperationAdapter != null) {
-            postToUi(() -> currentOperationAdapter.setRunningPosition(operationId));
-        }
+        postToUi(() -> {
+            followRuntimeTaskIfPanelIsStale(operationId);
+            if (currentOperationAdapter != null) {
+                currentOperationAdapter.setRunningPosition(operationId);
+            }
+            scrollRunningOperationIntoView(operationId);
+        });
         syncProjectPanelRuntimeUi();
         maybeStartDelayProgress(opItem);
 
@@ -8143,14 +8147,153 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         
         // 重置索引
         currentOperationIndex = 0;
-        currentRunningTask = taskName;
-        CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
-        
-        // 在主线程刷新当前节点面板的运行态
-        postToUi(this::syncProjectPanelRuntimeUi);
+        currentRunningTask = TextUtils.isEmpty(taskId) ? taskName : taskId;
+        CrashLogger.updateRunContext(currentRunningProject, currentRunningTask, currentRunningOperationId, currentRunningOperationName);
+
+        final List<OperationItem> switchedOperations = new ArrayList<>(runningOperations);
+        postToUi(() -> {
+            File runtimeTaskDir = resolveRuntimeTaskDir(taskId, taskName);
+            if (runtimeTaskDir != null) {
+                currentTaskDir = runtimeTaskDir;
+                currentLevel = NavigationLevel.OPERATION;
+                clearProjectPanelSearch();
+                updateUIForLevel();
+                renderRuntimeTaskOperations(runtimeTaskDir, switchedOperations);
+            }
+            syncProjectPanelRuntimeUi();
+        });
         
         // 更新通知栏
-        updateNotification("已切换到: " + taskName);
+        updateNotification("已切换到: " + currentRunningTask);
+    }
+
+    @Nullable
+    private File resolveRuntimeTaskDir(@Nullable String taskId, @Nullable String taskName) {
+        if (currentProjectDir == null) {
+            return null;
+        }
+        File directById = resolveExistingTaskDir(taskId);
+        if (directById != null) {
+            return directById;
+        }
+        File directByName = resolveExistingTaskDir(taskName);
+        if (directByName != null) {
+            return directByName;
+        }
+
+        Project project = findCachedProjectByName(currentProjectDir.getName());
+        if (project != null && project.getTaskMap() != null) {
+            for (Map.Entry<String, Task> entry : project.getTaskMap().entrySet()) {
+                Task task = entry.getValue();
+                if (task == null) {
+                    continue;
+                }
+                boolean matches = TextUtils.equals(entry.getKey(), taskId)
+                        || TextUtils.equals(entry.getKey(), taskName)
+                        || TextUtils.equals(task.getId(), taskId)
+                        || TextUtils.equals(task.getId(), taskName)
+                        || TextUtils.equals(task.getName(), taskName)
+                        || TextUtils.equals(task.getName(), taskId);
+                if (matches) {
+                    File dir = resolveExistingTaskDir(entry.getKey());
+                    if (dir != null) {
+                        return dir;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private File resolveExistingTaskDir(@Nullable String taskKey) {
+        if (currentProjectDir == null || TextUtils.isEmpty(taskKey)) {
+            return null;
+        }
+        File taskDir = new File(currentProjectDir, taskKey);
+        return taskDir.isDirectory() ? taskDir : null;
+    }
+
+    private void renderRuntimeTaskOperations(@NonNull File taskDir, @NonNull List<OperationItem> operations) {
+        if (projectPanelView == null || getProjectPanelRecyclerView() == null) {
+            return;
+        }
+        List<OperationItem> items = new ArrayList<>(operations);
+        String taskKey = buildFileCacheKey(taskDir);
+        File json = new File(taskDir, "operations.json");
+        long version = json.exists() ? json.lastModified() : Long.MIN_VALUE;
+        operationListCacheTaskDir = taskDir;
+        operationListCacheVersion = version;
+        operationListCache.clear();
+        operationListCache.addAll(items);
+        operationItemsMemoryCache.put(taskKey, new ArrayList<>(items));
+        operationItemsMemoryVersions.put(taskKey, version);
+        renderOperationItems(taskDir, items, taskKey, "");
+    }
+
+    private void followRuntimeTaskIfPanelIsStale(@NonNull String operationId) {
+        if (currentOperationAdapter != null && currentOperationAdapter.findPositionById(operationId) >= 0) {
+            return;
+        }
+        File ownerTaskDir = findTaskDirOwningOperation(operationId);
+        if (ownerTaskDir == null || isSameFile(currentTaskDir, ownerTaskDir)) {
+            return;
+        }
+        currentTaskDir = ownerTaskDir;
+        currentLevel = NavigationLevel.OPERATION;
+        clearProjectPanelSearch();
+        updateUIForLevel();
+        loadOperations(ownerTaskDir, true);
+    }
+
+    @Nullable
+    private File findTaskDirOwningOperation(@Nullable String operationId) {
+        if (currentProjectDir == null || TextUtils.isEmpty(operationId)) {
+            return null;
+        }
+        Project project = findCachedProjectByName(currentProjectDir.getName());
+        if (project == null || project.getTaskMap() == null) {
+            project = loadProjectFromDir(currentProjectDir);
+            if (project != null) {
+                upsertCachedProject(project);
+            }
+        }
+        if (project == null || project.getTaskMap() == null) {
+            return null;
+        }
+        for (Map.Entry<String, Task> entry : project.getTaskMap().entrySet()) {
+            Task task = entry.getValue();
+            if (task != null && task.getOperationMap() != null
+                    && task.getOperationMap().containsKey(operationId)) {
+                return resolveExistingTaskDir(entry.getKey());
+            }
+        }
+        return null;
+    }
+
+    private void scrollRunningOperationIntoView(@Nullable String operationId) {
+        if (currentOperationAdapter == null || TextUtils.isEmpty(operationId)) {
+            return;
+        }
+        RecyclerView rv = getProjectPanelRecyclerView();
+        if (rv == null) {
+            return;
+        }
+        int position = currentOperationAdapter.findPositionById(operationId);
+        if (position < 0) {
+            return;
+        }
+        RecyclerView.LayoutManager manager = rv.getLayoutManager();
+        if (manager instanceof LinearLayoutManager) {
+            LinearLayoutManager linear = (LinearLayoutManager) manager;
+            int first = linear.findFirstCompletelyVisibleItemPosition();
+            int last = linear.findLastCompletelyVisibleItemPosition();
+            if (position < first || position > last) {
+                linear.scrollToPositionWithOffset(position, Math.max(dp(24), rv.getHeight() / 3));
+            }
+        } else {
+            rv.scrollToPosition(position);
+        }
     }
 
     /**
