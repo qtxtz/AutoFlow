@@ -8262,11 +8262,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void followRuntimeTaskIfPanelIsStale(@NonNull String operationId) {
-        if (currentOperationAdapter != null && currentOperationAdapter.findPositionById(operationId) >= 0) {
+        // Only skip if the panel is actually at OPERATION level showing this operation.
+        // If the user navigated back to PROJECT/TASK level, the adapter retains stale data
+        // but currentLevel no longer reflects OPERATION — we must still navigate down.
+        if (currentLevel == NavigationLevel.OPERATION
+                && currentOperationAdapter != null
+                && currentOperationAdapter.findPositionById(operationId) >= 0) {
             return;
         }
         File ownerTaskDir = findTaskDirOwningOperation(operationId);
-        if (ownerTaskDir == null || isSameFile(currentTaskDir, ownerTaskDir)) {
+        // isSameFile alone is not enough: currentTaskDir may still equal ownerTaskDir even
+        // when the user navigated back to TASK/PROJECT level, so also require OPERATION level.
+        if (ownerTaskDir == null
+                || (currentLevel == NavigationLevel.OPERATION && isSameFile(currentTaskDir, ownerTaskDir))) {
             return;
         }
         currentTaskDir = ownerTaskDir;
