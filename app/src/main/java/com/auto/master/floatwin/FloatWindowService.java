@@ -3124,7 +3124,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 rv.removeCallbacks(pendingClearAnimRunnable);
             }
             rv.post(pendingClearAnimRunnable = () -> {
-                rv.setLayoutAnimation(null);
+                android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+                if (lac == null || lac.isDone()) {
+                    rv.setLayoutAnimation(null);
+                }
                 pendingClearAnimRunnable = null;
             });
         }
@@ -3457,7 +3460,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             rv.removeCallbacks(pendingClearAnimRunnable);
         }
         rv.post(pendingClearAnimRunnable = () -> {
-            rv.setLayoutAnimation(null);
+            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+            if (lac == null || lac.isDone()) {
+                rv.setLayoutAnimation(null);
+            }
             pendingClearAnimRunnable = null;
         });
         switchProjectPanelAdapter(projectPanelAdapter);
@@ -3474,7 +3480,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             rv.removeCallbacks(pendingClearAnimRunnable);
         }
         rv.post(pendingClearAnimRunnable = () -> {
-            rv.setLayoutAnimation(null);
+            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+            if (lac == null || lac.isDone()) {
+                rv.setLayoutAnimation(null);
+            }
             pendingClearAnimRunnable = null;
         });
         switchProjectPanelAdapter(taskPanelAdapter);
