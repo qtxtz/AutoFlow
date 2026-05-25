@@ -167,7 +167,12 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                 return oldItem.index == newItem.index
                         && TextUtils.equals(oldItem.id, newItem.id)
                         && TextUtils.equals(oldItem.name, newItem.name)
-                        && TextUtils.equals(oldItem.type, newItem.type);
+                        && TextUtils.equals(oldItem.type, newItem.type)
+                        && oldItem.delayDurationMs == newItem.delayDurationMs
+                        && oldItem.nodePreDelayMs == newItem.nodePreDelayMs
+                        && oldItem.nodePreDelayMinMs == newItem.nodePreDelayMinMs
+                        && oldItem.nodePreDelayMaxMs == newItem.nodePreDelayMaxMs
+                        && oldItem.nodePreDelayRandom == newItem.nodePreDelayRandom;
             }
         });
         operations.clear();

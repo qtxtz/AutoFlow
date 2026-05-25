@@ -542,7 +542,7 @@ public class OperationDialogFactory {
         }
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
@@ -550,7 +550,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -995,12 +995,12 @@ public class OperationDialogFactory {
         }
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -1107,7 +1107,7 @@ public class OperationDialogFactory {
         }
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
@@ -1115,7 +1115,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -1196,7 +1196,7 @@ public class OperationDialogFactory {
             gestureHelper.refreshGestureOptions(edtGestureFile);
         }
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // Pre-fill with existing data
@@ -1253,7 +1253,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -1357,7 +1357,7 @@ public class OperationDialogFactory {
         }
         bindJumpTaskTargetOperationSuggestions(edtTargetOperation, "");
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         edtTargetTask.addTextChangedListener(new android.text.TextWatcher() {
@@ -1450,7 +1450,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择返回后的下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择返回后的下一节点", null, edtNextOperation);
             }
         });
 
@@ -1825,7 +1825,7 @@ public class OperationDialogFactory {
         }
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
@@ -2116,7 +2116,7 @@ public class OperationDialogFactory {
         setupAdvancedToggle(dialogView);
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // 回填现有数据
@@ -2176,13 +2176,13 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择失败跳转节点", operationId, edtFallback);
+                showOperationPickerForField("选择失败跳转节点", null, edtFallback);
             }
         });
 
@@ -2488,7 +2488,7 @@ public class OperationDialogFactory {
         setupMatchDelayHint(edtPreDelay);
         setupAdvancedToggle(dialogView);
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         try {
@@ -2524,12 +2524,12 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_add_color_point).setOnClickListener(v -> addColorMatchPointRow(lyPoints, dialogView, null));
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择失败跳转节点", operationId, edtFallback);
+                showOperationPickerForField("选择失败跳转节点", null, edtFallback);
             }
         });
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
@@ -2933,7 +2933,7 @@ public class OperationDialogFactory {
         }
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // Pre-fill with existing data
@@ -2969,7 +2969,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -3124,7 +3124,7 @@ public class OperationDialogFactory {
         btnConfirm.setText("保存");
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // Pre-fill with existing data
@@ -3144,7 +3144,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择默认下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择默认下一节点", null, edtNextOperation);
             }
         });
 
@@ -3326,7 +3326,7 @@ public class OperationDialogFactory {
         dialogHelpers.bindAutoComplete(edtOperandType, java.util.Collections.singletonList("number"));
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         if (variableMathHelper != null) {
@@ -3366,7 +3366,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -3521,7 +3521,7 @@ public class OperationDialogFactory {
         btnConfirm.setText("保存");
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // Pre-fill with existing data
@@ -3542,7 +3542,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -3730,7 +3730,7 @@ public class OperationDialogFactory {
             launchAppHelper.refreshAppOptions(edtAppPackage);
         }
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         // Pre-fill existing data
@@ -3763,7 +3763,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
 
@@ -3924,7 +3924,7 @@ public class OperationDialogFactory {
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
 
-        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
 
         try {
             edtName.setText(operationObject.optString("name", ""));
@@ -3956,7 +3956,7 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_default).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择 default 节点", operationId, edtDefaultNext);
+                showOperationPickerForField("选择 default 节点", null, edtDefaultNext);
             }
         });
 
@@ -4094,7 +4094,7 @@ public class OperationDialogFactory {
             "is_true", "is_false", "lt", "lte", "gt", "gte", "eq", "neq", "not_empty", "empty");
         dialogHelpers.bindAutoComplete(edtOperator, operators);
 
-        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
 
         try {
             edtName.setText(operationObject.optString("name", ""));
@@ -4115,13 +4115,13 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_body).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择主路径节点", operationId, edtBodyNext);
+                showOperationPickerForField("选择主路径节点", null, edtBodyNext);
             }
         });
 
         dialogView.findViewById(R.id.btn_pick_exit).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择另一条路径节点", operationId, edtExitNext);
+                showOperationPickerForField("选择另一条路径节点", null, edtExitNext);
             }
         });
 
@@ -4361,7 +4361,7 @@ public class OperationDialogFactory {
         setupAdvancedToggle(dialogView);
 
         if (nextOpBinder != null) {
-            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
 
         edtColorValue.addTextChangedListener(new TextWatcher() {
@@ -4428,12 +4428,12 @@ public class OperationDialogFactory {
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
             }
         });
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
-                showOperationPickerForField("选择失败跳转节点", operationId, edtFallback);
+                showOperationPickerForField("选择失败跳转节点", null, edtFallback);
             }
         });
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
@@ -4583,7 +4583,7 @@ public class OperationDialogFactory {
         edtName.setText(operationObject.optString("name", ""));
         JSONObject inputMap0 = operationObject.optJSONObject("inputMap");
         edtNextOperation.setText(inputMap0 != null ? inputMap0.optString(MetaOperation.NEXT_OPERATION_ID, "") : "");
-        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
                 dialogHelpers.safeRemoveView(dialogView));
@@ -4715,18 +4715,18 @@ public class OperationDialogFactory {
         updateBodyVisibility.run();
 
         // 绑定下一节点自动补全
-        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
                 dialogHelpers.safeRemoveView(dialogView));
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null)
-                showOperationPickerForField("选择成功后节点", operationId, edtNextOperation);
+                showOperationPickerForField("选择成功后节点", null, edtNextOperation);
         });
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null)
-                showOperationPickerForField("选择失败后节点", operationId, edtFallbackOperation);
+                showOperationPickerForField("选择失败后节点", null, edtFallbackOperation);
         });
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
                 dialogHelpers.safeRemoveView(dialogView));

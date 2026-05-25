@@ -1995,6 +1995,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     if (!newJsonObj.has("inputMap") && jsonObject.has("inputMap")) {
                         newJsonObj.put("inputMap", jsonObject.optJSONObject("inputMap"));
                     }
+                    // 保留旧 inputMap 中的节点前置延迟元数据（由 NodePreDelayDialogHelper 独立管理）
+                    JSONObject oldInputMap = jsonObject.optJSONObject("inputMap");
+                    JSONObject newInputMap = newJsonObj.optJSONObject("inputMap");
+                    if (oldInputMap != null && newInputMap != null) {
+                        for (String preDelayKey : new String[]{
+                                MetaOperation.NODE_PRE_DELAY_MS,
+                                MetaOperation.NODE_PRE_DELAY_MIN_MS,
+                                MetaOperation.NODE_PRE_DELAY_MAX_MS,
+                                MetaOperation.NODE_PRE_DELAY_RANDOM}) {
+                            if (oldInputMap.has(preDelayKey) && !newInputMap.has(preDelayKey)) {
+                                newInputMap.put(preDelayKey, oldInputMap.opt(preDelayKey));
+                            }
+                        }
+                    }
                     jsonArray.put(i, newJsonObj);
                     found = true;
                     break;
