@@ -54,6 +54,9 @@ public abstract class MetaOperation {
     public static String MATCHTIMEOUT = "MATCHTIMEOUT";
     public static String MATCH_PRE_DELAY_MS = "MATCH_PRE_DELAY_MS";
     public static String MATCH_POST_DELAY_MS = "MATCH_POST_DELAY_MS";
+    public static String POLL_FAST_INTERVAL_MS = "POLL_FAST_INTERVAL_MS";
+    public static String POLL_MEDIUM_INTERVAL_MS = "POLL_MEDIUM_INTERVAL_MS";
+    public static String POLL_SLOW_INTERVAL_MS = "POLL_SLOW_INTERVAL_MS";
 
     // 固定区域干净的背景
     public static String MATCHBACKGROUND = "MATCHBACKGROUND";

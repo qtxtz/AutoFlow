@@ -159,11 +159,11 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                         MAIN_HANDLER.post(() -> {
                             svc.showClickFeedback((int) target.x, (int) target.y, 280);
                         });
-                        try {
-                            Thread.sleep(100);
-                        } catch (Exception e) {
-
-                        }
+//                        try {
+//                            Thread.sleep(100);
+//                        } catch (Exception e) {
+//
+//                        }
                         svc.click((int) target.x, (int) target.y,
                                 () -> {
 //                                    notifyResult(result, true);
@@ -174,11 +174,11 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                                     Log.w(TAG, "点击失败回调");
                                 }
                         );
-                        try {
-                            Thread.sleep(100);
-                        } catch (Exception e) {
-
-                        }
+//                        try {
+//                            Thread.sleep(100);
+//                        } catch (Exception e) {
+//
+//                        }
 //                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
 //
 //                        });

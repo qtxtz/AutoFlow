@@ -262,6 +262,54 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="4dp"
+                    android:text="快速轮询间隔(ms)"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_poll_fast_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="默认 220"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="中速轮询间隔(ms)"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_poll_medium_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="默认 420"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="慢速轮询间隔(ms)"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_poll_slow_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="默认 700"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
                     android:text="匹配失败跳转节点"
                     android:textColor="#4e5f74"
                     android:textSize="13sp" />

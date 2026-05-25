@@ -88,7 +88,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         boolean matched = false;
         MatchResult firstMatch = null;
         List<Integer> matchedBbox = null;
-        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
+        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch(inputMap);
         long startedAt = System.currentTimeMillis();
 
         while (duration > System.currentTimeMillis() - startedAt) {

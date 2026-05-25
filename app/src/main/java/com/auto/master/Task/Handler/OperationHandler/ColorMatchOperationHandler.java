@@ -61,7 +61,7 @@ public class ColorMatchOperationHandler extends OperationHandler {
         // sanitizeRoi() to return null while captureRoi is still non-null, which makes
         // evaluate() subtract the wrong offset and read pixel (0,0) instead of the target.
         long start = System.currentTimeMillis();
-        AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck();
+        AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck(inputMap);
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame();

@@ -112,7 +112,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         }
 
         AtomicReference<MatchTaskResult> winnerRef = new AtomicReference<>(null);
-        AdaptivePollingController pollingController = AdaptivePollingController.forMatchMap();
+        AdaptivePollingController pollingController = AdaptivePollingController.forMatchMap(inputMap);
         long startedAt = System.currentTimeMillis();
 
         while ((duration - (System.currentTimeMillis() - startedAt)) > 0) {

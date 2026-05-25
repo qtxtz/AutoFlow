@@ -62,7 +62,7 @@ public class ColorSearchOperationHandler extends OperationHandler {
         List<Integer> localBbox = Arrays.asList(0, 0, captureRoi.width(), captureRoi.height());
 
         long start = System.currentTimeMillis();
-        AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck();
+        AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck(inputMap);
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(captureRoi);

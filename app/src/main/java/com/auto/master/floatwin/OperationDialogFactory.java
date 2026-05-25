@@ -646,6 +646,48 @@ public class OperationDialogFactory {
         }
     }
 
+    private void setupPollingIntervalInputs(View dialogView, JSONObject inputMap) {
+        EditText fastInput = dialogView.findViewById(R.id.edt_poll_fast_ms);
+        EditText mediumInput = dialogView.findViewById(R.id.edt_poll_medium_ms);
+        EditText slowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
+        if (inputMap == null) {
+            return;
+        }
+        setOptionalLongText(fastInput, inputMap.opt(MetaOperation.POLL_FAST_INTERVAL_MS));
+        setOptionalLongText(mediumInput, inputMap.opt(MetaOperation.POLL_MEDIUM_INTERVAL_MS));
+        setOptionalLongText(slowInput, inputMap.opt(MetaOperation.POLL_SLOW_INTERVAL_MS));
+    }
+
+    private void fillPollingIntervalInputMap(View dialogView, JSONObject inputMap) throws org.json.JSONException {
+        putOptionalInterval(dialogView, inputMap, R.id.edt_poll_fast_ms, MetaOperation.POLL_FAST_INTERVAL_MS);
+        putOptionalInterval(dialogView, inputMap, R.id.edt_poll_medium_ms, MetaOperation.POLL_MEDIUM_INTERVAL_MS);
+        putOptionalInterval(dialogView, inputMap, R.id.edt_poll_slow_ms, MetaOperation.POLL_SLOW_INTERVAL_MS);
+    }
+
+    private void putOptionalInterval(View dialogView,
+                                     JSONObject inputMap,
+                                     int viewId,
+                                     String key) throws org.json.JSONException {
+        EditText input = dialogView.findViewById(viewId);
+        String text = safeText(input);
+        if (TextUtils.isEmpty(text)) {
+            inputMap.remove(key);
+            return;
+        }
+        Long value = parsePositiveLong(text);
+        if (value == null) {
+            throw new IllegalArgumentException("轮询间隔必须是大于 0 的毫秒数");
+        }
+        inputMap.put(key, Math.max(10L, Math.min(value, 5000L)));
+    }
+
+    private void setOptionalLongText(EditText input, Object raw) {
+        if (input == null || raw == null) {
+            return;
+        }
+        input.setText(String.valueOf(raw).replace(".0", ""));
+    }
+
     private void bindJumpTaskTargetOperationSuggestions(AutoCompleteTextView edtTargetOperation, String taskId) {
         if (edtTargetOperation == null) {
             return;
@@ -1880,6 +1922,7 @@ public class OperationDialogFactory {
 
         // 高级参数折叠
         setupAdvancedToggle(dialogView);
+        setupPollingIntervalInputs(dialogView, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -1954,6 +1997,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(preDelay)) {
                     inputMap.put("MATCH_PRE_DELAY_MS", Long.parseLong(preDelay));
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
 
                 String fallback = safeText(edtFallback);
                 if (!TextUtils.isEmpty(fallback)) {
@@ -2013,6 +2057,7 @@ public class OperationDialogFactory {
                 setOperationReferenceText(edtNextOperation, inputMap.optString("nextOperationId", ""));
                 setOperationReferenceText(edtFallback, inputMap.optString("FALLBACKOPERATIONID", ""));
                 edtPreDelay.setText(inputMap.optString("MATCH_PRE_DELAY_MS", ""));
+                setupPollingIntervalInputs(dialogView, inputMap);
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(inputMap.optBoolean(MetaOperation.SUCCEESCLICK, true));
                 }
@@ -2115,6 +2160,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(preDelay)) {
                     inputMap.put("MATCH_PRE_DELAY_MS", Long.parseLong(preDelay));
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
 
                 String fallback = safeText(edtFallback);
                 if (!TextUtils.isEmpty(fallback)) {
@@ -2274,6 +2320,7 @@ public class OperationDialogFactory {
         dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
         setupAdvancedToggle(dialogView);
+        setupPollingIntervalInputs(dialogView, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -2327,6 +2374,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
                     inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay)));
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
                 }
@@ -2384,6 +2432,7 @@ public class OperationDialogFactory {
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                 setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
                 edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
+                setupPollingIntervalInputs(dialogView, inputMap);
                 JSONArray points = inputMap.optJSONArray(MetaOperation.COLOR_POINTS);
                 if (points != null) {
                     for (int i = 0; i < points.length(); i++) {
@@ -2447,6 +2496,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
                     inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay)));
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
                 }
@@ -4095,6 +4145,7 @@ public class OperationDialogFactory {
         edtTolerance.setText("18");
         edtMinPixels.setText("60");
         setupAdvancedToggle(dialogView);
+        setupPollingIntervalInputs(dialogView, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -4194,6 +4245,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
                     try { inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay))); } catch (Exception ignored) {}
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
                 }
@@ -4280,6 +4332,7 @@ public class OperationDialogFactory {
                 edtTimeout.setText(timeoutObj == null ? "5000" : String.valueOf(timeoutObj).replace(".0", ""));
                 // pre delay
                 edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
+                setupPollingIntervalInputs(dialogView, inputMap);
                 // next / fallback
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                 setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
@@ -4373,6 +4426,7 @@ public class OperationDialogFactory {
                 if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
                     try { inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay))); } catch (Exception ignored) {}
                 }
+                fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
                 }

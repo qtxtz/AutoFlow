@@ -7691,6 +7691,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         AutoCompleteTextView fallbackInput = dialogView.findViewById(R.id.edt_fallback_operation);
         EditText preDelayInput = dialogView.findViewById(R.id.edt_match_pre_delay);
         EditText postDelayInput = dialogView.findViewById(R.id.edt_match_post_delay);
+        EditText pollFastInput = dialogView.findViewById(R.id.edt_poll_fast_ms);
+        EditText pollMediumInput = dialogView.findViewById(R.id.edt_poll_medium_ms);
+        EditText pollSlowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
 
         bindAutoComplete(methodInput, getMatchMethodOptions());
         bindAutoComplete(fallbackInput, getCurrentTaskOperationIds(excludeId));
@@ -7716,11 +7719,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 fallbackInput.setText(inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""), false);
                 Object preDelayObj = inputMap.opt(MetaOperation.MATCH_PRE_DELAY_MS);
                 Object postDelayObj = inputMap.opt(MetaOperation.MATCH_POST_DELAY_MS);
+                Object pollFastObj = inputMap.opt(MetaOperation.POLL_FAST_INTERVAL_MS);
+                Object pollMediumObj = inputMap.opt(MetaOperation.POLL_MEDIUM_INTERVAL_MS);
+                Object pollSlowObj = inputMap.opt(MetaOperation.POLL_SLOW_INTERVAL_MS);
                 if (preDelayObj != null && preDelayInput != null) {
                     preDelayInput.setText(String.valueOf(preDelayObj).replace(".0", ""));
                 }
                 if (postDelayObj != null && postDelayInput != null) {
                     postDelayInput.setText(String.valueOf(postDelayObj).replace(".0", ""));
+                }
+                if (pollFastObj != null && pollFastInput != null) {
+                    pollFastInput.setText(String.valueOf(pollFastObj).replace(".0", ""));
+                }
+                if (pollMediumObj != null && pollMediumInput != null) {
+                    pollMediumInput.setText(String.valueOf(pollMediumObj).replace(".0", ""));
+                }
+                if (pollSlowObj != null && pollSlowInput != null) {
+                    pollSlowInput.setText(String.valueOf(pollSlowObj).replace(".0", ""));
                 }
             }
         }
@@ -7744,6 +7759,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText scaleFactorInput = dialogView.findViewById(R.id.edt_scale_factor);
         EditText preDelayInput = dialogView.findViewById(R.id.edt_match_pre_delay);
         EditText postDelayInput = dialogView.findViewById(R.id.edt_match_post_delay);
+        EditText pollFastInput = dialogView.findViewById(R.id.edt_poll_fast_ms);
+        EditText pollMediumInput = dialogView.findViewById(R.id.edt_poll_medium_ms);
+        EditText pollSlowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
 
         String methodText = methodInput == null || methodInput.getText() == null ? "" : methodInput.getText().toString().trim();
         String sfText = scaleFactorInput == null || scaleFactorInput.getText() == null ? "" : scaleFactorInput.getText().toString().trim();
@@ -7798,6 +7816,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             } else {
                 inputMap.remove(MetaOperation.MATCH_POST_DELAY_MS);
             }
+            putOptionalPollingInterval(inputMap, MetaOperation.POLL_FAST_INTERVAL_MS, pollFastInput);
+            putOptionalPollingInterval(inputMap, MetaOperation.POLL_MEDIUM_INTERVAL_MS, pollMediumInput);
+            putOptionalPollingInterval(inputMap, MetaOperation.POLL_SLOW_INTERVAL_MS, pollSlowInput);
             if (TextUtils.isEmpty(fallbackId)) {
                 inputMap.remove(MetaOperation.FALLBACKOPERATIONID);
             } else {
@@ -7806,6 +7827,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         } catch (Exception e) {
             Log.w(TAG, "写入高级匹配参数失败", e);
         }
+    }
+
+    private void putOptionalPollingInterval(JSONObject inputMap, String key, EditText input) throws org.json.JSONException {
+        String text = input == null || input.getText() == null ? "" : input.getText().toString().trim();
+        if (TextUtils.isEmpty(text)) {
+            inputMap.remove(key);
+            return;
+        }
+        long value;
+        try {
+            value = Long.parseLong(text);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("轮询间隔必须是大于 0 的毫秒数");
+        }
+        if (value <= 0) {
+            throw new IllegalArgumentException("轮询间隔必须是大于 0 的毫秒数");
+        }
+        inputMap.put(key, Math.max(10L, Math.min(value, 5000L)));
     }
 
     private boolean launchTemplateCapture(String templateFileName) {

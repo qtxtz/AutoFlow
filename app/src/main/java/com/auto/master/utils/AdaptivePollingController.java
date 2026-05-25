@@ -6,8 +6,11 @@ import android.os.SystemClock;
 import androidx.annotation.Nullable;
 
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.Task.Operation.MetaOperation;
 
 import org.opencv.core.Mat;
+
+import java.util.Map;
 
 /**
  * 自适应轮询控制器：
@@ -55,6 +58,10 @@ public final class AdaptivePollingController {
         );
     }
 
+    public static AdaptivePollingController forTemplateMatch(@Nullable Map<String, Object> inputMap) {
+        return fromInputMap(inputMap, 220L, 380L, 600L, 800L, 2500L, 2, 5);
+    }
+
     public static AdaptivePollingController forMatchMap() {
         return new AdaptivePollingController(
                 220L, 380L, 560L,
@@ -63,12 +70,56 @@ public final class AdaptivePollingController {
         );
     }
 
+    public static AdaptivePollingController forMatchMap(@Nullable Map<String, Object> inputMap) {
+        return fromInputMap(inputMap, 220L, 380L, 560L, 800L, 2500L, 2, 5);
+    }
+
     public static AdaptivePollingController forColorCheck() {
         return new AdaptivePollingController(
                 220L, 420L, 700L,
                 800L, 2500L,
                 2, 4
         );
+    }
+
+    public static AdaptivePollingController forColorCheck(@Nullable Map<String, Object> inputMap) {
+        return fromInputMap(inputMap, 220L, 420L, 700L, 800L, 2500L, 2, 4);
+    }
+
+    private static AdaptivePollingController fromInputMap(@Nullable Map<String, Object> inputMap,
+                                                          long defaultFastIntervalMs,
+                                                          long defaultMediumIntervalMs,
+                                                          long defaultSlowIntervalMs,
+                                                          long warmupWindowMs,
+                                                          long slowdownWindowMs,
+                                                          int mediumMissThreshold,
+                                                          int slowMissThreshold) {
+        long fastIntervalMs = parseIntervalMs(inputMap, MetaOperation.POLL_FAST_INTERVAL_MS, defaultFastIntervalMs);
+        long mediumIntervalMs = parseIntervalMs(inputMap, MetaOperation.POLL_MEDIUM_INTERVAL_MS, defaultMediumIntervalMs);
+        long slowIntervalMs = parseIntervalMs(inputMap, MetaOperation.POLL_SLOW_INTERVAL_MS, defaultSlowIntervalMs);
+        return new AdaptivePollingController(
+                fastIntervalMs, mediumIntervalMs, slowIntervalMs,
+                warmupWindowMs, slowdownWindowMs,
+                mediumMissThreshold, slowMissThreshold
+        );
+    }
+
+    private static long parseIntervalMs(@Nullable Map<String, Object> inputMap, String key, long fallback) {
+        if (inputMap == null) {
+            return fallback;
+        }
+        Object raw = inputMap.get(key);
+        long value = fallback;
+        if (raw instanceof Number) {
+            value = ((Number) raw).longValue();
+        } else if (raw instanceof String) {
+            try {
+                value = Long.parseLong(((String) raw).trim());
+            } catch (Exception ignored) {
+                value = fallback;
+            }
+        }
+        return Math.max(10L, Math.min(value, 5000L));
     }
 
     @Nullable

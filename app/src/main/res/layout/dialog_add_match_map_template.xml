@@ -219,6 +219,54 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:text="快速轮询间隔(ms)"
+                    android:textSize="13sp"
+                    android:textColor="#4e5f74"
+                    android:layout_marginBottom="4dp"/>
+
+                <EditText
+                    android:id="@+id/edt_poll_fast_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:hint="默认 220"
+                    android:layout_marginBottom="8dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="中速轮询间隔(ms)"
+                    android:textSize="13sp"
+                    android:textColor="#4e5f74"
+                    android:layout_marginBottom="4dp"/>
+
+                <EditText
+                    android:id="@+id/edt_poll_medium_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:hint="默认 380"
+                    android:layout_marginBottom="8dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="慢速轮询间隔(ms)"
+                    android:textSize="13sp"
+                    android:textColor="#4e5f74"
+                    android:layout_marginBottom="4dp"/>
+
+                <EditText
+                    android:id="@+id/edt_poll_slow_ms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:hint="默认 560"
+                    android:layout_marginBottom="8dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="匹配失败跳转节点 (fallbackId)"
                     android:textSize="13sp"
                     android:textColor="#4e5f74"

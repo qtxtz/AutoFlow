@@ -46,11 +46,11 @@ public class BackKeyOperationHandler extends OperationHandler {
         Log.d(TAG, "返回按键执行成功");
 
         // 短暂延时，等待返回动画完成
-        try {
-            Thread.sleep(300);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+//        try {
+//            Thread.sleep(300);
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//        }
 
         ctx.currentOperation = obj;
         ctx.lastOperation = obj;
