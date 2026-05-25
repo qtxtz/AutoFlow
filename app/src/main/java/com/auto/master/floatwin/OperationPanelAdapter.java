@@ -232,11 +232,18 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         holder.typeText.setText(getOperationTypeDisplayName(item.type));
         holder.opId.setText(item.id);
         if (holder.nodePreDelayText != null) {
+            boolean hasDelay = item.nodePreDelayRandom || item.nodePreDelayMs > 0L;
             String delayText = item.nodePreDelayRandom
-                    ? "等待: " + item.nodePreDelayMinMs + "~" + item.nodePreDelayMaxMs + "ms"
-                    : "等待: " + item.nodePreDelayMs + "ms";
+                    ? "等 " + item.nodePreDelayMinMs + "~" + item.nodePreDelayMaxMs + "ms"
+                    : "等 " + item.nodePreDelayMs + "ms";
             holder.nodePreDelayText.setText(delayText);
-            holder.nodePreDelayText.setTextColor(item.nodePreDelayMs > 0L ? 0xFFD34B3F : 0xFF8A97A6);
+            if (hasDelay) {
+                holder.nodePreDelayText.setTextColor(0xFFB85C00);
+                holder.nodePreDelayText.setBackgroundResource(R.drawable.node_delay_chip_active_bg);
+            } else {
+                holder.nodePreDelayText.setTextColor(0xFF8A97A6);
+                holder.nodePreDelayText.setBackgroundResource(R.drawable.project_panel_type_chip_bg);
+            }
         }
 
         boolean isRunning = runningOperationId != null && runningOperationId.equals(item.id);
