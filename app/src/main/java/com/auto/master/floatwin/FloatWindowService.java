@@ -233,6 +233,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     /** Service 存活标志：onDestroy 后置 false，后台线程回调据此短路，避免访问已销毁状态 */
     private volatile boolean serviceAlive = true;
     private final Runnable searchRefreshRunnable = this::refreshCurrentLevelList;
+    private Runnable pendingClearAnimRunnable;
     private RecyclerView projectPanelRecyclerView;
     private ProjectPanelAdapter projectPanelAdapter;
     private TaskPanelAdapter taskPanelAdapter;
@@ -1445,6 +1446,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showRuntimeAwareProjectPanel() {
+        // If a script is running, immediately snap to its project/task instead of
+        // waiting for the next onOperationStart to trigger followRuntimeTaskIfPanelIsStale.
+        if (isScriptActiveForUi() && !TextUtils.isEmpty(currentRunningProject)) {
+            if (currentProjectDir == null || !currentProjectDir.getName().equals(currentRunningProject)) {
+                File runningProjectDir = new File(getProjectsRootDir(), currentRunningProject);
+                if (runningProjectDir.isDirectory()) {
+                    currentProjectDir = runningProjectDir;
+                    currentTaskDir = null;
+                }
+            }
+            if (!TextUtils.isEmpty(currentRunningOperationId)) {
+                followRuntimeTaskIfPanelIsStale(currentRunningOperationId);
+            }
+        }
         if (currentTaskDir != null) {
             currentLevel = NavigationLevel.OPERATION;
         }
@@ -3099,9 +3114,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         boolean shouldAnimate = !TextUtils.equals(lastRenderedOperationTaskKey, taskKey)
                 && TextUtils.isEmpty(normalizeQuery(currentSearchQuery));
         if (shouldAnimate) {
+            if (pendingClearAnimRunnable != null) {
+                rv.removeCallbacks(pendingClearAnimRunnable);
+                pendingClearAnimRunnable = null;
+            }
             rv.setLayoutAnimation(android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.op_layout_enter));
         } else {
-            rv.post(() -> rv.setLayoutAnimation(null));
+            if (pendingClearAnimRunnable != null) {
+                rv.removeCallbacks(pendingClearAnimRunnable);
+            }
+            rv.post(pendingClearAnimRunnable = () -> {
+                android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+                if (lac == null || lac.isDone()) {
+                    rv.setLayoutAnimation(null);
+                }
+                pendingClearAnimRunnable = null;
+            });
         }
         List<OperationItem> allOperations;
         if (!forceReload
@@ -3428,7 +3456,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        rv.post(() -> rv.setLayoutAnimation(null));
+        if (pendingClearAnimRunnable != null) {
+            rv.removeCallbacks(pendingClearAnimRunnable);
+        }
+        rv.post(pendingClearAnimRunnable = () -> {
+            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+            if (lac == null || lac.isDone()) {
+                rv.setLayoutAnimation(null);
+            }
+            pendingClearAnimRunnable = null;
+        });
         switchProjectPanelAdapter(projectPanelAdapter);
         projectPanelAdapter.submitProjects(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建项目");
@@ -3439,7 +3476,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        rv.post(() -> rv.setLayoutAnimation(null));
+        if (pendingClearAnimRunnable != null) {
+            rv.removeCallbacks(pendingClearAnimRunnable);
+        }
+        rv.post(pendingClearAnimRunnable = () -> {
+            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
+            if (lac == null || lac.isDone()) {
+                rv.setLayoutAnimation(null);
+            }
+            pendingClearAnimRunnable = null;
+        });
         switchProjectPanelAdapter(taskPanelAdapter);
         taskPanelAdapter.submitItems(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建 Task");
@@ -8225,11 +8271,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void followRuntimeTaskIfPanelIsStale(@NonNull String operationId) {
-        if (currentOperationAdapter != null && currentOperationAdapter.findPositionById(operationId) >= 0) {
+        // Only skip if the panel is actually at OPERATION level showing this operation.
+        // If the user navigated back to PROJECT/TASK level, the adapter retains stale data
+        // but currentLevel no longer reflects OPERATION — we must still navigate down.
+        if (currentLevel == NavigationLevel.OPERATION
+                && currentOperationAdapter != null
+                && currentOperationAdapter.findPositionById(operationId) >= 0) {
             return;
         }
         File ownerTaskDir = findTaskDirOwningOperation(operationId);
-        if (ownerTaskDir == null || isSameFile(currentTaskDir, ownerTaskDir)) {
+        // isSameFile alone is not enough: currentTaskDir may still equal ownerTaskDir even
+        // when the user navigated back to TASK/PROJECT level, so also require OPERATION level.
+        if (ownerTaskDir == null
+                || (currentLevel == NavigationLevel.OPERATION && isSameFile(currentTaskDir, ownerTaskDir))) {
             return;
         }
         currentTaskDir = ownerTaskDir;
