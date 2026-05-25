@@ -233,7 +233,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     /** Service 存活标志：onDestroy 后置 false，后台线程回调据此短路，避免访问已销毁状态 */
     private volatile boolean serviceAlive = true;
     private final Runnable searchRefreshRunnable = this::refreshCurrentLevelList;
-    private Runnable pendingClearAnimRunnable;
     private RecyclerView projectPanelRecyclerView;
     private ProjectPanelAdapter projectPanelAdapter;
     private TaskPanelAdapter taskPanelAdapter;
@@ -3114,22 +3113,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         boolean shouldAnimate = !TextUtils.equals(lastRenderedOperationTaskKey, taskKey)
                 && TextUtils.isEmpty(normalizeQuery(currentSearchQuery));
         if (shouldAnimate) {
-            if (pendingClearAnimRunnable != null) {
-                rv.removeCallbacks(pendingClearAnimRunnable);
-                pendingClearAnimRunnable = null;
-            }
             rv.setLayoutAnimation(android.view.animation.AnimationUtils.loadLayoutAnimation(this, R.anim.op_layout_enter));
-        } else {
-            if (pendingClearAnimRunnable != null) {
-                rv.removeCallbacks(pendingClearAnimRunnable);
-            }
-            rv.post(pendingClearAnimRunnable = () -> {
-                android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
-                if (lac == null || lac.isDone()) {
-                    rv.setLayoutAnimation(null);
-                }
-                pendingClearAnimRunnable = null;
-            });
         }
         List<OperationItem> allOperations;
         if (!forceReload
@@ -3456,16 +3440,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        if (pendingClearAnimRunnable != null) {
-            rv.removeCallbacks(pendingClearAnimRunnable);
-        }
-        rv.post(pendingClearAnimRunnable = () -> {
-            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
-            if (lac == null || lac.isDone()) {
-                rv.setLayoutAnimation(null);
-            }
-            pendingClearAnimRunnable = null;
-        });
         switchProjectPanelAdapter(projectPanelAdapter);
         projectPanelAdapter.submitProjects(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建项目");
@@ -3476,16 +3450,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
         ensureProjectPanelAdapters();
-        if (pendingClearAnimRunnable != null) {
-            rv.removeCallbacks(pendingClearAnimRunnable);
-        }
-        rv.post(pendingClearAnimRunnable = () -> {
-            android.view.animation.LayoutAnimationController lac = rv.getLayoutAnimation();
-            if (lac == null || lac.isDone()) {
-                rv.setLayoutAnimation(null);
-            }
-            pendingClearAnimRunnable = null;
-        });
         switchProjectPanelAdapter(taskPanelAdapter);
         taskPanelAdapter.submitItems(items);
         updateEmptyView(items.isEmpty(), "点击右上角 + 创建 Task");
