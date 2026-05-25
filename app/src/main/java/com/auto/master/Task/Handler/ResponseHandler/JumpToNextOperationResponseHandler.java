@@ -40,10 +40,20 @@ public class JumpToNextOperationResponseHandler extends DefaultResponseHandler{
             scriptExecuteContext.tobeHandledOperation = null;
             return;
         }
+        /**
+         * 这里有一个指向自身的一个判断
+         */
         if (nextOpId.equals(ctx.lastOperation.getId())) {
-            Log.e(TAG, "nextOperationId 指向自身，终止以避免循环: " + nextOpId);
-            scriptExecuteContext.tobeHandledOperation = null;
-            return;
+            scriptExecuteContext.repeatedTimes +=1;
+            if (scriptExecuteContext.repeatedTimes>100){
+                Log.e(TAG, "nextOperationId 指向自身，循环100次，终止以避免无限循环: " + nextOpId);
+                scriptExecuteContext.tobeHandledOperation = null;
+                return;
+            }
+
+
+        }else {
+            scriptExecuteContext.repeatedTimes = 0;
         }
 
         Project anchorProject = ctx.anchorProject;

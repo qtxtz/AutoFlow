@@ -10,6 +10,8 @@ public class ScriptExecuteContext {
 
     public  volatile MetaOperation tobeHandledOperation;
 
+    public volatile int repeatedTimes = 0;
+
     /**
      * 这个currentoperation放在了 operationContext里面 所以这里不需要了 注释掉即可
      */
