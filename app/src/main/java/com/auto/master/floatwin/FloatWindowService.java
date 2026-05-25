@@ -1112,6 +1112,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private ClipboardDialogHelper clipboardDialogHelper;
     /** 执行流程对话框（从本类拆分，见 ExecutionDialogHelper）。 */
     private ExecutionDialogHelper executionDialogHelper;
+    /** 通用节点前置延迟对话框。 */
+    private NodePreDelayDialogHelper nodePreDelayDialogHelper;
     /** 悬浮球与扇形菜单控制器。 */
     private final FloatBallOverlayController floatBallOverlayController =
             new FloatBallOverlayController(new FloatBallOverlayController.Host() {
@@ -1679,6 +1681,71 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         });
     }
 
+    private void showNodePreDelayDialog(OperationItem item) {
+        if (item == null || TextUtils.isEmpty(item.id)) {
+            return;
+        }
+        if (nodePreDelayDialogHelper == null) {
+            nodePreDelayDialogHelper = new NodePreDelayDialogHelper(this, wm);
+        }
+        nodePreDelayDialogHelper.show(
+                item.nodePreDelayMs,
+                item.nodePreDelayMinMs,
+                item.nodePreDelayMaxMs,
+                item.nodePreDelayRandom,
+                (delayMs, minMs, maxMs, random) ->
+                        updateNodePreDelay(item.id, delayMs, minMs, maxMs, random));
+    }
+
+    private void updateNodePreDelay(String operationId, long delayMs, long minMs, long maxMs, boolean random) {
+        getOperationJsonAsync(operationId, operationJson -> {
+            if (!serviceAlive || operationJson == null) {
+                Toast.makeText(this, "无法读取 operation 数据", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try {
+                JSONObject operationObject = new JSONObject(operationJson);
+                JSONObject inputMap = operationObject.optJSONObject("inputMap");
+                if (inputMap == null) {
+                    inputMap = new JSONObject();
+                    operationObject.put("inputMap", inputMap);
+                }
+                long safeDelay = Math.max(0L, Math.min(delayMs, MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                long safeMin = Math.max(0L, Math.min(minMs, MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                long safeMax = Math.max(0L, Math.min(maxMs, MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                if (safeMax < safeMin) {
+                    long tmp = safeMin;
+                    safeMin = safeMax;
+                    safeMax = tmp;
+                }
+                if (!random && safeDelay == MetaOperation.DEFAULT_NODE_PRE_DELAY_MS) {
+                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MS);
+                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
+                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
+                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_RANDOM);
+                } else {
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_RANDOM, random);
+                    if (random) {
+                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MIN_MS, safeMin);
+                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MAX_MS, safeMax);
+                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeMax);
+                    } else {
+                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeDelay);
+                        inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
+                        inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
+                    }
+                }
+                if (saveOperationJson(operationId, operationObject.toString(2), currentOperationAdapter)) {
+                    if (currentTaskDir != null) {
+                        loadOperations(currentTaskDir, true);
+                    }
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "保存节点延迟失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     private void showEditOperationDialogWithJson(OperationItem selected, OperationPanelAdapter adapter, String operationJson) {
         try {
             JSONObject operationObject = new JSONObject(operationJson);
@@ -1950,7 +2017,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             refreshCurrentTaskCache();
             
             // 刷新列表
-            loadOperations(currentTaskDir);
+            loadOperations(currentTaskDir, true);
             refreshOpenFlowGraphPanel(operationId);
             
             Toast.makeText(this, cleaned > 0 ? "保存成功，已清理 " + cleaned + " 张无用图片" : "保存成功", Toast.LENGTH_SHORT).show();
@@ -2173,6 +2240,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         });
         triggerDialogHelper = new TriggerDialogHelper(this, dialogHelpers, appLaunchTriggerManager);
         executionDialogHelper = new ExecutionDialogHelper(this, dialogHelpers);
+        nodePreDelayDialogHelper = new NodePreDelayDialogHelper(this, wm);
         clipboardDialogHelper = new ClipboardDialogHelper(this, dialogHelpers, new ClipboardDialogHelper.ClipboardCallbacks() {
             @Override public boolean hasOperationClipboard() { return !operationClipboardLibrary.isEmpty(); }
             @Override public java.util.List<OperationClipboardEntry> getClipboardLibrary() { return operationClipboardLibrary; }
@@ -2186,12 +2254,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         dialogFactory.setOnOperationAddedListener(() -> {
             refreshCurrentTaskCache();
-            loadOperations(currentTaskDir);
+            loadOperations(currentTaskDir, true);
         });
 
         dialogFactory.setOnOperationUpdatedListener(() -> {
             refreshCurrentTaskCache();
-            loadOperations(currentTaskDir);
+            loadOperations(currentTaskDir, true);
         });
 
         dialogFactory.setNextOperationBinder((view, excludeId) ->
@@ -3239,7 +3307,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     int i = 0;
                     for (MetaOperation op : metaOperations) {
                         operations.add(new OperationItem(op.getName(), op.getId(), getOperationTypeName(op.getType()), i,
-                                extractDelayDurationMs(op), extractDelayShowCountdown(op)));
+                                extractDelayDurationMs(op), extractDelayShowCountdown(op),
+                                extractNodePreDelayMs(op), extractNodePreDelayMinMs(op),
+                                extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op)));
                         i++;
                     }
                 } else {
@@ -3251,7 +3321,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         int i = 0;
                         for (MetaOperation value : operationMap.values()) {
                             operations.add(new OperationItem(value.getName(), value.getId(), getOperationTypeName(value.getType()), i,
-                                    extractDelayDurationMs(value), extractDelayShowCountdown(value)));
+                                    extractDelayDurationMs(value), extractDelayShowCountdown(value),
+                                    extractNodePreDelayMs(value), extractNodePreDelayMinMs(value),
+                                    extractNodePreDelayMaxMs(value), extractNodePreDelayRandom(value)));
                             i++;
                         }
                     }
@@ -3263,7 +3335,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         int i = 0;
                         for (MetaOperation op : metaOperations) {
                             operations.add(new OperationItem(op.getName(), op.getId(), getOperationTypeName(op.getType()), i,
-                                    extractDelayDurationMs(op), extractDelayShowCountdown(op)));
+                                    extractDelayDurationMs(op), extractDelayShowCountdown(op),
+                                    extractNodePreDelayMs(op), extractNodePreDelayMinMs(op),
+                                    extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op)));
                             i++;
                         }
                     }
@@ -3344,6 +3418,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     @Override
                     public void onFloatButton(OperationItem item) {
                         showNodeFloatBtnConfig(item);
+                    }
+
+                    @Override
+                    public void onNodePreDelay(OperationItem item) {
+                        showNodePreDelayDialog(item);
                     }
                 },
                 selectedIds -> {
@@ -3531,7 +3610,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                 getOperationTypeName(op.getType()),
                                 index++,
                                 extractDelayDurationMs(op),
-                                extractDelayShowCountdown(op)));
+                                extractDelayShowCountdown(op),
+                                extractNodePreDelayMs(op),
+                                extractNodePreDelayMinMs(op),
+                                extractNodePreDelayMaxMs(op),
+                                extractNodePreDelayRandom(op)));
                     }
                     if (!operations.isEmpty()) {
                         return operations;
@@ -3584,7 +3667,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         showCountdown = inputMap.optBoolean(MetaOperation.DELAY_SHOW_COUNTDOWN, true);
                     }
                 }
-                operations.add(new OperationItem(name, id, typeName, i, delayMs, showCountdown));
+                JSONObject inputMap = op.optJSONObject("inputMap");
+                long nodePreDelayMs = inputMap == null
+                        ? MetaOperation.DEFAULT_NODE_PRE_DELAY_MS
+                        : Math.max(0L, Math.min(inputMap.optLong(MetaOperation.NODE_PRE_DELAY_MS,
+                                MetaOperation.DEFAULT_NODE_PRE_DELAY_MS), MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                long nodePreDelayMinMs = inputMap == null
+                        ? 0L
+                        : Math.max(0L, Math.min(inputMap.optLong(MetaOperation.NODE_PRE_DELAY_MIN_MS, 0L),
+                                MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                long nodePreDelayMaxMs = inputMap == null
+                        ? nodePreDelayMs
+                        : Math.max(0L, Math.min(inputMap.optLong(MetaOperation.NODE_PRE_DELAY_MAX_MS, nodePreDelayMs),
+                                MetaOperation.MAX_NODE_PRE_DELAY_MS));
+                boolean nodePreDelayRandom = inputMap != null
+                        && inputMap.optBoolean(MetaOperation.NODE_PRE_DELAY_RANDOM, false);
+                operations.add(new OperationItem(name, id, typeName, i, delayMs, showCountdown,
+                        nodePreDelayMs, nodePreDelayMinMs, nodePreDelayMaxMs, nodePreDelayRandom));
             }
         } catch (Exception e) {
             Log.e(TAG, "load operations failed", e);
@@ -4754,7 +4853,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             scrollRunningOperationIntoView(operationId);
         });
         syncProjectPanelRuntimeUi();
-        maybeStartDelayProgress(opItem);
+        if (opItem == null || opItem.nodePreDelayMs <= 0L) {
+            maybeStartDelayProgress(opItem);
+        }
 
         // 2. 更新悬浮球状态：运行中切为贴边 handle
         dockBallForRunningFromCurrentPosition();
@@ -4778,6 +4879,26 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }
         return null;
+    }
+
+    @Override
+    public void onNodePreDelayStart(String operationId, long durationMs) {
+        OperationItem opItem = findRunningItem(operationId);
+        if (opItem == null || durationMs <= 0L) {
+            return;
+        }
+        OperationItem runtimeItem = new OperationItem(
+                opItem.name,
+                opItem.id,
+                opItem.type,
+                opItem.index,
+                opItem.delayDurationMs,
+                opItem.delayShowCountdown,
+                durationMs,
+                durationMs,
+                durationMs,
+                false);
+        maybeStartDelayProgress(runtimeItem);
     }
 
     public static long extractDelayDurationMs(@Nullable MetaOperation operation) {
@@ -4825,6 +4946,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return "true".equalsIgnoreCase(raw) || "1".equals(raw) || "yes".equalsIgnoreCase(raw);
         }
         return true;
+    }
+
+    public static long extractNodePreDelayMs(@Nullable MetaOperation operation) {
+        return OperationHandler.getConfiguredNodePreDelayMs(operation);
+    }
+
+    public static long extractNodePreDelayMinMs(@Nullable MetaOperation operation) {
+        return OperationHandler.getNodePreDelayMinMs(operation);
+    }
+
+    public static long extractNodePreDelayMaxMs(@Nullable MetaOperation operation) {
+        return OperationHandler.getNodePreDelayMaxMs(operation);
+    }
+
+    public static boolean extractNodePreDelayRandom(@Nullable MetaOperation operation) {
+        return OperationHandler.isNodePreDelayRandom(operation);
     }
 
     // ── 延迟进度悬浮层：实现已迁移至 StepAndDelayOverlayManager，此处仅保留薄封装。
@@ -5001,7 +5138,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
 
             refreshCurrentTaskCache();
-            loadOperations(currentTaskDir);
+            loadOperations(currentTaskDir, true);
             Toast.makeText(this, "已添加操作", Toast.LENGTH_SHORT).show();
             return true;
         } catch (Exception e) {
@@ -5149,7 +5286,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
             int cleaned = 0;
             refreshCurrentTaskCache();
-            loadOperations(currentTaskDir);
+            loadOperations(currentTaskDir, true);
             if (!TextUtils.isEmpty(successText)) {
                 if (cleaned > 0) {
                     Toast.makeText(this, successText + "，清理图片 " + cleaned + " 张", Toast.LENGTH_SHORT).show();
@@ -6962,7 +7099,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 continue;
             }
             items.add(new OperationItem(operation.getName(), operation.getId(), getOperationTypeName(operation.getType()),
-                    opIndex++, extractDelayDurationMs(operation), extractDelayShowCountdown(operation)));
+                    opIndex++, extractDelayDurationMs(operation), extractDelayShowCountdown(operation),
+                    extractNodePreDelayMs(operation), extractNodePreDelayMinMs(operation),
+                    extractNodePreDelayMaxMs(operation), extractNodePreDelayRandom(operation)));
         }
         return items;
     }
@@ -7108,6 +7247,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         @Override
                         public void onFloatButton(OperationItem item) {
                             showNodeFloatBtnConfig(item);
+                        }
+
+                        @Override
+                        public void onNodePreDelay(OperationItem item) {
+                            showNodePreDelayDialog(item);
                         }
                     },
                     selectedIds -> {
@@ -7682,6 +7826,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         chkUseCanny.setChecked(false);
         if (preDelayInput != null) preDelayInput.setText("0");
         if (postDelayInput != null) postDelayInput.setText("0");
+        if (preDelayInput != null) preDelayInput.setHint("0~" + MetaOperation.MAX_NODE_PRE_DELAY_MS);
+        if (postDelayInput != null) postDelayInput.setHint("0~" + MetaOperation.MAX_MATCH_DELAY_MS);
 
         if (operationObject != null) {
             JSONObject inputMap = operationObject.optJSONObject("inputMap");
@@ -7700,7 +7846,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     sampleRatioInput.setText(String.valueOf(sampleRatioObj));
                 }
                 fallbackInput.setText(inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""), false);
-                Object preDelayObj = inputMap.opt(MetaOperation.MATCH_PRE_DELAY_MS);
+                Object preDelayObj = inputMap.has(MetaOperation.NODE_PRE_DELAY_MS)
+                        ? inputMap.opt(MetaOperation.NODE_PRE_DELAY_MS)
+                        : inputMap.opt(MetaOperation.MATCH_PRE_DELAY_MS);
                 Object postDelayObj = inputMap.opt(MetaOperation.MATCH_POST_DELAY_MS);
                 Object pollFastObj = inputMap.opt(MetaOperation.POLL_FAST_INTERVAL_MS);
                 Object pollMediumObj = inputMap.opt(MetaOperation.POLL_MEDIUM_INTERVAL_MS);
@@ -7792,8 +7940,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         } catch (Exception ignored) {}
         if (preDelay < 0) preDelay = 0;
         if (postDelay < 0) postDelay = 0;
-        if (preDelay > 5000) preDelay = 5000;
-        if (postDelay > 5000) postDelay = 5000;
+        if (preDelay > MetaOperation.MAX_NODE_PRE_DELAY_MS) preDelay = MetaOperation.MAX_NODE_PRE_DELAY_MS;
+        if (postDelay > MetaOperation.MAX_MATCH_DELAY_MS) postDelay = MetaOperation.MAX_MATCH_DELAY_MS;
 
         try {
             inputMap.put(MetaOperation.MATCHUSEGRAY, chkGray != null && chkGray.isChecked());
@@ -7807,8 +7955,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick != null && chkSuccessClick.isChecked());
             inputMap.put(MetaOperation.MATCHUSECANNARY, chkUseCanny != null && chkUseCanny.isChecked());
             if (preDelay > 0) {
-                inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, (double) preDelay);
+                inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, (double) preDelay);
+                inputMap.remove(MetaOperation.MATCH_PRE_DELAY_MS);
             } else {
+                inputMap.remove(MetaOperation.NODE_PRE_DELAY_MS);
+                inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
+                inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
+                inputMap.remove(MetaOperation.NODE_PRE_DELAY_RANDOM);
                 inputMap.remove(MetaOperation.MATCH_PRE_DELAY_MS);
             }
             if (postDelay > 0) {
@@ -8433,7 +8586,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     typeName,
                     index++,
                     extractDelayDurationMs(op),
-                    extractDelayShowCountdown(op)
+                    extractDelayShowCountdown(op),
+                    extractNodePreDelayMs(op),
+                    extractNodePreDelayMinMs(op),
+                    extractNodePreDelayMaxMs(op),
+                    extractNodePreDelayRandom(op)
                 ));
             }
             

@@ -88,6 +88,9 @@ public final class ScriptRunner {
          * @param operationName operation 的名称
          */
         void onOperationStart(String operationId, String operationName);
+
+        default void onNodePreDelayStart(String operationId, long durationMs) {
+        }
         
         /**
          * operation 执行完成
@@ -345,6 +348,26 @@ public final class ScriptRunner {
         return operationType == null ? "未知" : operationType.getDisplayName();
     }
 
+    private static boolean sleepNodePreDelay(ScriptExecuteContext ctx, long delayMs) throws InterruptedException {
+        long endAt = SystemClock.uptimeMillis() + Math.max(0L, delayMs);
+        while (SystemClock.uptimeMillis() < endAt) {
+            if (ctx == null || ctx.stopped || !Boolean.TRUE.equals(ctx.running)) {
+                return false;
+            }
+            synchronized (ctx.pauseLock) {
+                while (ctx.paused && Boolean.TRUE.equals(ctx.running) && !ctx.stopped) {
+                    ctx.pauseLock.wait();
+                }
+            }
+            long remaining = endAt - SystemClock.uptimeMillis();
+            if (remaining <= 0L) {
+                break;
+            }
+            SystemClock.sleep(Math.min(remaining, 50L));
+        }
+        return ctx != null && !ctx.stopped && Boolean.TRUE.equals(ctx.running);
+    }
+
     public static void runOperation(ScriptExecuteContext scriptExecuteContext) {
         currentExecuteContext = scriptExecuteContext;
 
@@ -437,7 +460,11 @@ public final class ScriptRunner {
                                                                     typeName,
                                                                     index++,
                                                                     com.auto.master.floatwin.FloatWindowService.extractDelayDurationMs(op),
-                                                                    com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(op)
+                                                                    com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(op),
+                                                                    com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMs(op),
+                                                                    com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMinMs(op),
+                                                                    com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMaxMs(op),
+                                                                    com.auto.master.floatwin.FloatWindowService.extractNodePreDelayRandom(op)
                                                             ));
                                                         }
                                                         MAIN.post(() -> listener.onTaskSwitch(taskId, taskName, operationItems));
@@ -471,6 +498,19 @@ public final class ScriptRunner {
                                     }
                                     scriptExecuteContext.running = false;
                                     break;
+                                }
+
+                                long nodePreDelayMs = OperationHandler.resolveNodePreDelayMs(operation);
+                                if (nodePreDelayMs > 0L) {
+                                    if (currentListener != null) {
+                                        final ScriptExecutionListener listener = currentListener;
+                                        final long delayForUi = nodePreDelayMs;
+                                        MAIN.post(() -> listener.onNodePreDelayStart(opId, delayForUi));
+                                    }
+                                    if (!sleepNodePreDelay(scriptExecuteContext, nodePreDelayMs)) {
+                                        scriptExecuteContext.running = false;
+                                        break;
+                                    }
                                 }
 
                                 boolean ok = operationHandler.handle(operation, scriptExecuteContext.sharedContext);

@@ -59,6 +59,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         void onConfigUi(OperationItem item);
 
         void onFloatButton(OperationItem item);
+
+        void onNodePreDelay(OperationItem item);
     }
 
     interface OnBatchSelectionListener {
@@ -199,7 +201,11 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                     || !TextUtils.equals(oldItem.name, newItem.name)
                     || !TextUtils.equals(oldItem.type, newItem.type)
                     || oldItem.delayDurationMs != newItem.delayDurationMs
-                    || oldItem.delayShowCountdown != newItem.delayShowCountdown) {
+                    || oldItem.delayShowCountdown != newItem.delayShowCountdown
+                    || oldItem.nodePreDelayMs != newItem.nodePreDelayMs
+                    || oldItem.nodePreDelayMinMs != newItem.nodePreDelayMinMs
+                    || oldItem.nodePreDelayMaxMs != newItem.nodePreDelayMaxMs
+                    || oldItem.nodePreDelayRandom != newItem.nodePreDelayRandom) {
                 return false;
             }
         }
@@ -220,6 +226,13 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         holder.name.setText(item.name);
         holder.typeText.setText(getOperationTypeDisplayName(item.type));
         holder.opId.setText(item.id);
+        if (holder.nodePreDelayText != null) {
+            String delayText = item.nodePreDelayRandom
+                    ? "等待: " + item.nodePreDelayMinMs + "~" + item.nodePreDelayMaxMs + "ms"
+                    : "等待: " + item.nodePreDelayMs + "ms";
+            holder.nodePreDelayText.setText(delayText);
+            holder.nodePreDelayText.setTextColor(item.nodePreDelayMs > 0L ? 0xFFD34B3F : 0xFF8A97A6);
+        }
 
         boolean isRunning = runningOperationId != null && runningOperationId.equals(item.id);
         boolean isSelected = position == selectedPosition.get();
@@ -281,6 +294,13 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         });
 
         holder.moreOptions.setOnClickListener(v -> showMenu(v, item, position));
+        if (holder.nodePreDelayButton != null) {
+            holder.nodePreDelayButton.setOnClickListener(v -> {
+                if (actionListener != null) {
+                    actionListener.onNodePreDelay(item);
+                }
+            });
+        }
         holder.batchCheckBox.setOnClickListener(v -> toggleBatchSelection(item.id, position));
     }
 
@@ -310,6 +330,7 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         actionItems.add(new ActionItem(7, "删除", "删除当前节点", true));
         actionItems.add(new ActionItem(8, "ConfigUI 设计", "为这个节点设计可视化配置界面", true));
         actionItems.add(new ActionItem(9, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
+        actionItems.add(new ActionItem(10, "节点前置延迟", "运行到这个节点前先等待一段时间", true));
 
         View popupView = LayoutInflater.from(anchor.getContext()).inflate(R.layout.dialog_node_action_sheet, null);
         TextView titleView = popupView.findViewById(R.id.tv_action_title);
@@ -359,6 +380,9 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                     break;
                 case 9:
                     actionListener.onFloatButton(item);
+                    break;
+                case 10:
+                    actionListener.onNodePreDelay(item);
                     break;
                 default:
                     break;
@@ -572,6 +596,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         final View floatBtnDot;
         final GradientDrawable floatBtnDotBg;
         final ImageView moreOptions;
+        final TextView nodePreDelayText;
+        final ImageView nodePreDelayButton;
         final CheckBox batchCheckBox;
 
         ViewHolder(View itemView) {
@@ -580,6 +606,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             name = itemView.findViewById(R.id.list_item_text);
             typeText = itemView.findViewById(R.id.operation_type);
             opId = itemView.findViewById(R.id.operation_id);
+            nodePreDelayText = itemView.findViewById(R.id.node_pre_delay_text);
+            nodePreDelayButton = itemView.findViewById(R.id.btn_node_pre_delay);
             selectionIndicator = itemView.findViewById(R.id.selection_indicator);
             moreOptions = itemView.findViewById(R.id.more_options);
             batchCheckBox = itemView.findViewById(R.id.chk_batch);

@@ -38,8 +38,10 @@ public class ColorSearchOperationHandler extends OperationHandler {
         Integer targetColor = parseColor(inputMap == null ? null : inputMap.get(MetaOperation.COLOR_VALUE));
         int tolerance = parseInt(inputMap == null ? null : inputMap.get(MetaOperation.COLOR_TOLERANCE), 18, 0, 255);
         int minPixels = parseInt(inputMap == null ? null : inputMap.get(MetaOperation.COLOR_SEARCH_MIN_PIXELS), 60, 1, Integer.MAX_VALUE);
-        long timeoutMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCHTIMEOUT), 5000L, 1L, 60_000L);
-        long preDelayMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS), 0L, 0L, 5000L);
+        long timeoutMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS, 1L, 60_000L);
+        long preDelayMs = inputMap != null && inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
+                ? 0L
+                : parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS), 0L, 0L, MetaOperation.MAX_MATCH_DELAY_MS);
 
         if (bbox == null || targetColor == null) {
             ctx.currentResponse = buildResult(false, 0, null, null);

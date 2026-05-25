@@ -42,8 +42,10 @@ public class ColorMatchOperationHandler extends OperationHandler {
             return true;
         }
 
-        long timeoutMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCHTIMEOUT), 5000L, 1L, 60_000L);
-        long preDelayMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS), 0L, 0L, 5000L);
+        long timeoutMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS, 1L, 60_000L);
+        long preDelayMs = inputMap != null && inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
+                ? 0L
+                : parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS), 0L, 0L, MetaOperation.MAX_MATCH_DELAY_MS);
         String matchMode = getString(inputMap, MetaOperation.COLOR_MATCH_MODE, MetaOperation.COLOR_MATCH_MODE_ALL);
         boolean anyMode = MetaOperation.COLOR_MATCH_MODE_ANY.equalsIgnoreCase(matchMode);
 

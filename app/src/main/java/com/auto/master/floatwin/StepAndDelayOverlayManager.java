@@ -129,9 +129,14 @@ public class StepAndDelayOverlayManager {
     /** 如果 opItem 是带倒计时的延迟操作，则启动延迟进度显示。 */
     public void maybeStartDelay(@Nullable OperationItem opItem) {
         stopDelay();
-        if (opItem == null || opItem.delayDurationMs <= 0L || !opItem.delayShowCountdown) return;
+        if (opItem == null) return;
+        long durationMs = opItem.nodePreDelayRandom
+                ? opItem.nodePreDelayMaxMs
+                : (opItem.nodePreDelayMs > 0L ? opItem.nodePreDelayMs : opItem.delayDurationMs);
+        boolean showCountdown = durationMs > 0L || opItem.delayShowCountdown;
+        if (durationMs <= 0L || !showCountdown) return;
         activeDelayOperationId = opItem.id;
-        activeDelayDurationMs = opItem.delayDurationMs;
+        activeDelayDurationMs = durationMs;
         activeDelayStartMs = SystemClock.uptimeMillis();
         renderDelayProgress(true, 0L, activeDelayDurationMs);
         uiHandler.postDelayed(delayProgressRunnable, DELAY_TICK_MS);

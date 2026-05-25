@@ -33,7 +33,6 @@ import java.util.Map;
 public class MatchtemplateOperationHandler extends OperationHandler {
 
     private static final String TAG = "MatchTemplateOp";
-    private static final long MAX_PRE_DELAY_MS = 5000L;
     private static final int MIN_RANDOM_SAMPLE_POINTS = 32;
 
     MatchtemplateOperationHandler() {
@@ -62,8 +61,10 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 MetaOperation.SAVEFILENAME,
                 "gesture_" + System.currentTimeMillis() + ".json");
         double similarity = parseDouble(inputMap.get(MetaOperation.MATCHSIMILARITY), 0.8d);
-        double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), 5000d);
-        long preDelayMs = parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
+        double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
+        long preDelayMs = inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
+                ? 0L
+                : parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
         int matchMethod = (int) parseDouble(inputMap.get(MetaOperation.MATCHMETHOD), 5d);
         double sampleRatio = parseDouble(inputMap.get(MetaOperation.MATCH_SAMPLE_RATIO), 0.1d);
         sampleRatio = Math.max(0.001d, Math.min(1.0d, sampleRatio));
@@ -365,12 +366,12 @@ public class MatchtemplateOperationHandler extends OperationHandler {
     private long parseDelayMs(Object raw) {
         if (raw instanceof Number) {
             long value = ((Number) raw).longValue();
-            return Math.max(0L, Math.min(value, MAX_PRE_DELAY_MS));
+            return Math.max(0L, Math.min(value, MetaOperation.MAX_MATCH_DELAY_MS));
         }
         if (raw instanceof String) {
             try {
                 long value = Long.parseLong(((String) raw).trim());
-                return Math.max(0L, Math.min(value, MAX_PRE_DELAY_MS));
+                return Math.max(0L, Math.min(value, MetaOperation.MAX_MATCH_DELAY_MS));
             } catch (Exception ignored) {
             }
         }

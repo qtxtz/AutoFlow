@@ -249,12 +249,12 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
     private long parseDelayMs(Object raw) {
         if (raw instanceof Number) {
             long v = ((Number) raw).longValue();
-            return Math.max(0, Math.min(v, 5000));
+            return Math.max(0, Math.min(v, MetaOperation.MAX_MATCH_DELAY_MS));
         }
         if (raw instanceof String) {
             try {
                 long v = Long.parseLong(((String) raw).trim());
-                return Math.max(0, Math.min(v, 5000));
+                return Math.max(0, Math.min(v, MetaOperation.MAX_MATCH_DELAY_MS));
             } catch (Exception ignored) {
             }
         }

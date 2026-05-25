@@ -43,7 +43,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MatchMaptemplateOperationHandler extends OperationHandler {
 
     private static final String TAG = "MatchMapOp";
-    private static final long MAX_PRE_DELAY_MS = 5000L;
     private static final double DEFAULT_SIMILARITY = 0.88d;
     private static final int CAPTURE_ROI_PADDING_PX = 12;
     private static final long RECT_FEEDBACK_DELAY_MS = 24L;
@@ -94,8 +93,10 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
         String projectName = getStringSafe(inputMap, MetaOperation.PROJECT, "fallback");
         String taskName = getStringSafe(inputMap, MetaOperation.TASK, "");
-        double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), 5000d);
-        long preDelayMs = parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
+        double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
+        long preDelayMs = inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
+                ? 0L
+                : parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
 
         CompiledMatchPlan plan = getOrCreateCompiledPlan(inputMap.get(MetaOperation.MATCHMAP));
         if (plan == null || plan.groups.isEmpty()) {
@@ -575,11 +576,11 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
     private long parseDelayMs(Object raw) {
         if (raw instanceof Number) {
-            return Math.max(0L, Math.min(((Number) raw).longValue(), MAX_PRE_DELAY_MS));
+            return Math.max(0L, Math.min(((Number) raw).longValue(), MetaOperation.MAX_MATCH_DELAY_MS));
         }
         if (raw instanceof String) {
             try {
-                return Math.max(0L, Math.min(Long.parseLong(((String) raw).trim()), MAX_PRE_DELAY_MS));
+                return Math.max(0L, Math.min(Long.parseLong(((String) raw).trim()), MetaOperation.MAX_MATCH_DELAY_MS));
             } catch (Exception ignored) {
             }
         }

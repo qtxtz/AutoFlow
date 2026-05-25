@@ -647,6 +647,57 @@ public class OperationDialogFactory {
         }
     }
 
+    private String defaultMatchTimeoutText() {
+        return String.valueOf(MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
+    }
+
+    private void putOptionalMatchPreDelay(JSONObject inputMap, TextView input) throws org.json.JSONException {
+        String text = safeText(input);
+        if (TextUtils.isEmpty(text)) {
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_RANDOM);
+            inputMap.remove(MetaOperation.MATCH_PRE_DELAY_MS);
+            return;
+        }
+        long value;
+        try {
+            value = Long.parseLong(text);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("节点前延迟必须是 0~" + MetaOperation.MAX_NODE_PRE_DELAY_MS + " 的毫秒数");
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException("节点前延迟必须是 0~" + MetaOperation.MAX_NODE_PRE_DELAY_MS + " 的毫秒数");
+        }
+        if (value == 0) {
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
+            inputMap.remove(MetaOperation.NODE_PRE_DELAY_RANDOM);
+            inputMap.remove(MetaOperation.MATCH_PRE_DELAY_MS);
+            return;
+        }
+        inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, Math.min(value, MetaOperation.MAX_NODE_PRE_DELAY_MS));
+        inputMap.remove(MetaOperation.MATCH_PRE_DELAY_MS);
+    }
+
+    private void setupMatchDelayHint(EditText input) {
+        if (input != null) {
+            input.setHint("0~" + MetaOperation.MAX_NODE_PRE_DELAY_MS);
+        }
+    }
+
+    private void setNodePreDelayText(EditText input, JSONObject inputMap) {
+        if (input == null || inputMap == null) {
+            return;
+        }
+        String value = inputMap.has(MetaOperation.NODE_PRE_DELAY_MS)
+                ? inputMap.optString(MetaOperation.NODE_PRE_DELAY_MS, "")
+                : inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, "");
+        input.setText(value);
+    }
+
     private void setupPollingIntervalInputs(View dialogView,
                                             AdaptivePollingController.Profile profile,
                                             JSONObject inputMap) {
@@ -1608,7 +1659,7 @@ public class OperationDialogFactory {
         String defaultTemplate = "tpl_" + System.currentTimeMillis() + ".png";
         edtTemplateFile.setText(defaultTemplate);
         edtSimilarity.setText("0.85");
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
 
         if (templateHelper != null) {
             templateHelper.refreshTemplateOptions(edtTemplateFile);
@@ -1829,13 +1880,13 @@ public class OperationDialogFactory {
                 if (timeout != null) {
                     edtTimeout.setText(String.valueOf(timeout).replace(".0", ""));
                 } else {
-                    edtTimeout.setText("5000");
+                    edtTimeout.setText(defaultMatchTimeoutText());
                 }
 
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
             } else {
                 edtSimilarity.setText("0.85");
-                edtTimeout.setText("5000");
+                edtTimeout.setText(defaultMatchTimeoutText());
             }
         } catch (Exception e) {
             host.showToast("加载操作数据失败: " + e.getMessage());
@@ -1937,7 +1988,8 @@ public class OperationDialogFactory {
         EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
         CheckBox chkSuccessClick = dialogView.findViewById(R.id.chk_success_click);
 
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
         if (chkSuccessClick != null) {
             chkSuccessClick.setChecked(true);
         }
@@ -2015,10 +2067,7 @@ public class OperationDialogFactory {
                 inputMap.put("MatchMap", matchMapJson);
                 inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick == null || chkSuccessClick.isChecked());
 
-                String preDelay = edtPreDelay.getText().toString().trim();
-                if (!TextUtils.isEmpty(preDelay)) {
-                    inputMap.put("MATCH_PRE_DELAY_MS", Long.parseLong(preDelay));
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
 
                 String fallback = safeText(edtFallback);
@@ -2062,6 +2111,7 @@ public class OperationDialogFactory {
         CheckBox chkSuccessClick = dialogView.findViewById(R.id.chk_success_click);
         android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
+        setupMatchDelayHint(edtPreDelay);
 
         setupAdvancedToggle(dialogView);
 
@@ -2075,10 +2125,10 @@ public class OperationDialogFactory {
             JSONObject inputMap = operationObject.optJSONObject("inputMap");
             if (inputMap != null) {
                 Object timeout = inputMap.opt("MATCHTIMEOUT");
-                edtTimeout.setText(timeout != null ? String.valueOf(timeout).replace(".0", "") : "5000");
+                edtTimeout.setText(timeout != null ? String.valueOf(timeout).replace(".0", "") : defaultMatchTimeoutText());
                 setOperationReferenceText(edtNextOperation, inputMap.optString("nextOperationId", ""));
                 setOperationReferenceText(edtFallback, inputMap.optString("FALLBACKOPERATIONID", ""));
-                edtPreDelay.setText(inputMap.optString("MATCH_PRE_DELAY_MS", ""));
+                setNodePreDelayText(edtPreDelay, inputMap);
                 setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.MATCH_MAP, inputMap);
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(inputMap.optBoolean(MetaOperation.SUCCEESCLICK, true));
@@ -2105,7 +2155,7 @@ public class OperationDialogFactory {
                     }
                 }
             } else {
-                edtTimeout.setText("5000");
+                edtTimeout.setText(defaultMatchTimeoutText());
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(true);
                 }
@@ -2178,10 +2228,7 @@ public class OperationDialogFactory {
                 inputMap.put("MatchMap", matchMapJson);
                 inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick == null || chkSuccessClick.isChecked());
 
-                String preDelay = edtPreDelay.getText().toString().trim();
-                if (!TextUtils.isEmpty(preDelay)) {
-                    inputMap.put("MATCH_PRE_DELAY_MS", Long.parseLong(preDelay));
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
 
                 String fallback = safeText(edtFallback);
@@ -2338,7 +2385,8 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
         EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
 
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
         dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
         setupAdvancedToggle(dialogView);
@@ -2393,9 +2441,7 @@ public class OperationDialogFactory {
                 inputMap.put(MetaOperation.COLOR_POINTS, points);
                 inputMap.put(MetaOperation.COLOR_MATCH_MODE, parseColorMatchMode(safeText(edtMode)));
                 inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
-                if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
-                    inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay)));
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
@@ -2438,7 +2484,8 @@ public class OperationDialogFactory {
 
         dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
         setupAdvancedToggle(dialogView);
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
@@ -2449,11 +2496,11 @@ public class OperationDialogFactory {
             JSONObject inputMap = operationObject.optJSONObject("inputMap");
             if (inputMap != null) {
                 Object timeoutObj = inputMap.opt(MetaOperation.MATCHTIMEOUT);
-                edtTimeout.setText(timeoutObj == null ? "5000" : String.valueOf(timeoutObj).replace(".0", ""));
+                edtTimeout.setText(timeoutObj == null ? defaultMatchTimeoutText() : String.valueOf(timeoutObj).replace(".0", ""));
                 edtMode.setText(displayColorMatchMode(inputMap.optString(MetaOperation.COLOR_MATCH_MODE, MetaOperation.COLOR_MATCH_MODE_ALL)), false);
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                 setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
-                edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
+                setNodePreDelayText(edtPreDelay, inputMap);
                 setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, inputMap);
                 JSONArray points = inputMap.optJSONArray(MetaOperation.COLOR_POINTS);
                 if (points != null) {
@@ -2515,9 +2562,7 @@ public class OperationDialogFactory {
                 inputMap.put(MetaOperation.COLOR_POINTS, points);
                 inputMap.put(MetaOperation.COLOR_MATCH_MODE, parseColorMatchMode(safeText(edtMode)));
                 inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
-                if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
-                    inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay)));
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
@@ -4163,7 +4208,8 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
 
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
         edtTolerance.setText("18");
         edtMinPixels.setText("60");
         setupAdvancedToggle(dialogView);
@@ -4264,9 +4310,7 @@ public class OperationDialogFactory {
                     try { inputMap.put(MetaOperation.COLOR_SEARCH_MIN_PIXELS, Integer.parseInt(minPixStr)); } catch (Exception ignored) {}
                 }
                 inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
-                if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
-                    try { inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay))); } catch (Exception ignored) {}
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));
@@ -4310,7 +4354,8 @@ public class OperationDialogFactory {
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
 
-        edtTimeout.setText("5000");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
         edtTolerance.setText("18");
         edtMinPixels.setText("60");
         setupAdvancedToggle(dialogView);
@@ -4351,9 +4396,9 @@ public class OperationDialogFactory {
                 edtMinPixels.setText(minPixObj == null ? "60" : String.valueOf(minPixObj).replace(".0", ""));
                 // timeout
                 Object timeoutObj = inputMap.opt(MetaOperation.MATCHTIMEOUT);
-                edtTimeout.setText(timeoutObj == null ? "5000" : String.valueOf(timeoutObj).replace(".0", ""));
+                edtTimeout.setText(timeoutObj == null ? defaultMatchTimeoutText() : String.valueOf(timeoutObj).replace(".0", ""));
                 // pre delay
-                edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
+                setNodePreDelayText(edtPreDelay, inputMap);
                 setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, inputMap);
                 // next / fallback
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
@@ -4445,9 +4490,7 @@ public class OperationDialogFactory {
                     try { inputMap.put(MetaOperation.COLOR_SEARCH_MIN_PIXELS, Integer.parseInt(minPixStr)); } catch (Exception ignored) {}
                 }
                 inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
-                if (!TextUtils.isEmpty(safeText(edtPreDelay))) {
-                    try { inputMap.put(MetaOperation.MATCH_PRE_DELAY_MS, Long.parseLong(safeText(edtPreDelay))); } catch (Exception ignored) {}
-                }
+                putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
                 if (!TextUtils.isEmpty(safeText(edtFallback))) {
                     inputMap.put(MetaOperation.FALLBACKOPERATIONID, safeText(edtFallback));

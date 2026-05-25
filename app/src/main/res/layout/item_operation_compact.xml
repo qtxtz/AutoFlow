@@ -84,6 +84,34 @@
                 android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/node_pre_delay_row"
+            android:layout_width="match_parent"
+            android:layout_height="22dp"
+            android:layout_marginTop="3dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/node_pre_delay_text"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:text="等待: 0ms"
+                android:textColor="#8A97A6"
+                android:textSize="10sp" />
+
+            <ImageView
+                android:id="@+id/btn_node_pre_delay"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="5dp"
+                android:src="@drawable/ic_edit"
+                android:tint="#728090" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 悬浮按钮标识点：仅当节点已绑定悬浮按钮时可见，背景色在 ViewHolder 中以代码设置 -->
