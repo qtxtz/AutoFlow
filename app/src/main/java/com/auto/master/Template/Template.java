@@ -197,6 +197,17 @@ public class Template {
         taskSnapshotCache.put(taskCacheKey(projectName, taskName), snapshotToken);
     }
 
+    public static synchronized boolean isTaskCacheWarm(String projectName, String taskName) {
+        if (projectName == null || projectName.isEmpty() || taskName == null || taskName.isEmpty()) {
+            return false;
+        }
+        String cacheKey = taskCacheKey(projectName, taskName);
+        return taskSnapshotCache.containsKey(cacheKey)
+                || manifestCache.containsKey(cacheKey)
+                || gestureCache.containsKey(cacheKey)
+                || matCache.containsKey(cacheKey);
+    }
+
     public static synchronized void invalidateTaskCache(String projectName, String taskName) {
         String cacheKey = taskCacheKey(projectName, taskName);
         cleanupMats(matCache.remove(cacheKey));

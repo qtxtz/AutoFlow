@@ -368,10 +368,6 @@ public final class ScriptRunner {
                     int consecutiveErrors = 0;
                     try {
 //                    *************************************************
-                        LoadImgToMatOperation loadImgToMatOperation = new LoadImgToMatOperation();
-                        loadImgToMatOperation.setId("loadResource");
-                        loadImgToMatOperation.setResponseType(1);
-                        HashMap<String, Object> tmpInputMap = new HashMap<>();
                         String projectName = "";
                         String entryTaskName = "";
                         if (scriptExecuteContext.sharedContext != null
@@ -383,12 +379,16 @@ public final class ScriptRunner {
                         if (entryOperation != null && entryOperation.taskId != null) {
                             entryTaskName = entryOperation.taskId;
                         }
-                        tmpInputMap.put(MetaOperation.PROJECT, projectName);
-                        if (!entryTaskName.isEmpty()) {
+                        if (!entryTaskName.isEmpty() && !Template.isTaskCacheWarm(projectName, entryTaskName)) {
+                            LoadImgToMatOperation loadImgToMatOperation = new LoadImgToMatOperation();
+                            loadImgToMatOperation.setId("loadResource");
+                            loadImgToMatOperation.setResponseType(1);
+                            HashMap<String, Object> tmpInputMap = new HashMap<>();
+                            tmpInputMap.put(MetaOperation.PROJECT, projectName);
                             tmpInputMap.put(MetaOperation.TASK, entryTaskName);
+                            loadImgToMatOperation.setInputMap(tmpInputMap);
+                            new LoadImgToMatOperationHandler().handle(loadImgToMatOperation, new OperationContext());
                         }
-                        loadImgToMatOperation.setInputMap(tmpInputMap);
-                        new LoadImgToMatOperationHandler().handle(loadImgToMatOperation, new OperationContext());
 //                    *************************************************
 
                         currentExecuteThread = Thread.currentThread();

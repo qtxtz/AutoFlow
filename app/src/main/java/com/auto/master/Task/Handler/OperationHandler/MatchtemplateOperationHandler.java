@@ -19,6 +19,7 @@ import com.auto.master.utils.OpenCVHelper;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.opencv.android.Utils;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 
@@ -33,6 +34,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
 
     private static final String TAG = "MatchTemplateOp";
     private static final long MAX_PRE_DELAY_MS = 5000L;
+    private static final int MIN_RANDOM_SAMPLE_POINTS = 32;
 
     MatchtemplateOperationHandler() {
         this.setType(6);
@@ -62,6 +64,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         double similarity = parseDouble(inputMap.get(MetaOperation.MATCHSIMILARITY), 0.8d);
         double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), 5000d);
         long preDelayMs = parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
+        int matchMethod = (int) parseDouble(inputMap.get(MetaOperation.MATCHMETHOD), 5d);
+        double sampleRatio = parseDouble(inputMap.get(MetaOperation.MATCH_SAMPLE_RATIO), 0.1d);
+        sampleRatio = Math.max(0.001d, Math.min(1.0d, sampleRatio));
         double scaleFactor = parseDouble(inputMap.get(MetaOperation.MATCHSCALEFACTOR), 1.0d);
         scaleFactor = Math.max(0.1d, Math.min(1.0d, scaleFactor));
 
@@ -71,6 +76,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             Log.w(TAG, "模板加载失败: " + templateName);
             return createResponse(ctx, obj, false, null, bbox, null);
         }
+        Mat randomSampleMask = createRandomSampleMaskIfNeeded(templateMat, matchMethod, sampleRatio);
 
         android.graphics.Rect captureRoi = null;
         if (bbox != null && bbox.size() >= 4) {
@@ -104,7 +110,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 continue;
             }
             try {
-                Point position = OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, scaleFactor);
+                Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor, matchMethod, sampleRatio, randomSampleMask);
                 if (position == null || position.x < 0 || position.y < 0) {
                     pollingController.onMiss();
                     pollingController.sleepUntilNextIteration(loopStartMs);
@@ -135,8 +141,95 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             }
             pollingController.sleepUntilNextIteration(loopStartMs);
         }
+        if (randomSampleMask != null) {
+            randomSampleMask.release();
+        }
 
         return createResponse(ctx, obj, matched, firstMatch, matched ? matchedBbox : bbox, svc);
+    }
+
+    private Point matchTemplate(Mat screenMat,
+                                Mat templateMat,
+                                double similarity,
+                                double scaleFactor,
+                                int matchMethod,
+                                double sampleRatio,
+                                Mat randomSampleMask) {
+        if (shouldUseRandomSample(screenMat, templateMat, matchMethod, sampleRatio, randomSampleMask)) {
+            return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, randomSampleMask);
+        }
+        return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, scaleFactor);
+    }
+
+    private boolean shouldUseRandomSample(Mat screenMat, Mat templateMat, int matchMethod, double sampleRatio, Mat randomSampleMask) {
+        return matchMethod == MetaOperation.MATCH_METHOD_RANDOM_SAMPLE
+                && sampleRatio < 1.0d
+                && randomSampleMask != null
+                && !randomSampleMask.empty()
+                && screenMat != null
+                && templateMat != null
+                && !screenMat.empty()
+                && !templateMat.empty()
+                && screenMat.rows() == templateMat.rows()
+                && screenMat.cols() == templateMat.cols();
+    }
+
+    private Mat createRandomSampleMaskIfNeeded(Mat templateMat, int matchMethod, double sampleRatio) {
+        if (matchMethod != MetaOperation.MATCH_METHOD_RANDOM_SAMPLE
+                || sampleRatio >= 1.0d
+                || templateMat == null
+                || templateMat.empty()) {
+            return null;
+        }
+
+        int rows = templateMat.rows();
+        int cols = templateMat.cols();
+        long totalPixelsLong = (long) rows * cols;
+        if (totalPixelsLong <= 0 || totalPixelsLong > Integer.MAX_VALUE) {
+            return null;
+        }
+
+        int totalPixels = (int) totalPixelsLong;
+        int sampleCount = (int) Math.ceil(totalPixels * sampleRatio);
+        sampleCount = Math.max(MIN_RANDOM_SAMPLE_POINTS, Math.min(totalPixels, sampleCount));
+        byte[] maskBytes = new byte[totalPixels];
+        long seed = sampleSeed(rows, cols, templateMat.channels(), sampleCount);
+
+        for (int i = 0; i < sampleCount; i++) {
+            int pixelIndex = pickStratifiedPixel(seed, i, sampleCount, totalPixels);
+            maskBytes[pixelIndex] = (byte) 255;
+        }
+
+        Mat mask = Mat.zeros(rows, cols, CvType.CV_8UC1);
+        mask.put(0, 0, maskBytes);
+        return mask;
+    }
+
+    private int pickStratifiedPixel(long seed, int index, int sampleCount, int totalPixels) {
+        int start = (int) Math.floor(index * (double) totalPixels / sampleCount);
+        int end = (int) Math.floor((index + 1) * (double) totalPixels / sampleCount) - 1;
+        if (end < start) {
+            end = start;
+        }
+        int span = end - start + 1;
+        long mixed = mix64(seed + 0x9E3779B97F4A7C15L * (index + 1L));
+        int offset = (int) Long.remainderUnsigned(mixed, span);
+        return Math.min(totalPixels - 1, start + offset);
+    }
+
+    private long sampleSeed(int rows, int cols, int channels, int sampleCount) {
+        long seed = 0xD1B54A32D192ED03L;
+        seed ^= (long) rows * 0x9E3779B185EBCA87L;
+        seed ^= (long) cols * 0xC2B2AE3D27D4EB4FL;
+        seed ^= (long) channels << 32;
+        seed ^= sampleCount;
+        return mix64(seed);
+    }
+
+    private long mix64(long z) {
+        z = (z ^ (z >>> 33)) * 0xff51afd7ed558ccdL;
+        z = (z ^ (z >>> 33)) * 0xc4ceb9fe1a85ec53L;
+        return z ^ (z >>> 33);
     }
 
     private boolean createResponse(OperationContext ctx,

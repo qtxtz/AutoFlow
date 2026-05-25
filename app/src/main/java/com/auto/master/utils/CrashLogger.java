@@ -35,6 +35,7 @@ public final class CrashLogger {
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final long ANR_TIMEOUT_MS = 5000L;
     private static final long ANR_POLL_INTERVAL_MS = 1500L;
+    private static final long RUN_LOG_FLUSH_INTERVAL_MS = 10_000L;
     private static final int EXIT_TRACE_MAX_CHARS = 12000;
     private static volatile boolean installed = false;
     private static volatile boolean anrWatchdogStarted = false;
@@ -48,6 +49,8 @@ public final class CrashLogger {
     private static volatile String currentTask = "";
     private static volatile String currentOperationId = "";
     private static volatile String currentOperationName = "";
+    private static final StringBuilder currentRunLogBuffer = new StringBuilder(4096);
+    private static long lastRunLogFlushMs = 0L;
 
     private CrashLogger() {
     }
@@ -101,6 +104,8 @@ public final class CrashLogger {
             currentOperationName = valueOrEmpty(entryOperationName);
             currentRunLogFile = createRunLogFile();
             currentSessionMarkerFile = getRunSessionMarkerFile();
+            currentRunLogBuffer.setLength(0);
+            lastRunLogFlushMs = SystemClock.uptimeMillis();
             anrReported = false;
             appendToCurrentRunLog("=== Live Run Start ===");
             appendToCurrentRunLog("project=" + currentProject + ", task=" + currentTask);
@@ -108,6 +113,7 @@ public final class CrashLogger {
                 appendToCurrentRunLog("entry=" + currentOperationId + " (" + currentOperationName + ")");
             }
             appendToCurrentRunLog(memorySummary());
+            flushCurrentRunLogLocked();
             writeCurrentSessionMarker();
         }
     }
@@ -139,9 +145,12 @@ public final class CrashLogger {
         synchronized (LOCK) {
             appendToCurrentRunLog("=== Live Run End: " + reason + " ===");
             appendToCurrentRunLog(memorySummary());
+            flushCurrentRunLogLocked();
             clearCurrentSessionMarker();
             currentRunLogFile = null;
             currentSessionMarkerFile = null;
+            currentRunLogBuffer.setLength(0);
+            lastRunLogFlushMs = 0L;
             currentProject = "";
             currentTask = "";
             currentOperationId = "";
@@ -155,6 +164,7 @@ public final class CrashLogger {
         synchronized (LOCK) {
             appendToCurrentRunLog("[ERROR] handled_exception stage=" + valueOrEmpty(stage)
                     + " | " + summarizeThrowable(throwable));
+            flushCurrentRunLogLocked();
             writeErrorReport(
                     createCrashFile("handled"),
                     "handled_exception",
@@ -180,6 +190,7 @@ public final class CrashLogger {
     private static void writeCrashReport(Thread thread, Throwable throwable) {
         synchronized (LOCK) {
             appendToCurrentRunLog("[ERROR] fatal_exception | " + summarizeThrowable(throwable));
+            flushCurrentRunLogLocked();
             writeErrorReport(createCrashFile("fatal"), "fatal_exception", "uncaught", thread, throwable);
             writeErrorReport(createErrorRunLogFile("fatal"), "fatal_exception", "uncaught", thread, throwable);
         }
@@ -189,7 +200,23 @@ public final class CrashLogger {
         if (currentRunLogFile == null || TextUtils.isEmpty(line)) {
             return;
         }
-        appendLine(currentRunLogFile, line);
+        currentRunLogBuffer.append(line);
+        if (!line.endsWith("\n")) {
+            currentRunLogBuffer.append('\n');
+        }
+        long now = SystemClock.uptimeMillis();
+        if (now - lastRunLogFlushMs >= RUN_LOG_FLUSH_INTERVAL_MS) {
+            flushCurrentRunLogLocked();
+        }
+    }
+
+    private static void flushCurrentRunLogLocked() {
+        if (currentRunLogFile == null || currentRunLogBuffer.length() == 0) {
+            return;
+        }
+        appendText(currentRunLogFile, currentRunLogBuffer.toString());
+        currentRunLogBuffer.setLength(0);
+        lastRunLogFlushMs = SystemClock.uptimeMillis();
     }
 
     private static File createRunLogFile() {
@@ -266,11 +293,15 @@ public final class CrashLogger {
         if (file == null || TextUtils.isEmpty(line)) {
             return;
         }
+        appendText(file, line.endsWith("\n") ? line : line + "\n");
+    }
+
+    private static void appendText(File file, @Nullable String text) {
+        if (file == null || TextUtils.isEmpty(text)) {
+            return;
+        }
         try (FileWriter writer = new FileWriter(file, true)) {
-            writer.write(line);
-            if (!line.endsWith("\n")) {
-                writer.write("\n");
-            }
+            writer.write(text);
         } catch (Exception e) {
             Log.e(TAG, "append line failed", e);
         }
@@ -341,6 +372,7 @@ public final class CrashLogger {
         appendLine(file, "operation=" + currentOperationId + " (" + currentOperationName + ")");
         appendLine(file, memorySummary());
         if (currentRunLogFile != null) {
+            flushCurrentRunLogLocked();
             appendLine(file, "live_run_log=" + currentRunLogFile.getAbsolutePath());
             appendLine(file, "--- recent_run_log_tail ---");
             appendLine(file, tail(currentRunLogFile, 80));
@@ -577,6 +609,7 @@ public final class CrashLogger {
                                         "ANR watchdog detected main thread stall > " + ANR_TIMEOUT_MS + "ms",
                                         Looper.getMainLooper().getThread().getStackTrace());
                                 appendToCurrentRunLog("[ERROR] anr_detected | " + summarizeThrowable(synthetic));
+                                flushCurrentRunLogLocked();
                                 writeErrorReport(createCrashFile("anr"),
                                         "anr_watchdog",
                                         "main_thread_blocked",

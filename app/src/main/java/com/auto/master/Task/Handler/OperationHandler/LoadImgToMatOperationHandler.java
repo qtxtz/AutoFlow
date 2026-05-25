@@ -96,6 +96,14 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
         if (targetTask instanceof String) {
             targetTaskName = ((String) targetTask).trim();
         }
+        if (!targetTaskName.isEmpty() && Template.isTaskCacheWarm(projectName, targetTaskName)) {
+            ctx.currentOperation = obj;
+            ctx.lastOperation = obj;
+            if (obj.getResponseType() == null || obj.getResponseType() == 1) {
+                ctx.currentResponse = new HashMap<>();
+            }
+            return true;
+        }
 
         // 优先用 Service 自身 Context，避免依赖 Activity（Activity 可能为 null）
         final Context appCtx = svc.getApplicationContext();

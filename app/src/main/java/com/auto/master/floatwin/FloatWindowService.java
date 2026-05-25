@@ -131,6 +131,7 @@ import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
+import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.OpenCVHelper;
 import com.auto.master.utils.OperationGsonUtils;
 import com.auto.master.utils.UUIDGenerator;
@@ -1091,6 +1092,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final String METHOD_TM_CCORR_NORMED = "TM_CCORR_NORMED (3)";
     private static final String METHOD_TM_SQDIFF = "TM_SQDIFF (0)";
     private static final String METHOD_TM_SQDIFF_NORMED = "TM_SQDIFF_NORMED (1)";
+    private static final String METHOD_RANDOM_SAMPLE = "随机点采样 (99)";
 
     // ---- Extracted helper objects (Phase 2 refactoring) ----
     private OperationCrudHelper crudHelper;
@@ -5987,6 +5989,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         options.add(METHOD_TM_CCORR);
         options.add(METHOD_TM_SQDIFF_NORMED);
         options.add(METHOD_TM_SQDIFF);
+        options.add(METHOD_RANDOM_SAMPLE);
         return options;
     }
 
@@ -6002,6 +6005,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }
         String t = methodText.toUpperCase(Locale.ROOT);
+        if (methodText.contains("随机点采样") || t.contains("RANDOM")) {
+            return MetaOperation.MATCH_METHOD_RANDOM_SAMPLE;
+        }
         if (t.contains("SQDIFF_NORMED")) return 1;
         if (t.contains("SQDIFF")) return 0;
         if (t.contains("CCORR_NORMED")) return 3;
@@ -6023,6 +6029,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return METHOD_TM_CCORR_NORMED;
             case 4:
                 return METHOD_TM_CCOEFF;
+            case MetaOperation.MATCH_METHOD_RANDOM_SAMPLE:
+                return METHOD_RANDOM_SAMPLE;
             case 5:
             default:
                 return METHOD_TM_CCOEFF_NORMED;
@@ -7651,6 +7659,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         CheckBox chkSuccessClick = dialogView.findViewById(R.id.chk_success_click);
         CheckBox chkUseCanny = dialogView.findViewById(R.id.chk_use_canny);
         AutoCompleteTextView methodInput = dialogView.findViewById(R.id.edt_match_method);
+        EditText sampleRatioInput = dialogView.findViewById(R.id.edt_match_sample_ratio);
         EditText scaleFactorInput = dialogView.findViewById(R.id.edt_scale_factor);
         AutoCompleteTextView fallbackInput = dialogView.findViewById(R.id.edt_fallback_operation);
         EditText preDelayInput = dialogView.findViewById(R.id.edt_match_pre_delay);
@@ -7658,10 +7667,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText pollFastInput = dialogView.findViewById(R.id.edt_poll_fast_ms);
         EditText pollMediumInput = dialogView.findViewById(R.id.edt_poll_medium_ms);
         EditText pollSlowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
+        setPollingIntervalHints(
+                pollFastInput,
+                pollMediumInput,
+                pollSlowInput,
+                AdaptivePollingController.Profile.TEMPLATE_MATCH);
 
         bindAutoComplete(methodInput, getMatchMethodOptions());
         bindAutoComplete(fallbackInput, getCurrentTaskOperationIds(excludeId));
         methodInput.setText(METHOD_TM_CCOEFF_NORMED, false);
+        if (sampleRatioInput != null) sampleRatioInput.setText("0.1");
         scaleFactorInput.setText("1.0");
         chkSuccessClick.setChecked(true);
         chkUseCanny.setChecked(false);
@@ -7679,6 +7694,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Object sfObj = inputMap.opt(MetaOperation.MATCHSCALEFACTOR);
                 if (sfObj != null) {
                     scaleFactorInput.setText(String.valueOf(sfObj));
+                }
+                Object sampleRatioObj = inputMap.opt(MetaOperation.MATCH_SAMPLE_RATIO);
+                if (sampleRatioObj != null && sampleRatioInput != null) {
+                    sampleRatioInput.setText(String.valueOf(sampleRatioObj));
                 }
                 fallbackInput.setText(inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""), false);
                 Object preDelayObj = inputMap.opt(MetaOperation.MATCH_PRE_DELAY_MS);
@@ -7720,6 +7739,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         CheckBox chkUseCanny = dialogView.findViewById(R.id.chk_use_canny);
         AutoCompleteTextView methodInput = dialogView.findViewById(R.id.edt_match_method);
         AutoCompleteTextView fallbackInput = dialogView.findViewById(R.id.edt_fallback_operation);
+        EditText sampleRatioInput = dialogView.findViewById(R.id.edt_match_sample_ratio);
         EditText scaleFactorInput = dialogView.findViewById(R.id.edt_scale_factor);
         EditText preDelayInput = dialogView.findViewById(R.id.edt_match_pre_delay);
         EditText postDelayInput = dialogView.findViewById(R.id.edt_match_post_delay);
@@ -7728,9 +7748,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText pollSlowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
 
         String methodText = methodInput == null || methodInput.getText() == null ? "" : methodInput.getText().toString().trim();
+        String sampleRatioText = sampleRatioInput == null || sampleRatioInput.getText() == null ? "" : sampleRatioInput.getText().toString().trim();
         String sfText = scaleFactorInput == null || scaleFactorInput.getText() == null ? "" : scaleFactorInput.getText().toString().trim();
 
         int methodCode = parseMethodCode(methodText);
+        double sampleRatio = 0.1d;
+        if (!TextUtils.isEmpty(sampleRatioText)) {
+            try {
+                sampleRatio = Double.parseDouble(sampleRatioText);
+            } catch (Exception ignored) {
+                sampleRatio = 0.1d;
+            }
+        }
+        if (sampleRatio <= 0.0d) sampleRatio = 0.1d;
+        if (sampleRatio > 1.0d) sampleRatio = 1.0d;
         double scaleFactor = 1.0;
         if (!TextUtils.isEmpty(sfText)) {
             try {
@@ -7767,6 +7798,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         try {
             inputMap.put(MetaOperation.MATCHUSEGRAY, chkGray != null && chkGray.isChecked());
             inputMap.put(MetaOperation.MATCHMETHOD, (double) methodCode);
+            if (methodCode == MetaOperation.MATCH_METHOD_RANDOM_SAMPLE) {
+                inputMap.put(MetaOperation.MATCH_SAMPLE_RATIO, sampleRatio);
+            } else {
+                inputMap.remove(MetaOperation.MATCH_SAMPLE_RATIO);
+            }
             inputMap.put(MetaOperation.MATCHSCALEFACTOR, scaleFactor);
             inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick != null && chkSuccessClick.isChecked());
             inputMap.put(MetaOperation.MATCHUSECANNARY, chkUseCanny != null && chkUseCanny.isChecked());
@@ -7790,6 +7826,21 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         } catch (Exception e) {
             Log.w(TAG, "写入高级匹配参数失败", e);
+        }
+    }
+
+    private void setPollingIntervalHints(EditText fastInput,
+                                          EditText mediumInput,
+                                          EditText slowInput,
+                                          AdaptivePollingController.Profile profile) {
+        if (fastInput != null) {
+            fastInput.setHint("默认 " + AdaptivePollingController.defaultFastIntervalMs(profile));
+        }
+        if (mediumInput != null) {
+            mediumInput.setHint("默认 " + AdaptivePollingController.defaultMediumIntervalMs(profile));
+        }
+        if (slowInput != null) {
+            slowInput.setHint("默认 " + AdaptivePollingController.defaultSlowIntervalMs(profile));
         }
     }
 

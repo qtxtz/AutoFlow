@@ -229,7 +229,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="number"
-                    android:hint="默认 220"
+                    android:hint="使用默认值"
                     android:layout_marginBottom="8dp"/>
 
                 <TextView
@@ -245,7 +245,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="number"
-                    android:hint="默认 380"
+                    android:hint="使用默认值"
                     android:layout_marginBottom="8dp"/>
 
                 <TextView
@@ -261,7 +261,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="number"
-                    android:hint="默认 560"
+                    android:hint="使用默认值"
                     android:layout_marginBottom="8dp"/>
 
                 <TextView

@@ -20,6 +20,22 @@ import java.util.Map;
  */
 public final class AdaptivePollingController {
 
+    public enum Profile {
+        TEMPLATE_MATCH,
+        MATCH_MAP,
+        COLOR_CHECK
+    }
+
+    public static final long DEFAULT_TEMPLATE_FAST_INTERVAL_MS = 60L;
+    public static final long DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS = 120L;
+    public static final long DEFAULT_TEMPLATE_SLOW_INTERVAL_MS = 240L;
+    public static final long DEFAULT_MATCH_MAP_FAST_INTERVAL_MS = 60L;
+    public static final long DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS = 120L;
+    public static final long DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS = 220L;
+    public static final long DEFAULT_COLOR_FAST_INTERVAL_MS = 60L;
+    public static final long DEFAULT_COLOR_MEDIUM_INTERVAL_MS = 140L;
+    public static final long DEFAULT_COLOR_SLOW_INTERVAL_MS = 280L;
+
     private final long fastIntervalMs;
     private final long mediumIntervalMs;
     private final long slowIntervalMs;
@@ -52,38 +68,86 @@ public final class AdaptivePollingController {
 
     public static AdaptivePollingController forTemplateMatch() {
         return new AdaptivePollingController(
-                220L, 380L, 600L,
-                800L, 2500L,
-                2, 5
+                DEFAULT_TEMPLATE_FAST_INTERVAL_MS, DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS, DEFAULT_TEMPLATE_SLOW_INTERVAL_MS,
+                500L, 1800L,
+                3, 8
         );
     }
 
     public static AdaptivePollingController forTemplateMatch(@Nullable Map<String, Object> inputMap) {
-        return fromInputMap(inputMap, 220L, 380L, 600L, 800L, 2500L, 2, 5);
+        return fromInputMap(inputMap,
+                DEFAULT_TEMPLATE_FAST_INTERVAL_MS,
+                DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS,
+                DEFAULT_TEMPLATE_SLOW_INTERVAL_MS,
+                500L, 1800L, 3, 8);
     }
 
     public static AdaptivePollingController forMatchMap() {
         return new AdaptivePollingController(
-                220L, 380L, 560L,
-                800L, 2500L,
-                2, 5
+                DEFAULT_MATCH_MAP_FAST_INTERVAL_MS, DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS, DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS,
+                500L, 1800L,
+                3, 8
         );
     }
 
     public static AdaptivePollingController forMatchMap(@Nullable Map<String, Object> inputMap) {
-        return fromInputMap(inputMap, 220L, 380L, 560L, 800L, 2500L, 2, 5);
+        return fromInputMap(inputMap,
+                DEFAULT_MATCH_MAP_FAST_INTERVAL_MS,
+                DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS,
+                DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS,
+                500L, 1800L, 3, 8);
     }
 
     public static AdaptivePollingController forColorCheck() {
         return new AdaptivePollingController(
-                220L, 420L, 700L,
-                800L, 2500L,
-                2, 4
+                DEFAULT_COLOR_FAST_INTERVAL_MS, DEFAULT_COLOR_MEDIUM_INTERVAL_MS, DEFAULT_COLOR_SLOW_INTERVAL_MS,
+                500L, 1800L,
+                3, 7
         );
     }
 
     public static AdaptivePollingController forColorCheck(@Nullable Map<String, Object> inputMap) {
-        return fromInputMap(inputMap, 220L, 420L, 700L, 800L, 2500L, 2, 4);
+        return fromInputMap(inputMap,
+                DEFAULT_COLOR_FAST_INTERVAL_MS,
+                DEFAULT_COLOR_MEDIUM_INTERVAL_MS,
+                DEFAULT_COLOR_SLOW_INTERVAL_MS,
+                500L, 1800L, 3, 7);
+    }
+
+    public static long defaultFastIntervalMs(Profile profile) {
+        switch (profile) {
+            case MATCH_MAP:
+                return DEFAULT_MATCH_MAP_FAST_INTERVAL_MS;
+            case COLOR_CHECK:
+                return DEFAULT_COLOR_FAST_INTERVAL_MS;
+            case TEMPLATE_MATCH:
+            default:
+                return DEFAULT_TEMPLATE_FAST_INTERVAL_MS;
+        }
+    }
+
+    public static long defaultMediumIntervalMs(Profile profile) {
+        switch (profile) {
+            case MATCH_MAP:
+                return DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS;
+            case COLOR_CHECK:
+                return DEFAULT_COLOR_MEDIUM_INTERVAL_MS;
+            case TEMPLATE_MATCH:
+            default:
+                return DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS;
+        }
+    }
+
+    public static long defaultSlowIntervalMs(Profile profile) {
+        switch (profile) {
+            case MATCH_MAP:
+                return DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS;
+            case COLOR_CHECK:
+                return DEFAULT_COLOR_SLOW_INTERVAL_MS;
+            case TEMPLATE_MATCH:
+            default:
+                return DEFAULT_TEMPLATE_SLOW_INTERVAL_MS;
+        }
     }
 
     private static AdaptivePollingController fromInputMap(@Nullable Map<String, Object> inputMap,

@@ -16,6 +16,7 @@ import android.widget.Toast;
 import com.auto.master.R;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
+import com.auto.master.utils.AdaptivePollingController;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -646,16 +647,37 @@ public class OperationDialogFactory {
         }
     }
 
-    private void setupPollingIntervalInputs(View dialogView, JSONObject inputMap) {
+    private void setupPollingIntervalInputs(View dialogView,
+                                            AdaptivePollingController.Profile profile,
+                                            JSONObject inputMap) {
         EditText fastInput = dialogView.findViewById(R.id.edt_poll_fast_ms);
         EditText mediumInput = dialogView.findViewById(R.id.edt_poll_medium_ms);
         EditText slowInput = dialogView.findViewById(R.id.edt_poll_slow_ms);
+        setPollingIntervalHints(fastInput, mediumInput, slowInput, profile);
         if (inputMap == null) {
             return;
         }
         setOptionalLongText(fastInput, inputMap.opt(MetaOperation.POLL_FAST_INTERVAL_MS));
         setOptionalLongText(mediumInput, inputMap.opt(MetaOperation.POLL_MEDIUM_INTERVAL_MS));
         setOptionalLongText(slowInput, inputMap.opt(MetaOperation.POLL_SLOW_INTERVAL_MS));
+    }
+
+    private void setPollingIntervalHints(EditText fastInput,
+                                          EditText mediumInput,
+                                          EditText slowInput,
+                                          AdaptivePollingController.Profile profile) {
+        if (profile == null) {
+            profile = AdaptivePollingController.Profile.TEMPLATE_MATCH;
+        }
+        if (fastInput != null) {
+            fastInput.setHint("默认 " + AdaptivePollingController.defaultFastIntervalMs(profile));
+        }
+        if (mediumInput != null) {
+            mediumInput.setHint("默认 " + AdaptivePollingController.defaultMediumIntervalMs(profile));
+        }
+        if (slowInput != null) {
+            slowInput.setHint("默认 " + AdaptivePollingController.defaultSlowIntervalMs(profile));
+        }
     }
 
     private void fillPollingIntervalInputMap(View dialogView, JSONObject inputMap) throws org.json.JSONException {
@@ -1922,7 +1944,7 @@ public class OperationDialogFactory {
 
         // 高级参数折叠
         setupAdvancedToggle(dialogView);
-        setupPollingIntervalInputs(dialogView, null);
+        setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.MATCH_MAP, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -2057,7 +2079,7 @@ public class OperationDialogFactory {
                 setOperationReferenceText(edtNextOperation, inputMap.optString("nextOperationId", ""));
                 setOperationReferenceText(edtFallback, inputMap.optString("FALLBACKOPERATIONID", ""));
                 edtPreDelay.setText(inputMap.optString("MATCH_PRE_DELAY_MS", ""));
-                setupPollingIntervalInputs(dialogView, inputMap);
+                setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.MATCH_MAP, inputMap);
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(inputMap.optBoolean(MetaOperation.SUCCEESCLICK, true));
                 }
@@ -2320,7 +2342,7 @@ public class OperationDialogFactory {
         dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
         setupAdvancedToggle(dialogView);
-        setupPollingIntervalInputs(dialogView, null);
+        setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -2432,7 +2454,7 @@ public class OperationDialogFactory {
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                 setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
                 edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
-                setupPollingIntervalInputs(dialogView, inputMap);
+                setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, inputMap);
                 JSONArray points = inputMap.optJSONArray(MetaOperation.COLOR_POINTS);
                 if (points != null) {
                     for (int i = 0; i < points.length(); i++) {
@@ -4145,7 +4167,7 @@ public class OperationDialogFactory {
         edtTolerance.setText("18");
         edtMinPixels.setText("60");
         setupAdvancedToggle(dialogView);
-        setupPollingIntervalInputs(dialogView, null);
+        setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, null);
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -4332,7 +4354,7 @@ public class OperationDialogFactory {
                 edtTimeout.setText(timeoutObj == null ? "5000" : String.valueOf(timeoutObj).replace(".0", ""));
                 // pre delay
                 edtPreDelay.setText(inputMap.optString(MetaOperation.MATCH_PRE_DELAY_MS, ""));
-                setupPollingIntervalInputs(dialogView, inputMap);
+                setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, inputMap);
                 // next / fallback
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                 setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));

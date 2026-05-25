@@ -242,6 +242,22 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:text="随机点采样比率"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/edt_match_sample_ratio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:hint="默认 0.1"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:text="缩放因子"
             android:textSize="13sp"
             android:textColor="#4e5f74"
@@ -351,7 +367,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="number"
-            android:hint="默认 220" />
+            android:hint="使用默认值" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -367,7 +383,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="number"
-            android:hint="默认 380" />
+            android:hint="使用默认值" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -383,7 +399,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="number"
-            android:hint="默认 600" />
+            android:hint="使用默认值" />
     </LinearLayout>
 
     <LinearLayout

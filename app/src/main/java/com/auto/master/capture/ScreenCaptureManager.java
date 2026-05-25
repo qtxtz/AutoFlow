@@ -101,7 +101,7 @@ public class ScreenCaptureManager {
     /**
      * 1s 4个frames = 1000/4 = 250ms，降低采集频率减少发热
      */
-    private static final int MAX_POLLS_PER_SECOND = 8;
+    private static final int MAX_POLLS_PER_SECOND = 20;
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
     private static final long MAX_STALE_FRAME_AGE_MS = 500L;
     private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;

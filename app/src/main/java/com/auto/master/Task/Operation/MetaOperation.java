@@ -66,6 +66,8 @@ public abstract class MetaOperation {
     public static String MATCHSCALEFACTOR = "MATCHSCALEFACTOR";
 
     public static String MATCHMETHOD = "MATCHMETHOD";
+    public static String MATCH_SAMPLE_RATIO = "MATCH_SAMPLE_RATIO";
+    public static final int MATCH_METHOD_RANDOM_SAMPLE = 99;
 
     public static String MATCHUSEGRAY = "MATCHUSEGRAY";
 
