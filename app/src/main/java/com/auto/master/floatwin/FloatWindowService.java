@@ -1718,22 +1718,17 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     safeMin = safeMax;
                     safeMax = tmp;
                 }
-                if (!random && safeDelay == MetaOperation.DEFAULT_NODE_PRE_DELAY_MS) {
-                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MS);
-                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
-                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
-                    inputMap.remove(MetaOperation.NODE_PRE_DELAY_RANDOM);
+                // Always put all 4 preDelay keys so the preservation code in saveOperationJson
+                // never copies stale values back from the old inputMap.
+                inputMap.put(MetaOperation.NODE_PRE_DELAY_RANDOM, random);
+                if (random) {
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MIN_MS, safeMin);
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MAX_MS, safeMax);
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeMax);
                 } else {
-                    inputMap.put(MetaOperation.NODE_PRE_DELAY_RANDOM, random);
-                    if (random) {
-                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MIN_MS, safeMin);
-                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MAX_MS, safeMax);
-                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeMax);
-                    } else {
-                        inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeDelay);
-                        inputMap.remove(MetaOperation.NODE_PRE_DELAY_MIN_MS);
-                        inputMap.remove(MetaOperation.NODE_PRE_DELAY_MAX_MS);
-                    }
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, safeDelay);
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MIN_MS, 0L);
+                    inputMap.put(MetaOperation.NODE_PRE_DELAY_MAX_MS, safeDelay);
                 }
                 if (saveOperationJson(operationId, operationObject.toString(2), currentOperationAdapter)) {
                     if (currentTaskDir != null) {
