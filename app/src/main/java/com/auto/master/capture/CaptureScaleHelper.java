@@ -108,6 +108,58 @@ public final class CaptureScaleHelper {
         return null;
     }
 
+    public static String getTemplateMaskFileName(String templateName) {
+        if (templateName == null || templateName.trim().isEmpty()) {
+            return "";
+        }
+        String name = templateName.trim();
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            return name.substring(0, dot) + ".mask.png";
+        }
+        return name + ".mask.png";
+    }
+
+    public static boolean isTemplateMaskFileName(String fileName) {
+        return fileName != null && fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".mask.png");
+    }
+
+    public static File resolveTemplateMaskFile(File imgDir, String templateName, float scale) {
+        String maskName = getTemplateMaskFileName(templateName);
+        if (imgDir == null || maskName.isEmpty()) {
+            return null;
+        }
+        File scaleDir = new File(imgDir, getScaleDirName(scale));
+        File scaleFile = new File(scaleDir, maskName);
+        if (scaleFile.exists()) {
+            return scaleFile;
+        }
+        if (Math.abs(scale - 1.0f) < 0.001f) {
+            File flatFile = new File(imgDir, maskName);
+            if (flatFile.exists()) {
+                return flatFile;
+            }
+        }
+        return null;
+    }
+
+    public static File resolveTemplateManifestFile(File imgDir, float scale) {
+        if (imgDir == null) {
+            return null;
+        }
+        File scaleManifest = new File(new File(imgDir, getScaleDirName(scale)), "manifest.json");
+        if (scaleManifest.exists()) {
+            return scaleManifest;
+        }
+        if (Math.abs(scale - 1.0f) < 0.001f) {
+            File flatManifest = new File(imgDir, "manifest.json");
+            if (flatManifest.exists()) {
+                return flatManifest;
+            }
+        }
+        return null;
+    }
+
     /**
      * 获取模板保存目录（scale-aware）：
      * 返回 imgDir/scale_{key}/，若不存在则自动创建。

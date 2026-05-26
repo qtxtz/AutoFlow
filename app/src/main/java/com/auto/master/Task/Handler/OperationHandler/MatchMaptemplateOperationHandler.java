@@ -24,6 +24,7 @@ import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.lang.reflect.Type;
@@ -237,7 +238,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                 return new MatchTaskResult(false, null, task);
             }
             Point positionInRoi = OpenCVHelper.getInstance()
-                    .fastSingleMatch(roi, task.info.mat, null, task.info.similarity);
+                    .fastSingleMatch(roi, task.info.mat, null, task.info.similarity, task.info.mask);
             if (positionInRoi != null && positionInRoi.x >= 0) {
                 ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
                 float invScaleX = mgr.getActualInvScaleX();
@@ -262,6 +263,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                                           String taskName) {
         List<MatchTask> tasks = new ArrayList<>();
         Map<String, Mat> loadedTemplates = new HashMap<>();
+        Map<String, Mat> loadedMasks = new HashMap<>();
         int priority = 0;
 
         for (CompiledMatchGroup group : plan.groups) {
@@ -275,11 +277,16 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                     }
                     loadedTemplates.put(rule.templateName, templateMat);
                 }
+                Mat templateMask = loadedMasks.get(rule.templateName);
+                if (!loadedMasks.containsKey(rule.templateName)) {
+                    templateMask = getOrLoadTemplateMaskMat(projectName, taskName, rule.templateName, templateMat);
+                    loadedMasks.put(rule.templateName, templateMask);
+                }
                 tasks.add(new MatchTask(
                         priority++,
                         rule.templateName,
                         group.region,
-                        new TemplateInfo(templateMat, rule.similarity)));
+                        new TemplateInfo(templateMat, templateMask, rule.similarity)));
             }
         }
         return tasks;
@@ -340,6 +347,69 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             return mat;
         } catch (Exception e) {
             Log.e(TAG, "tryLoadTemplate error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static Mat getOrLoadTemplateMaskMat(String projectName,
+                                                String taskName,
+                                                String templateName,
+                                                Mat templateMat) {
+        String maskName = CaptureScaleHelper.getTemplateMaskFileName(templateName);
+        if (maskName.isEmpty()) {
+            return null;
+        }
+        Mat cached = Template.getTaskSingleMutCache(projectName, taskName, maskName);
+        if (cached != null && !cached.empty()) {
+            return cached;
+        }
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return null;
+        }
+        try {
+            File imgDir = new File(
+                    svc.getApplicationContext().getExternalFilesDir(null),
+                    "projects" + File.separator + projectName
+                            + File.separator + taskName
+                            + File.separator + "img");
+            File maskFile = CaptureScaleHelper.resolveTemplateMaskFile(
+                    imgDir, templateName, ScreenCaptureManager.CAPTURE_SCALE);
+            if (maskFile == null) {
+                return null;
+            }
+            Bitmap bitmap = BitmapFactory.decodeFile(maskFile.getAbsolutePath());
+            if (bitmap == null) {
+                return null;
+            }
+            Mat rgba = new Mat();
+            Mat gray = new Mat();
+            boolean converted = false;
+            try {
+                Utils.bitmapToMat(bitmap, rgba);
+                int code = rgba.channels() == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+                Imgproc.cvtColor(rgba, gray, code);
+                Imgproc.threshold(gray, gray, 1, 255, Imgproc.THRESH_BINARY);
+                converted = true;
+            } finally {
+                bitmap.recycle();
+                rgba.release();
+                if (!converted) {
+                    gray.release();
+                }
+            }
+            if (gray.empty()
+                    || templateMat == null
+                    || templateMat.empty()
+                    || gray.cols() != templateMat.cols()
+                    || gray.rows() != templateMat.rows()) {
+                gray.release();
+                return null;
+            }
+            Template.putTaskSingleMatCache(projectName, taskName, maskName, gray);
+            return gray;
+        } catch (Exception e) {
+            Log.w(TAG, "加载模板 mask 失败: " + e.getMessage());
             return null;
         }
     }
@@ -666,12 +736,14 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
     private static final class TemplateInfo {
         final Mat mat;
+        final Mat mask;
         final double similarity;
         final int width;
         final int height;
 
-        TemplateInfo(Mat mat, double similarity) {
+        TemplateInfo(Mat mat, Mat mask, double similarity) {
             this.mat = mat;
+            this.mask = mask;
             this.similarity = similarity;
             this.width = mat.width();
             this.height = mat.height();

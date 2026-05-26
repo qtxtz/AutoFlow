@@ -19,9 +19,11 @@ import com.auto.master.utils.OpenCVHelper;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -95,7 +97,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             Log.w(TAG, "模板加载失败: " + templateName);
             return createResponse(ctx, obj, false, null, bbox, null);
         }
+        Mat templateMask = getOrLoadTemplateMaskMat(projectName, taskName, templateName, templateMat);
         Mat randomSampleMask = createRandomSampleMaskIfNeeded(templateMat, matchMethod, sampleRatio);
+        Mat matchMask = combineMasksIfNeeded(templateMask, randomSampleMask);
 
         android.graphics.Rect captureRoi = null;
         if (bbox != null && bbox.size() >= 4) {
@@ -106,7 +110,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                     bbox.get(1) + bbox.get(3));
         }
         RandomRoiPlan randomRoiPlan = getRandomRoiPlan(
-                projectName, taskName, templateName, captureRoi, templateMat, matchMethod, sampleRatio);
+                projectName, taskName, templateName, captureRoi, templateMat, templateMask, matchMethod, sampleRatio);
         if (randomRoiPlan != null) {
             captureRoi = randomRoiPlan.captureRoi;
         }
@@ -134,7 +138,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 continue;
             }
             try {
-                Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor, matchMethod, sampleRatio, randomSampleMask, randomRoiPlan);
+                Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor,
+                        matchMethod, sampleRatio, matchMask, randomRoiPlan);
                 if (position == null || position.x < 0 || position.y < 0) {
                     pollingController.onMiss();
                     pollingController.sleepUntilNextIteration(loopStartMs);
@@ -179,6 +184,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         if (randomSampleMask != null) {
             randomSampleMask.release();
         }
+        if (matchMask != null && matchMask != templateMask && matchMask != randomSampleMask) {
+            matchMask.release();
+        }
         if (randomRoiPlan != null) {
             randomRoiPlan.release();
         }
@@ -192,13 +200,18 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                                 double scaleFactor,
                                 int matchMethod,
                                 double sampleRatio,
-                                Mat randomSampleMask,
+                                Mat mask,
                                 RandomRoiPlan randomRoiPlan) {
         if (randomRoiPlan != null && randomRoiPlan.templateRoiMat != null && !randomRoiPlan.templateRoiMat.empty()) {
-            return OpenCVHelper.getInstance().fastSingleMatch(screenMat, randomRoiPlan.templateRoiMat, null, similarity, 1.0d);
+            return OpenCVHelper.getInstance().fastSingleMatch(
+                    screenMat,
+                    randomRoiPlan.templateRoiMat,
+                    null,
+                    similarity,
+                    randomRoiPlan.maskRoiMat);
         }
-        if (shouldUseRandomSample(screenMat, templateMat, matchMethod, sampleRatio, randomSampleMask)) {
-            return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, randomSampleMask);
+        if (mask != null && !mask.empty()) {
+            return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, mask);
         }
         return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, scaleFactor);
     }
@@ -228,6 +241,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                                            String templateName,
                                            android.graphics.Rect fullRoi,
                                            Mat templateMat,
+                                           Mat templateMask,
                                            int matchMethod,
                                            double sampleRatio) {
         if (matchMethod != MetaOperation.MATCH_METHOD_RANDOM_ROI
@@ -238,7 +252,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 || templateMat.empty()) {
             return null;
         }
-        String cacheKey = buildRandomRoiCacheKey(projectName, taskName, templateName, fullRoi, templateMat, sampleRatio);
+        String cacheKey = buildRandomRoiCacheKey(projectName, taskName, templateName,
+                fullRoi, templateMat, templateMask, sampleRatio);
         synchronized (RANDOM_ROI_CACHE) {
             List<RandomRoiPlan> cached = RANDOM_ROI_CACHE.get(cacheKey);
             if (hasUsableRandomRoiPlans(cached)) {
@@ -247,7 +262,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             releaseRandomRoiPlans(cached);
             cached = new ArrayList<>(RANDOM_ROI_CACHE_VARIANTS);
             for (int i = 0; i < RANDOM_ROI_CACHE_VARIANTS; i++) {
-                RandomRoiPlan plan = createRandomRoiPlan(fullRoi, templateMat, sampleRatio, true);
+                RandomRoiPlan plan = createRandomRoiPlan(fullRoi, templateMat, templateMask, sampleRatio, true);
                 if (plan != null) {
                     cached.add(plan);
                 }
@@ -269,6 +284,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             if (plan == null || plan.templateRoiMat == null || plan.templateRoiMat.empty()) {
                 return false;
             }
+            if (plan.maskRoiMat != null && plan.maskRoiMat.empty()) {
+                return false;
+            }
         }
         return true;
     }
@@ -278,6 +296,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                                           String templateName,
                                           android.graphics.Rect fullRoi,
                                           Mat templateMat,
+                                          Mat templateMask,
                                           double sampleRatio) {
         long ratioKey = Math.round(Math.max(0.001d, Math.min(1.0d, sampleRatio)) * 10000d);
         return String.valueOf(projectName) + '|'
@@ -285,6 +304,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 + templateName + '|'
                 + System.identityHashCode(templateMat) + '|'
                 + templateMat.cols() + 'x' + templateMat.rows() + '|'
+                + (templateMask == null ? "no-mask" : System.identityHashCode(templateMask)
+                + ":" + templateMask.cols() + "x" + templateMask.rows()) + '|'
                 + ScreenCaptureManager.CAPTURE_SCALE + '|'
                 + fullRoi.left + ',' + fullRoi.top + ',' + fullRoi.right + ',' + fullRoi.bottom + '|'
                 + ratioKey;
@@ -292,6 +313,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
 
     private RandomRoiPlan createRandomRoiPlan(android.graphics.Rect fullRoi,
                                               Mat templateMat,
+                                              Mat templateMask,
                                               double sampleRatio,
                                               boolean cached) {
 
@@ -337,7 +359,13 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         templateBottom = Math.max(templateY + 1, Math.min(templateBottom, templateH));
 
         Mat templateRoiMat = templateMat.submat(templateY, templateBottom, templateX, templateRight);
-        return new RandomRoiPlan(new android.graphics.Rect(fullRoi), screenRoi, templateRoiMat, cached);
+        Mat maskRoiMat = null;
+        if (templateMask != null && !templateMask.empty()
+                && templateMask.cols() == templateMat.cols()
+                && templateMask.rows() == templateMat.rows()) {
+            maskRoiMat = templateMask.submat(templateY, templateBottom, templateX, templateRight);
+        }
+        return new RandomRoiPlan(new android.graphics.Rect(fullRoi), screenRoi, templateRoiMat, maskRoiMat, cached);
     }
 
     private boolean shouldUseRandomSample(Mat screenMat, Mat templateMat, int matchMethod, double sampleRatio, Mat randomSampleMask) {
@@ -382,6 +410,22 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         Mat mask = Mat.zeros(rows, cols, CvType.CV_8UC1);
         mask.put(0, 0, maskBytes);
         return mask;
+    }
+
+    private Mat combineMasksIfNeeded(Mat templateMask, Mat randomSampleMask) {
+        if (templateMask == null || templateMask.empty()) {
+            return randomSampleMask;
+        }
+        if (randomSampleMask == null || randomSampleMask.empty()) {
+            return templateMask;
+        }
+        if (templateMask.rows() != randomSampleMask.rows()
+                || templateMask.cols() != randomSampleMask.cols()) {
+            return randomSampleMask;
+        }
+        Mat combined = new Mat();
+        Core.bitwise_and(templateMask, randomSampleMask, combined);
+        return combined;
     }
 
     private int pickStratifiedPixel(long seed, int index, int sampleCount, int totalPixels) {
@@ -500,6 +544,72 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         }
     }
 
+    private Mat getOrLoadTemplateMaskMat(String projectName,
+                                         String taskName,
+                                         String templateName,
+                                         Mat templateMat) {
+        String maskName = CaptureScaleHelper.getTemplateMaskFileName(templateName);
+        if (maskName.isEmpty()) {
+            return null;
+        }
+        Mat cached = Template.getTaskSingleMutCache(projectName, taskName, maskName);
+        if (cached != null && !cached.empty()) {
+            return cached;
+        }
+
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return null;
+        }
+        try {
+            File imgDir = new File(
+                    svc.getApplicationContext().getExternalFilesDir(null),
+                    "projects" + File.separator + projectName
+                            + File.separator + taskName
+                            + File.separator + "img");
+
+            File maskFile = CaptureScaleHelper.resolveTemplateMaskFile(
+                    imgDir, templateName, ScreenCaptureManager.CAPTURE_SCALE);
+            if (maskFile == null) {
+                return null;
+            }
+            Bitmap bitmap = BitmapFactory.decodeFile(maskFile.getAbsolutePath());
+            if (bitmap == null) {
+                return null;
+            }
+            Mat rgba = new Mat();
+            Mat gray = new Mat();
+            boolean converted = false;
+            try {
+                Utils.bitmapToMat(bitmap, rgba);
+                int code = rgba.channels() == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+                Imgproc.cvtColor(rgba, gray, code);
+                Imgproc.threshold(gray, gray, 1, 255, Imgproc.THRESH_BINARY);
+                converted = true;
+            } finally {
+                bitmap.recycle();
+                rgba.release();
+                if (!converted) {
+                    gray.release();
+                }
+            }
+            if (gray.empty()
+                    || templateMat == null
+                    || templateMat.empty()
+                    || gray.cols() != templateMat.cols()
+                    || gray.rows() != templateMat.rows()) {
+                Log.w(TAG, "模板 mask 尺寸不匹配，已忽略: " + maskName);
+                gray.release();
+                return null;
+            }
+            Template.putTaskSingleMatCache(projectName, taskName, maskName, gray);
+            return gray;
+        } catch (Exception e) {
+            Log.w(TAG, "加载模板 mask 失败: " + e.getMessage());
+            return null;
+        }
+    }
+
     private List<Integer> getOrLoadTemplateBbox(String projectName, String taskName, String templateName) {
         List<Integer> cached = Template.getManifestSingleCache(projectName, taskName, templateName);
         if (cached != null && cached.size() >= 4) {
@@ -511,13 +621,14 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             return null;
         }
         try {
-            File manifestFile = new File(
+            File imgDir = new File(
                     svc.getApplicationContext().getExternalFilesDir(null),
                     "projects" + File.separator + projectName
                             + File.separator + taskName
-                            + File.separator + "img"
-                            + File.separator + "manifest.json");
-            if (!manifestFile.exists()) {
+                            + File.separator + "img");
+            File manifestFile = CaptureScaleHelper.resolveTemplateManifestFile(
+                    imgDir, ScreenCaptureManager.CAPTURE_SCALE);
+            if (manifestFile == null || !manifestFile.exists()) {
                 return null;
             }
             String content = new String(Files.readAllBytes(manifestFile.toPath()));
@@ -574,15 +685,18 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         final android.graphics.Rect fullRoi;
         final android.graphics.Rect captureRoi;
         final Mat templateRoiMat;
+        final Mat maskRoiMat;
         final boolean cached;
 
         RandomRoiPlan(android.graphics.Rect fullRoi,
                       android.graphics.Rect captureRoi,
                       Mat templateRoiMat,
+                      Mat maskRoiMat,
                       boolean cached) {
             this.fullRoi = fullRoi;
             this.captureRoi = captureRoi;
             this.templateRoiMat = templateRoiMat;
+            this.maskRoiMat = maskRoiMat;
             this.cached = cached;
         }
 
@@ -590,11 +704,17 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             if (!cached && templateRoiMat != null) {
                 templateRoiMat.release();
             }
+            if (!cached && maskRoiMat != null) {
+                maskRoiMat.release();
+            }
         }
 
         void forceRelease() {
             if (templateRoiMat != null) {
                 templateRoiMat.release();
+            }
+            if (maskRoiMat != null) {
+                maskRoiMat.release();
             }
         }
     }

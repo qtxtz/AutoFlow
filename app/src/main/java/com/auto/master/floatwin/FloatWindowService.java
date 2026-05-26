@@ -57,6 +57,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -4077,7 +4078,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (taskDir == null || item == null || TextUtils.isEmpty(item.fileName)) {
             return;
         }
-        String[] actions = new String[]{"替换截图", "重命名模板", "删除模板"};
+        String[] actions = new String[]{"替换截图", "查看/编辑 Mask", "删除 Mask", "重命名模板", "删除模板"};
         android.view.ContextThemeWrapper ctx =
                 new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
@@ -4091,6 +4092,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         return;
                     }
                     if (which == 1) {
+                        showTemplateMaskEditorFromLibrary(taskDir, item, onChanged);
+                        return;
+                    }
+                    if (which == 2) {
+                        File dir = getTemplateItemDir(taskDir, item.scaleDirName);
+                        File maskFile = new File(dir, CaptureScaleHelper.getTemplateMaskFileName(item.fileName));
+                        if (maskFile.exists() && maskFile.isFile() && maskFile.delete()) {
+                            Toast.makeText(this, "Mask 已删除", Toast.LENGTH_SHORT).show();
+                            Template.clearTaskSingleMatCache(currentProjectDir == null ? "" : currentProjectDir.getName(),
+                                    taskDir.getName(),
+                                    CaptureScaleHelper.getTemplateMaskFileName(item.fileName));
+                            if (onChanged != null) onChanged.run();
+                        } else {
+                            Toast.makeText(this, "没有可删除的 Mask", Toast.LENGTH_SHORT).show();
+                        }
+                        return;
+                    }
+                    if (which == 3) {
                         if (item.usageCount > 0) {
                             Toast.makeText(this, "模板仍被节点引用，暂不支持重命名", Toast.LENGTH_SHORT).show();
                             return;
@@ -4134,6 +4153,122 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     : WindowManager.LayoutParams.TYPE_PHONE);
         }
         dialog.show();
+    }
+
+    private File getTemplateItemDir(File taskDir, @Nullable String scaleDirName) {
+        File imgDir = new File(taskDir, "img");
+        return TextUtils.isEmpty(scaleDirName) ? imgDir : new File(imgDir, scaleDirName);
+    }
+
+    private void showTemplateMaskEditorFromLibrary(File taskDir,
+                                                   TemplateLibraryAdapter.TemplateLibraryItem item,
+                                                   @Nullable Runnable onChanged) {
+        if (taskDir == null || item == null || item.file == null || !item.file.exists()) {
+            Toast.makeText(this, "模板文件不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Bitmap templateBitmap = BitmapFactory.decodeFile(item.file.getAbsolutePath());
+        if (templateBitmap == null) {
+            Toast.makeText(this, "模板读取失败", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        File templateDir = getTemplateItemDir(taskDir, item.scaleDirName);
+        File maskFile = new File(templateDir, CaptureScaleHelper.getTemplateMaskFileName(item.fileName));
+        Bitmap maskBitmap = maskFile.exists() ? BitmapFactory.decodeFile(maskFile.getAbsolutePath()) : null;
+
+        View overlay = LayoutInflater.from(this).inflate(R.layout.dialog_template_mask_editor, null);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
+
+        TemplateMaskEditorView editor = overlay.findViewById(R.id.template_mask_editor_view);
+        TextView tvTitle = overlay.findViewById(R.id.tv_mask_editor_title);
+        TextView btnDraw = overlay.findViewById(R.id.btn_mask_draw);
+        TextView btnErase = overlay.findViewById(R.id.btn_mask_erase);
+        TextView btnClear = overlay.findViewById(R.id.btn_mask_clear);
+        TextView btnSave = overlay.findViewById(R.id.btn_mask_save);
+        TextView btnDec = overlay.findViewById(R.id.btn_mask_brush_dec);
+        TextView btnInc = overlay.findViewById(R.id.btn_mask_brush_inc);
+        TextView tvBrush = overlay.findViewById(R.id.tv_mask_brush_size);
+
+        if (tvTitle != null) tvTitle.setText("Mask: " + item.fileName);
+        editor.setTemplateBitmap(templateBitmap, maskBitmap);
+        if (templateBitmap != null && !templateBitmap.isRecycled()) templateBitmap.recycle();
+        if (maskBitmap != null && !maskBitmap.isRecycled()) maskBitmap.recycle();
+
+        Runnable updateModeUi = () -> {
+            boolean erase = editor.isEraseMode();
+            btnDraw.setBackgroundResource(erase ? R.drawable.item_operation_compact_bg : R.drawable.panel_btn_primary_selector);
+            btnDraw.setTextColor(erase ? Color.rgb(49, 93, 191) : Color.WHITE);
+            btnErase.setBackgroundResource(erase ? R.drawable.panel_btn_primary_selector : R.drawable.item_operation_compact_bg);
+            btnErase.setTextColor(erase ? Color.WHITE : Color.rgb(49, 93, 191));
+        };
+        Runnable updateBrushUi = () -> tvBrush.setText("画笔 " + editor.getBrushSize() + " px");
+
+        btnDraw.setOnClickListener(v -> {
+            editor.setEraseMode(false);
+            updateModeUi.run();
+        });
+        btnErase.setOnClickListener(v -> {
+            editor.setEraseMode(true);
+            updateModeUi.run();
+        });
+        btnClear.setOnClickListener(v -> editor.clearMask());
+        btnDec.setOnClickListener(v -> {
+            editor.setBrushSize(editor.getBrushSize() - 1);
+            updateBrushUi.run();
+        });
+        btnInc.setOnClickListener(v -> {
+            editor.setBrushSize(editor.getBrushSize() + 1);
+            updateBrushUi.run();
+        });
+        overlay.findViewById(R.id.btn_mask_editor_close).setOnClickListener(v -> {
+            editor.release();
+            safeRemoveView(overlay);
+        });
+        btnSave.setOnClickListener(v -> {
+            Bitmap out = editor.hasMaskPixels() ? editor.exportMaskBitmap() : null;
+            try {
+                if (out == null) {
+                    if (maskFile.exists() && maskFile.isFile()) {
+                        maskFile.delete();
+                    }
+                    Toast.makeText(this, "Mask 已清空", Toast.LENGTH_SHORT).show();
+                } else {
+                    if (!templateDir.exists()) templateDir.mkdirs();
+                    try (FileOutputStream fos = new FileOutputStream(maskFile, false)) {
+                        out.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                        fos.flush();
+                    }
+                    Toast.makeText(this, "Mask 已保存", Toast.LENGTH_SHORT).show();
+                }
+                com.auto.master.utils.BitmapManager.getInstance().removeBitmap(maskFile.getAbsolutePath());
+                if (currentProjectDir != null) {
+                    Template.clearTaskSingleMatCache(currentProjectDir.getName(),
+                            taskDir.getName(),
+                            CaptureScaleHelper.getTemplateMaskFileName(item.fileName));
+                }
+                if (onChanged != null) onChanged.run();
+            } catch (Exception e) {
+                Log.w(TAG, "保存模板 mask 失败", e);
+                Toast.makeText(this, "Mask 保存失败", Toast.LENGTH_SHORT).show();
+            } finally {
+                if (out != null && !out.isRecycled()) out.recycle();
+                editor.release();
+                safeRemoveView(overlay);
+            }
+        });
+
+        updateModeUi.run();
+        updateBrushUi.run();
+        wm.addView(overlay, lp);
     }
 
     private void launchTemplateCaptureAfterUiSettled(String templateFileName) {
@@ -4265,6 +4400,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (file.exists() && file.isFile() && file.delete()) {
                 deleted++;
             }
+            File maskFile = new File(targetDir, CaptureScaleHelper.getTemplateMaskFileName(fileName));
+            if (maskFile.exists() && maskFile.isFile()) {
+                maskFile.delete();
+            }
             // Remove from scale-specific manifest
             File manifestFile = new File(targetDir, "manifest.json");
             if (deleted > 0 && manifestFile.exists()
@@ -4301,6 +4440,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File newFile = new File(targetDir, newName);
             if (!oldFile.exists() || newFile.exists()) return false;
             if (!oldFile.renameTo(newFile)) return false;
+            renameTemplateMaskFile(targetDir, oldName, newName);
             // Update scale-specific manifest
             File manifestFile = new File(targetDir, "manifest.json");
             if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -4341,6 +4481,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File newFlat = new File(imgDir, newName);
             if (oldFlat.exists() && !newFlat.exists()) {
                 renamedAny = oldFlat.renameTo(newFlat);
+                if (renamedAny) {
+                    renameTemplateMaskFile(imgDir, oldName, newName);
+                }
             }
 
             // Rename in all scale subdirs
@@ -4351,6 +4494,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 if (oldScaleFile.exists() && !newScaleFile.exists()) {
                     if (oldScaleFile.renameTo(newScaleFile)) {
                         renamedAny = true;
+                        renameTemplateMaskFile(scaleDir, oldName, newName);
                     }
                 }
             }
@@ -4389,6 +4533,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         } catch (Exception e) {
             Log.w(TAG, "重命名模板失败", e);
             return false;
+        }
+    }
+
+    private void renameTemplateMaskFile(File dir, String oldName, String newName) {
+        if (dir == null || TextUtils.isEmpty(oldName) || TextUtils.isEmpty(newName)) {
+            return;
+        }
+        File oldMask = new File(dir, CaptureScaleHelper.getTemplateMaskFileName(oldName));
+        if (!oldMask.exists() || !oldMask.isFile()) {
+            return;
+        }
+        File newMask = new File(dir, CaptureScaleHelper.getTemplateMaskFileName(newName));
+        if (newMask.exists()) {
+            return;
+        }
+        if (!oldMask.renameTo(newMask)) {
+            Log.w(TAG, "重命名模板 mask 失败: " + oldMask.getName());
         }
     }
 
@@ -5265,6 +5426,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         continue;
                     }
                     String lower = name.toLowerCase(Locale.ROOT);
+                    if (CaptureScaleHelper.isTemplateMaskFileName(lower)) {
+                        continue;
+                    }
                     boolean isImage = lower.endsWith(".png") || lower.endsWith(".jpg")
                             || lower.endsWith(".jpeg") || lower.endsWith(".webp");
                     if (!isImage) {
@@ -5950,6 +6114,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (!f.isFile()) return false;
             String name = f.getName().toLowerCase(Locale.ROOT);
             return !"manifest.json".equals(name)
+                    && !CaptureScaleHelper.isTemplateMaskFileName(name)
                     && (name.endsWith(".png") || name.endsWith(".jpg")
                         || name.endsWith(".jpeg") || name.endsWith(".webp"));
         });
@@ -6037,8 +6202,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File[] files = scaleDir.listFiles(f -> {
                 if (!f.isFile()) return false;
                 String n = f.getName().toLowerCase(Locale.ROOT);
-                return n.endsWith(".png") || n.endsWith(".jpg")
-                        || n.endsWith(".jpeg") || n.endsWith(".webp");
+                return !CaptureScaleHelper.isTemplateMaskFileName(n)
+                        && (n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp"));
             });
             int count = files == null ? 0 : files.length;
             // 空目录也显示，便于用户感知当前倍率
@@ -6053,6 +6219,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (!f.isFile()) return false;
             String n = f.getName().toLowerCase(Locale.ROOT);
             return !"manifest.json".equals(n)
+                    && !CaptureScaleHelper.isTemplateMaskFileName(n)
                     && (n.endsWith(".png") || n.endsWith(".jpg")
                         || n.endsWith(".jpeg") || n.endsWith(".webp"));
         });
@@ -6082,6 +6249,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (!f.isFile()) return false;
             String n = f.getName().toLowerCase(Locale.ROOT);
             return !"manifest.json".equals(n)
+                    && !CaptureScaleHelper.isTemplateMaskFileName(n)
                     && (n.endsWith(".png") || n.endsWith(".jpg")
                         || n.endsWith(".jpeg") || n.endsWith(".webp"));
         });
@@ -6112,8 +6280,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File[] files = scaleDir.listFiles(f -> {
                 if (!f.isFile()) return false;
                 String n = f.getName().toLowerCase(Locale.ROOT);
-                return n.endsWith(".png") || n.endsWith(".jpg")
-                        || n.endsWith(".jpeg") || n.endsWith(".webp");
+                return !CaptureScaleHelper.isTemplateMaskFileName(n)
+                        && (n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp"));
             });
             if (files == null) continue;
             java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
@@ -6129,6 +6298,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (!f.isFile()) return false;
             String n = f.getName().toLowerCase(Locale.ROOT);
             return !"manifest.json".equals(n)
+                    && !CaptureScaleHelper.isTemplateMaskFileName(n)
                     && (n.endsWith(".png") || n.endsWith(".jpg")
                         || n.endsWith(".jpeg") || n.endsWith(".webp"));
         });
@@ -7741,12 +7911,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 if (flat.exists() && flat.isFile() && flat.delete()) {
                     deleted++;
                 }
+                File flatMask = new File(imgDir, CaptureScaleHelper.getTemplateMaskFileName(name));
+                if (flatMask.exists() && flatMask.isFile()) {
+                    flatMask.delete();
+                }
                 // Delete from all scale subdirs
                 for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
-                    File scaleFile = new File(
-                            new File(imgDir, CaptureScaleHelper.getScaleDirName(scale)), name);
+                    File scaleDir = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+                    File scaleFile = new File(scaleDir, name);
                     if (scaleFile.exists() && scaleFile.isFile() && scaleFile.delete()) {
                         deleted++;
+                    }
+                    File scaleMask = new File(scaleDir, CaptureScaleHelper.getTemplateMaskFileName(name));
+                    if (scaleMask.exists() && scaleMask.isFile()) {
+                        scaleMask.delete();
                     }
                 }
             }

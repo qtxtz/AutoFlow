@@ -469,7 +469,7 @@ public class OpenCVHelper {
             Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED, mask);
 
             Core.MinMaxLocResult mm = Core.minMaxLoc(result);
-            if (mm.maxVal < minScore) {
+            if (Double.isNaN(mm.maxVal) || Double.isInfinite(mm.maxVal) || mm.maxVal < minScore) {
                 return new Point(-1, -1);
             }
 
