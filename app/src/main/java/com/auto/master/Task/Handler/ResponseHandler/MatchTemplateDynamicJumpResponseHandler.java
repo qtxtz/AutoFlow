@@ -27,9 +27,20 @@ import java.util.concurrent.ThreadLocalRandom;
 public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHandler {
 
     private static final String TAG = "MatchTemplateDynJump";
+    private static final int MAX_CLICK_RETRY_COUNT = 5;
+    private static final long CLICK_DISPATCH_TIMEOUT_MS = 250L;
+    private static final long DEFAULT_CLICK_WAIT_TIMEOUT_MS = 4000L;
 
     public MatchTemplateDynamicJumpResponseHandler() {
         this.type = 1;
+    }
+
+    private static class ClickResult {
+        final Object lock = new Object();
+        boolean dispatched = false;
+        boolean accepted = false;
+        boolean completed = false;
+        boolean ok = false;
     }
 
 
@@ -148,42 +159,33 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                         List<Integer> integers = generateRandomPointInBBox(bbox);
 //                    List<Integer> integers = bbox;
                         Point target;
-                        if (!integers.isEmpty()) {
+                        if (integers != null && !integers.isEmpty()) {
                             Integer x = integers.get(0);
                             Integer y = integers.get(1);
                             target = new Point(x, y);
-                        } else {
+                        } else if (bbox != null && bbox.size() >= 2) {
                             target = new Point(bbox.get(0), bbox.get(1));
+                        } else {
+                            targetId = getString(inputMap.get(MetaOperation.FALLBACKOPERATIONID));
+                            Log.w(TAG, "点击区域无效，走 fallback: " + targetId);
+                            if (!StringUtils.isNotEmpty(targetId)) {
+                                return;
+                            }
+                            target = null;
                         }
                         //        先画区域
-                        if (!ctx.suppressVisualFeedback) {
+                        if (target != null && !ctx.suppressVisualFeedback) {
                             MAIN_HANDLER.post(() -> {
                                 svc.showClickFeedback((int) target.x, (int) target.y, 280);
                             });
                         }
-//                        try {
-//                            Thread.sleep(100);
-//                        } catch (Exception e) {
-//
-//                        }
-                        svc.click((int) target.x, (int) target.y,
-                                () -> {
-//                                    notifyResult(result, true);
-                                    Log.d(TAG, "点击成功回调");
-                                },
-                                () -> {
-//                                    notifyResult(result, false);
-                                    Log.w(TAG, "点击失败回调");
-                                }
-                        );
-//                        try {
-//                            Thread.sleep(100);
-//                        } catch (Exception e) {
-//
-//                        }
-//                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-//
-//                        });
+                        if (target != null && !performClickWithRetry(svc, target, inputMap)) {
+                            targetId = getString(inputMap.get(MetaOperation.FALLBACKOPERATIONID));
+                            Log.w(TAG, "匹配成功但点击失败，走 fallback: " + targetId);
+                            if (!StringUtils.isNotEmpty(targetId)) {
+                                return;
+                            }
+                        }
                     }
 
 
@@ -261,5 +263,112 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
             }
         }
         return 0L;
+    }
+
+    private boolean performClickWithRetry(AutoAccessibilityService svc, Point target, Map<String, Object> inputMap) {
+        ClickResult clickResult = new ClickResult();
+        MAIN_HANDLER.post(() -> {
+            boolean accepted = svc.clickWithRetry((int) target.x, (int) target.y,
+                    () -> {
+                        notifyClickCompletion(clickResult, true);
+                        Log.d(TAG, "点击成功回调");
+                    },
+                    () -> {
+                        notifyClickCompletion(clickResult, false);
+                        Log.w(TAG, "点击失败回调");
+                    },
+                    MAX_CLICK_RETRY_COUNT);
+            notifyClickDispatch(clickResult, accepted);
+        });
+
+        if (!waitForClickDispatch(clickResult, CLICK_DISPATCH_TIMEOUT_MS) || !clickResult.accepted) {
+            return false;
+        }
+        long timeoutMs = positiveLong(inputMap.get(MetaOperation.CLICK_WAIT_TIMEOUT_MS), DEFAULT_CLICK_WAIT_TIMEOUT_MS);
+        return waitForClickCompletion(clickResult, timeoutMs) && clickResult.ok;
+    }
+
+    private void notifyClickDispatch(ClickResult result, boolean accepted) {
+        synchronized (result.lock) {
+            if (result.dispatched) {
+                return;
+            }
+            result.dispatched = true;
+            result.accepted = accepted;
+            result.lock.notifyAll();
+        }
+    }
+
+    private void notifyClickCompletion(ClickResult result, boolean success) {
+        synchronized (result.lock) {
+            if (result.completed) {
+                return;
+            }
+            result.completed = true;
+            result.ok = success;
+            result.lock.notifyAll();
+        }
+    }
+
+    private boolean waitForClickDispatch(ClickResult result, long timeoutMs) {
+        long start = System.currentTimeMillis();
+        synchronized (result.lock) {
+            while (!result.dispatched) {
+                if (!waitOnClickResult(result, timeoutMs, start)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean waitForClickCompletion(ClickResult result, long timeoutMs) {
+        long start = System.currentTimeMillis();
+        synchronized (result.lock) {
+            while (!result.completed) {
+                if (!waitOnClickResult(result, timeoutMs, start)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean waitOnClickResult(ClickResult result, long timeoutMs, long start) {
+        if (Thread.currentThread().isInterrupted()) {
+            Log.d(TAG, "点击等待被中断");
+            return false;
+        }
+        long left = timeoutMs - (System.currentTimeMillis() - start);
+        if (left <= 0) {
+            return false;
+        }
+        try {
+            result.lock.wait(left);
+            return true;
+        } catch (InterruptedException e) {
+            Log.d(TAG, "点击等待被中断", e);
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private long positiveLong(Object raw, long fallback) {
+        if (raw instanceof Number) {
+            long value = ((Number) raw).longValue();
+            return value > 0 ? value : fallback;
+        }
+        if (raw instanceof String) {
+            try {
+                long value = Long.parseLong(((String) raw).trim());
+                return value > 0 ? value : fallback;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return fallback;
+    }
+
+    private String getString(Object raw) {
+        return raw == null ? null : String.valueOf(raw).trim();
     }
 }
