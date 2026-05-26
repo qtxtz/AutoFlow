@@ -52,7 +52,7 @@ public abstract class MetaOperation {
 
     //    模板匹配参数
     public static String MATCHTIMEOUT = "MATCHTIMEOUT";
-    public static final long DEFAULT_MATCH_TIMEOUT_MS = 5000L;
+    public static final long DEFAULT_MATCH_TIMEOUT_MS = 500L;
     public static final long MAX_MATCH_DELAY_MS = 500L;
     public static final long DEFAULT_NODE_PRE_DELAY_MS = 0L;
     public static final long MAX_NODE_PRE_DELAY_MS = 60_000L;
