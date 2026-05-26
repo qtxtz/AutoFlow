@@ -818,6 +818,7 @@ public class OpenCVHelper {
                     long cacheKey = templateMat.nativeObj;
                     Mat cached = grayTemplateCache.get(cacheKey);
                     if (cached != null && !cached.empty()) {
+                        grayTemplate.release(); // 释放前面 new Mat() 产生的空头，再指向缓存
                         grayTemplate = cached;
                         grayTemplateFromCache = true;
                     } else {
