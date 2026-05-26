@@ -122,33 +122,59 @@
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/btn_mask_brush_dec"
+                android:layout_width="32dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="笔"
+                android:textColor="#33455C"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <SeekBar
+                android:id="@+id/sb_mask_brush"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:max="63"
+                android:progress="5"
+                android:progressDrawable="@drawable/seekbar_brush_track"
+                android:thumb="@drawable/seekbar_brush_thumb"
+                android:thumbOffset="10dp" />
+
+            <TextView
+                android:id="@+id/tv_mask_brush_size"
+                android:layout_width="38dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:gravity="center"
+                android:text="6 px"
+                android:textColor="#33455C"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:background="#33FFFFFF" />
+
+            <TextView
+                android:id="@+id/btn_mask_zoom_out"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
                 android:background="@drawable/item_operation_compact_bg"
                 android:gravity="center"
-                android:text="-"
+                android:text="−"
                 android:textColor="#315DBF"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tv_mask_brush_size"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="6dp"
-                android:layout_marginEnd="6dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:text="画笔 6 px"
-                android:textColor="#33455C"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/btn_mask_brush_inc"
+                android:id="@+id/btn_mask_zoom_in"
                 android:layout_width="40dp"
                 android:layout_height="match_parent"
+                android:layout_marginStart="4dp"
                 android:background="@drawable/item_operation_compact_bg"
                 android:gravity="center"
                 android:text="+"

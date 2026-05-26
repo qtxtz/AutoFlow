@@ -738,8 +738,7 @@ public class CropRegionOperationHandler extends OperationHandler {
             TextView btnErase = overlay.findViewById(R.id.btn_mask_erase);
             TextView btnClear = overlay.findViewById(R.id.btn_mask_clear);
             TextView btnSave = overlay.findViewById(R.id.btn_mask_save);
-            TextView btnDec = overlay.findViewById(R.id.btn_mask_brush_dec);
-            TextView btnInc = overlay.findViewById(R.id.btn_mask_brush_inc);
+            android.widget.SeekBar sbBrush = overlay.findViewById(R.id.sb_mask_brush);
             TextView tvBrush = overlay.findViewById(R.id.tv_mask_brush_size);
 
             if (tvTitle != null) tvTitle.setText(title);
@@ -753,7 +752,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                 btnErase.setBackgroundResource(erase ? R.drawable.panel_btn_primary_selector : R.drawable.item_operation_compact_bg);
                 btnErase.setTextColor(erase ? Color.WHITE : Color.rgb(49, 93, 191));
             };
-            Runnable updateBrushUi = () -> tvBrush.setText("画笔 " + editor.getBrushSize() + " px");
+            Runnable updateBrushUi = () -> tvBrush.setText(editor.getBrushSize() + " px");
 
             btnDraw.setOnClickListener(v -> {
                 editor.setEraseMode(false);
@@ -764,13 +763,14 @@ public class CropRegionOperationHandler extends OperationHandler {
                 updateModeUi.run();
             });
             btnClear.setOnClickListener(v -> editor.clearMask());
-            btnDec.setOnClickListener(v -> {
-                editor.setBrushSize(editor.getBrushSize() - 1);
-                updateBrushUi.run();
-            });
-            btnInc.setOnClickListener(v -> {
-                editor.setBrushSize(editor.getBrushSize() + 1);
-                updateBrushUi.run();
+            sbBrush.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                    editor.setBrushSize(progress + 1);
+                    updateBrushUi.run();
+                }
+                @Override public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
             });
             overlay.findViewById(R.id.btn_mask_editor_close).setOnClickListener(v -> {
                 editor.release();
