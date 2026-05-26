@@ -96,6 +96,32 @@ public class OpenCVHelper {
             grayTemplateCache.clear();
         }
     }
+
+    /**
+     * 释放当前线程上的 OpenCV 临时缓冲。
+     * ThreadLocal Mat 能减少短时间内的 native 分配，但长时间循环脚本中，
+     * 不同 ROI / 模板尺寸来回切换会让这些缓冲长期占住较大的 native 内存。
+     * 这里只清理当前线程的临时 Mat，不动模板缓存。
+     */
+    public static void releaseCurrentThreadBuffers() {
+        releaseThreadLocalMat(sResultMat);
+        releaseThreadLocalMat(sSuppressionMask);
+        releaseThreadLocalMat(sGraySearchMat);
+        releaseThreadLocalMat(sScaledSearchMat);
+        releaseThreadLocalMat(sScaledTemplateMat);
+        releaseThreadLocalMat(sGrayTemplateMat);
+    }
+
+    private static void releaseThreadLocalMat(ThreadLocal<Mat> local) {
+        Mat mat = local.get();
+        if (mat != null) {
+            try {
+                mat.release();
+            } catch (Throwable ignored) {
+            }
+            local.remove();
+        }
+    }
     
 
     

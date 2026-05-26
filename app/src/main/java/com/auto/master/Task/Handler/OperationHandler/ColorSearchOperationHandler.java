@@ -153,9 +153,15 @@ public class ColorSearchOperationHandler extends OperationHandler {
         }
 
         // ③ 关键：整个 ROI 只做 1 次 JNI 调用；submat 用后必须 release，否则每帧泄漏 native Mat 头
-        Mat subView = screenMat.submat(y, y + h, x, x + w);
-        subView.get(0, 0, buf);
-        subView.release();
+        Mat subView = null;
+        try {
+            subView = screenMat.submat(y, y + h, x, x + w);
+            subView.get(0, 0, buf);
+        } finally {
+            if (subView != null) {
+                subView.release();
+            }
+        }
 
         // ④ 提取目标色三通道（OpenCV 默认 BGR 顺序）
         // Color.parseColor 返回 ARGB；OpenCV 存 BGR(A)

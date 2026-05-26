@@ -85,7 +85,8 @@ public class ScreenCaptureManager {
     private Mat directMat;      // rowStride == width*4 快路径
     private Mat paddedMat;      // rowStride > width*4 慢路径（包含 padding）
     private Mat roiMat;         // paddedMat 的 colRange(0,width)，作为最终输出视图
-    private Mat directRoiMat;   // ROI 专用小图，避免整屏转 Mat
+    private Mat directRoiMat;   // ROI backing Mat：按最大见过尺寸增长，避免不同 ROI 尺寸来回切换时反复 native 分配
+    private Mat directRoiViewMat; // directRoiMat 的当前有效视图，尺寸等于本次 ROI
 
     // ===== 字节缓冲复用 =====
     private byte[] frameBytes;
@@ -457,7 +458,7 @@ public class ScreenCaptureManager {
             }
 
             boolean freshFrameLoaded = pollLatestRoiMatLocked(safeRoi);
-            if (directRoiMat == null || directRoiMat.empty()) {
+            if (directRoiViewMat == null || directRoiViewMat.empty()) {
                 return null;
             }
             long now = System.currentTimeMillis();
@@ -468,7 +469,7 @@ public class ScreenCaptureManager {
                     return null;
                 }
             }
-            return clone ? directRoiMat.clone() : directRoiMat;
+            return clone ? directRoiViewMat.clone() : directRoiViewMat;
         }
     }
 
@@ -605,7 +606,10 @@ public class ScreenCaptureManager {
         }
 
         ensureDirectRoiMat(w, h);
-        directRoiMat.put(0, 0, roiFrameBytes, 0, totalBytes);
+        if (directRoiViewMat == null || directRoiViewMat.empty()) {
+            return false;
+        }
+        directRoiViewMat.put(0, 0, roiFrameBytes, 0, totalBytes);
         return true;
     }
 
@@ -620,13 +624,28 @@ public class ScreenCaptureManager {
     }
 
     private void ensureDirectRoiMat(int w, int h) {
-        if (directRoiMat != null && !directRoiMat.empty()
-                && directRoiMat.width() == w && directRoiMat.height() == h
-                && directRoiMat.type() == CvType.CV_8UC4) {
+        if (directRoiMat == null
+                || directRoiMat.empty()
+                || directRoiMat.width() < w
+                || directRoiMat.height() < h
+                || directRoiMat.type() != CvType.CV_8UC4) {
+            if (directRoiViewMat != null) {
+                directRoiViewMat.release();
+                directRoiViewMat = null;
+            }
+            if (directRoiMat != null) {
+                directRoiMat.release();
+            }
+            directRoiMat = new Mat(h, w, CvType.CV_8UC4);
+        }
+        if (directRoiViewMat != null && !directRoiViewMat.empty()
+                && directRoiViewMat.width() == w && directRoiViewMat.height() == h) {
             return;
         }
-        if (directRoiMat != null) directRoiMat.release();
-        directRoiMat = new Mat(h, w, CvType.CV_8UC4);
+        if (directRoiViewMat != null) {
+            directRoiViewMat.release();
+        }
+        directRoiViewMat = directRoiMat.submat(0, h, 0, w);
     }
 
     private void ensurePaddedMat(int paddedCols, int h, int w) {
@@ -640,6 +659,10 @@ public class ScreenCaptureManager {
                 roiMat = paddedMat.colRange(0, w);
             }
             return;
+        }
+        if (roiMat != null) {
+            roiMat.release();
+            roiMat = null;
         }
         if (paddedMat != null) paddedMat.release();
         paddedMat = new Mat(h, paddedCols, CvType.CV_8UC4);
@@ -761,6 +784,7 @@ public class ScreenCaptureManager {
             if (directMat != null) { directMat.release(); directMat = null; }
             if (roiMat != null) { roiMat.release(); roiMat = null; } // 注意：roiMat 是 view，release 可选；不想踩坑可不 release
             if (paddedMat != null) { paddedMat.release(); paddedMat = null; }
+            if (directRoiViewMat != null) { directRoiViewMat.release(); directRoiViewMat = null; }
             if (directRoiMat != null) { directRoiMat.release(); directRoiMat = null; }
         } catch (Throwable ignored) {}
 

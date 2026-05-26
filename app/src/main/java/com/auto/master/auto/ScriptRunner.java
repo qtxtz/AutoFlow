@@ -66,6 +66,7 @@ import com.auto.master.utils.OpenCVHelper;
 public final class ScriptRunner {
 
     private static final String TAG = "ScriptRunner";
+    private static final int NATIVE_BUFFER_TRIM_INTERVAL_OPS = 512;
     private static final ExecutorService SINGLE = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -389,6 +390,7 @@ public final class ScriptRunner {
 //                        }
 //                    } catch (Exception ignored) {}
                     int consecutiveErrors = 0;
+                    int operationsSinceNativeTrim = 0;
                     try {
 //                    *************************************************
                         String projectName = "";
@@ -542,6 +544,11 @@ public final class ScriptRunner {
                                     break;
                                 }
                                 responseHandler.process(currentResponse, scriptExecuteContext);
+                                operationsSinceNativeTrim++;
+                                if (operationsSinceNativeTrim >= NATIVE_BUFFER_TRIM_INTERVAL_OPS) {
+                                    OpenCVHelper.releaseCurrentThreadBuffers();
+                                    operationsSinceNativeTrim = 0;
+                                }
                                 consecutiveErrors = 0;
                             } catch (InterruptedException e) {
                                 Log.d(TAG, "脚本执行被中断");
@@ -561,6 +568,7 @@ public final class ScriptRunner {
                     } finally {
                         currentExecuteContext = null;
                         currentExecuteThread = null;
+                        OpenCVHelper.releaseCurrentThreadBuffers();
 //                        if (wakeLock != null && wakeLock.isHeld()) {
 //                            wakeLock.release();
 //                        }
