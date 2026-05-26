@@ -98,7 +98,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             return createResponse(ctx, obj, false, null, bbox, null);
         }
         Mat templateMask = getOrLoadTemplateMaskMat(projectName, taskName, templateName, templateMat);
+//        NOTE: 这里只有随机roi的时候 才会有randomSampleMask 否则是 null
         Mat randomSampleMask = createRandomSampleMaskIfNeeded(templateMat, matchMethod, sampleRatio);
+//        这里会尝试进行合并 前提条件是 method 是 随机roi 才会合并 否则走默认mask
         Mat matchMask = combineMasksIfNeeded(templateMask, randomSampleMask);
 
         android.graphics.Rect captureRoi = null;
