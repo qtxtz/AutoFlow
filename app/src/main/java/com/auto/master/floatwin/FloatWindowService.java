@@ -4078,7 +4078,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (taskDir == null || item == null || TextUtils.isEmpty(item.fileName)) {
             return;
         }
-        String[] actions = new String[]{"替换截图", "查看/编辑 Mask", "删除 Mask", "重命名模板", "删除模板"};
+        String[] actions = new String[]{"替换截图", "预览搜索区域", "查看/编辑 Mask", "删除 Mask", "重命名模板", "删除模板"};
         android.view.ContextThemeWrapper ctx =
                 new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
@@ -4092,10 +4092,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         return;
                     }
                     if (which == 1) {
-                        showTemplateMaskEditorFromLibrary(taskDir, item, onChanged);
+                        showTemplateBboxPreview(item.fileName);
                         return;
                     }
                     if (which == 2) {
+                        showTemplateMaskEditorFromLibrary(taskDir, item, onChanged);
+                        return;
+                    }
+                    if (which == 3) {
                         File dir = getTemplateItemDir(taskDir, item.scaleDirName);
                         File maskFile = new File(dir, CaptureScaleHelper.getTemplateMaskFileName(item.fileName));
                         if (maskFile.exists() && maskFile.isFile() && maskFile.delete()) {
@@ -4109,7 +4113,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         }
                         return;
                     }
-                    if (which == 3) {
+                    if (which == 4) {
                         if (item.usageCount > 0) {
                             Toast.makeText(this, "模板仍被节点引用，暂不支持重命名", Toast.LENGTH_SHORT).show();
                             return;
