@@ -276,6 +276,10 @@ public class Template {
                 totalCachedMats--;
             }
         }
+        // 释放的 Mat 其 nativeObj 地址可能被新 Mat 复用，清空灰度缓存避免错误命中
+        try {
+            OpenCVHelper.getInstance().clearGrayTemplateCache();
+        } catch (Throwable ignored) {}
     }
     
     /**

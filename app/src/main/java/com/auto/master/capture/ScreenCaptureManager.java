@@ -502,7 +502,7 @@ public class ScreenCaptureManager {
             // 快路径：无 padding
             ensureDirectMat(w, h);
             directMat.put(0, 0, frameBytes, 0, h * tightRowBytes);
-            roiMat = null; // 当前输出是 directMat
+            if (roiMat != null) { roiMat.release(); roiMat = null; }
             return true;
         } else {
             // 慢路径：有 padding，用 paddedMat + ROI，仍然只 put 一次
@@ -636,6 +636,7 @@ public class ScreenCaptureManager {
                 && paddedMat.type() == CvType.CV_8UC4) {
             // 确保 roiMat 正确
             if (roiMat == null || roiMat.width() != w || roiMat.height() != h) {
+                if (roiMat != null) roiMat.release();
                 roiMat = paddedMat.colRange(0, w);
             }
             return;

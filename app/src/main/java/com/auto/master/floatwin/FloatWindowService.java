@@ -7881,9 +7881,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return sum / Math.max(1, data.size());
     }
 
+    private static final SimpleDateFormat RUN_LOG_FMT =
+            new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
+    private static final int MAX_RUN_LOG_ENTRIES = 2000;
+
     private void appendRunLog(String line) {
-        String ts = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(new Date());
+        String ts = RUN_LOG_FMT.format(new Date());
         String logLine = ts + "  " + line;
+        if (currentRunLogs.size() >= MAX_RUN_LOG_ENTRIES) {
+            currentRunLogs.subList(0, MAX_RUN_LOG_ENTRIES / 2).clear();
+        }
         currentRunLogs.add(logLine);
         CrashLogger.appendRunLog(this, logLine);
     }
