@@ -60,6 +60,7 @@ public class SetCaptureScaleOperationHandler extends OperationHandler {
 
         // 清空 MatchMap 编译计划缓存
         MatchMaptemplateOperationHandler.clearMatchPlanCache();
+        MatchtemplateOperationHandler.clearRandomRoiCache();
 
         // 若采集正在运行，等待 VD 稳定
         if (ScreenCaptureManager.getInstance().isRunning()) {

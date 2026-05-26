@@ -26,14 +26,32 @@ import org.opencv.core.Point;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class MatchtemplateOperationHandler extends OperationHandler {
 
     private static final String TAG = "MatchTemplateOp";
     private static final int MIN_RANDOM_SAMPLE_POINTS = 32;
+    private static final int MIN_RANDOM_ROI_SIDE_PX = 4;
+    private static final int RANDOM_ROI_CACHE_VARIANTS = 8;
+    private static final int MAX_RANDOM_ROI_CACHE_ENTRIES = 64;
+    private static final Map<String, List<RandomRoiPlan>> RANDOM_ROI_CACHE =
+            Collections.synchronizedMap(new LinkedHashMap<String, List<RandomRoiPlan>>(
+                    MAX_RANDOM_ROI_CACHE_ENTRIES + 1, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, List<RandomRoiPlan>> eldest) {
+                    if (size() <= MAX_RANDOM_ROI_CACHE_ENTRIES) {
+                        return false;
+                    }
+                    releaseRandomRoiPlans(eldest.getValue());
+                    return true;
+                }
+            });
 
     MatchtemplateOperationHandler() {
         this.setType(6);
@@ -87,6 +105,11 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                     bbox.get(0) + bbox.get(2),
                     bbox.get(1) + bbox.get(3));
         }
+        RandomRoiPlan randomRoiPlan = getRandomRoiPlan(
+                projectName, taskName, templateName, captureRoi, templateMat, matchMethod, sampleRatio);
+        if (randomRoiPlan != null) {
+            captureRoi = randomRoiPlan.captureRoi;
+        }
 
         if (preDelayMs > 0) {
             SystemClock.sleep(preDelayMs);
@@ -111,11 +134,22 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 continue;
             }
             try {
-                Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor, matchMethod, sampleRatio, randomSampleMask);
+                Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor, matchMethod, sampleRatio, randomSampleMask, randomRoiPlan);
                 if (position == null || position.x < 0 || position.y < 0) {
                     pollingController.onMiss();
                     pollingController.sleepUntilNextIteration(loopStartMs);
                     continue;
+                }
+                if (randomRoiPlan != null) {
+                    firstMatch = new MatchResult(new Point(randomRoiPlan.fullRoi.left, randomRoiPlan.fullRoi.top), 1);
+                    matchedBbox = java.util.Arrays.asList(
+                            randomRoiPlan.fullRoi.left,
+                            randomRoiPlan.fullRoi.top,
+                            randomRoiPlan.fullRoi.width(),
+                            randomRoiPlan.fullRoi.height());
+                    matched = true;
+                    pollingController.onHit();
+                    break;
                 }
                 ScreenCaptureManager captureManager = ScreenCaptureManager.getInstance();
                 float invScaleX = captureManager.getActualInvScaleX();
@@ -145,6 +179,9 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         if (randomSampleMask != null) {
             randomSampleMask.release();
         }
+        if (randomRoiPlan != null) {
+            randomRoiPlan.release();
+        }
 
         return createResponse(ctx, obj, matched, firstMatch, matched ? matchedBbox : bbox, svc);
     }
@@ -155,11 +192,152 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                                 double scaleFactor,
                                 int matchMethod,
                                 double sampleRatio,
-                                Mat randomSampleMask) {
+                                Mat randomSampleMask,
+                                RandomRoiPlan randomRoiPlan) {
+        if (randomRoiPlan != null && randomRoiPlan.templateRoiMat != null && !randomRoiPlan.templateRoiMat.empty()) {
+            return OpenCVHelper.getInstance().fastSingleMatch(screenMat, randomRoiPlan.templateRoiMat, null, similarity, 1.0d);
+        }
         if (shouldUseRandomSample(screenMat, templateMat, matchMethod, sampleRatio, randomSampleMask)) {
             return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, randomSampleMask);
         }
         return OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, scaleFactor);
+    }
+
+    public static void clearRandomRoiCache() {
+        synchronized (RANDOM_ROI_CACHE) {
+            for (List<RandomRoiPlan> plans : RANDOM_ROI_CACHE.values()) {
+                releaseRandomRoiPlans(plans);
+            }
+            RANDOM_ROI_CACHE.clear();
+        }
+    }
+
+    private static void releaseRandomRoiPlans(List<RandomRoiPlan> plans) {
+        if (plans == null) {
+            return;
+        }
+        for (RandomRoiPlan plan : plans) {
+            if (plan != null) {
+                plan.forceRelease();
+            }
+        }
+    }
+
+    private RandomRoiPlan getRandomRoiPlan(String projectName,
+                                           String taskName,
+                                           String templateName,
+                                           android.graphics.Rect fullRoi,
+                                           Mat templateMat,
+                                           int matchMethod,
+                                           double sampleRatio) {
+        if (matchMethod != MetaOperation.MATCH_METHOD_RANDOM_ROI
+                || sampleRatio >= 1.0d
+                || fullRoi == null
+                || fullRoi.isEmpty()
+                || templateMat == null
+                || templateMat.empty()) {
+            return null;
+        }
+        String cacheKey = buildRandomRoiCacheKey(projectName, taskName, templateName, fullRoi, templateMat, sampleRatio);
+        synchronized (RANDOM_ROI_CACHE) {
+            List<RandomRoiPlan> cached = RANDOM_ROI_CACHE.get(cacheKey);
+            if (hasUsableRandomRoiPlans(cached)) {
+                return cached.get(ThreadLocalRandom.current().nextInt(cached.size()));
+            }
+            releaseRandomRoiPlans(cached);
+            cached = new ArrayList<>(RANDOM_ROI_CACHE_VARIANTS);
+            for (int i = 0; i < RANDOM_ROI_CACHE_VARIANTS; i++) {
+                RandomRoiPlan plan = createRandomRoiPlan(fullRoi, templateMat, sampleRatio, true);
+                if (plan != null) {
+                    cached.add(plan);
+                }
+            }
+            if (cached.isEmpty()) {
+                RANDOM_ROI_CACHE.remove(cacheKey);
+                return null;
+            }
+            RANDOM_ROI_CACHE.put(cacheKey, cached);
+            return cached.get(ThreadLocalRandom.current().nextInt(cached.size()));
+        }
+    }
+
+    private boolean hasUsableRandomRoiPlans(List<RandomRoiPlan> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return false;
+        }
+        for (RandomRoiPlan plan : plans) {
+            if (plan == null || plan.templateRoiMat == null || plan.templateRoiMat.empty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String buildRandomRoiCacheKey(String projectName,
+                                          String taskName,
+                                          String templateName,
+                                          android.graphics.Rect fullRoi,
+                                          Mat templateMat,
+                                          double sampleRatio) {
+        long ratioKey = Math.round(Math.max(0.001d, Math.min(1.0d, sampleRatio)) * 10000d);
+        return String.valueOf(projectName) + '|'
+                + taskName + '|'
+                + templateName + '|'
+                + System.identityHashCode(templateMat) + '|'
+                + templateMat.cols() + 'x' + templateMat.rows() + '|'
+                + ScreenCaptureManager.CAPTURE_SCALE + '|'
+                + fullRoi.left + ',' + fullRoi.top + ',' + fullRoi.right + ',' + fullRoi.bottom + '|'
+                + ratioKey;
+    }
+
+    private RandomRoiPlan createRandomRoiPlan(android.graphics.Rect fullRoi,
+                                              Mat templateMat,
+                                              double sampleRatio,
+                                              boolean cached) {
+
+        ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+        android.graphics.Rect fullCaptureRoi = mgr.toCaptureRect(fullRoi);
+        if (fullCaptureRoi == null || fullCaptureRoi.isEmpty()) {
+            return null;
+        }
+
+        int templateW = templateMat.cols();
+        int templateH = templateMat.rows();
+        if (templateW <= 0 || templateH <= 0) {
+            return null;
+        }
+
+        double sideRatio = Math.sqrt(Math.max(0.001d, Math.min(1.0d, sampleRatio)));
+        int roiW = Math.max(1, Math.min(templateW, (int) Math.round(templateW * sideRatio)));
+        int roiH = Math.max(1, Math.min(templateH, (int) Math.round(templateH * sideRatio)));
+        roiW = Math.min(templateW, Math.max(Math.min(templateW, MIN_RANDOM_ROI_SIDE_PX), roiW));
+        roiH = Math.min(templateH, Math.max(Math.min(templateH, MIN_RANDOM_ROI_SIDE_PX), roiH));
+
+        int localX = templateW == roiW ? 0 : ThreadLocalRandom.current().nextInt(templateW - roiW + 1);
+        int localY = templateH == roiH ? 0 : ThreadLocalRandom.current().nextInt(templateH - roiH + 1);
+
+        android.graphics.Rect requestedCaptureRoi = new android.graphics.Rect(
+                fullCaptureRoi.left + localX,
+                fullCaptureRoi.top + localY,
+                fullCaptureRoi.left + localX + roiW,
+                fullCaptureRoi.top + localY + roiH);
+        android.graphics.Rect screenRoi = mgr.toScreenRect(requestedCaptureRoi);
+        android.graphics.Rect effectiveCaptureRoi = mgr.toCaptureRect(screenRoi);
+        if (screenRoi == null || effectiveCaptureRoi == null || effectiveCaptureRoi.isEmpty()) {
+            return null;
+        }
+
+        int templateX = effectiveCaptureRoi.left - fullCaptureRoi.left;
+        int templateY = effectiveCaptureRoi.top - fullCaptureRoi.top;
+        int templateRight = effectiveCaptureRoi.right - fullCaptureRoi.left;
+        int templateBottom = effectiveCaptureRoi.bottom - fullCaptureRoi.top;
+        templateX = Math.max(0, Math.min(templateX, templateW - 1));
+        templateY = Math.max(0, Math.min(templateY, templateH - 1));
+        templateRight = Math.max(templateX + 1, Math.min(templateRight, templateW));
+        templateBottom = Math.max(templateY + 1, Math.min(templateBottom, templateH));
+
+        Mat templateRoiMat = templateMat.submat(templateY, templateBottom, templateX, templateRight);
+        return new RandomRoiPlan(new android.graphics.Rect(fullRoi), screenRoi, templateRoiMat, cached);
     }
 
     private boolean shouldUseRandomSample(Mat screenMat, Mat templateMat, int matchMethod, double sampleRatio, Mat randomSampleMask) {
@@ -389,5 +567,34 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             }
         }
         return def;
+    }
+
+    private static final class RandomRoiPlan {
+        final android.graphics.Rect fullRoi;
+        final android.graphics.Rect captureRoi;
+        final Mat templateRoiMat;
+        final boolean cached;
+
+        RandomRoiPlan(android.graphics.Rect fullRoi,
+                      android.graphics.Rect captureRoi,
+                      Mat templateRoiMat,
+                      boolean cached) {
+            this.fullRoi = fullRoi;
+            this.captureRoi = captureRoi;
+            this.templateRoiMat = templateRoiMat;
+            this.cached = cached;
+        }
+
+        void release() {
+            if (!cached && templateRoiMat != null) {
+                templateRoiMat.release();
+            }
+        }
+
+        void forceRelease() {
+            if (templateRoiMat != null) {
+                templateRoiMat.release();
+            }
+        }
     }
 }
