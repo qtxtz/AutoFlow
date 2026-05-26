@@ -238,7 +238,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                 return new MatchTaskResult(false, null, task);
             }
             Point positionInRoi = OpenCVHelper.getInstance()
-                    .fastSingleMatch(roi, task.info.mat, null, task.info.similarity, task.info.mask);
+                    .fastSingleMatchGray(roi, task.info.mat, null, task.info.similarity, task.info.mask);
             if (positionInRoi != null && positionInRoi.x >= 0) {
                 ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
                 float invScaleX = mgr.getActualInvScaleX();

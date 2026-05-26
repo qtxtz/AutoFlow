@@ -466,7 +466,11 @@ public class OpenCVHelper {
                 searchMat = screenMat;
             }
 
-            Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED, mask);
+            if (mask != null && !mask.empty()) {
+                Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED, mask);
+            } else {
+                Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED);
+            }
 
             Core.MinMaxLocResult mm = Core.minMaxLoc(result);
             if (Double.isNaN(mm.maxVal) || Double.isInfinite(mm.maxVal) || mm.maxVal < minScore) {
@@ -486,6 +490,85 @@ public class OpenCVHelper {
             if (searchMat != null && searchMat != screenMat) {
                 searchMat.release();
             }
+        }
+    }
+
+    /**
+     * 快速灰度单峰匹配，支持 mask。
+     * 以 fastSingleMatch(4参数) 为基础：灰度转换、灰度模板缓存、ROI边界检查均保留，
+     * mask 非空时仅对 mask=255 的像素参与匹配；mask 为 null/empty 时直接委托 4 参数版本。
+     * @param mask 单通道灰度 mask（255=参与匹配，0=忽略），null 则全图匹配
+     */
+    public Point fastSingleMatchGray(Mat screenMat, Mat templateMat, Rect roi, double threshold, Mat mask) {
+        if (mask == null || mask.empty()) {
+            return fastSingleMatch(screenMat, templateMat, roi, threshold);
+        }
+
+        Mat searchMat = null;
+        Mat result = sResultMat.get();
+        if (result == null) { result = new Mat(); sResultMat.set(result); }
+        Mat graySearch = sGraySearchMat.get();
+        if (graySearch == null) { graySearch = new Mat(); sGraySearchMat.set(graySearch); }
+        Point roiOffset = new Point(0, 0);
+        Mat grayTemplate = null;
+
+        try {
+            if (screenMat == null || screenMat.empty() || templateMat == null || templateMat.empty()) {
+                return new Point(-1, -1);
+            }
+
+            if (roi != null && roi.width > 0 && roi.height > 0) {
+                int x = Math.max(0, roi.x);
+                int y = Math.max(0, roi.y);
+                int w = Math.min(roi.width, screenMat.cols() - x);
+                int h = Math.min(roi.height, screenMat.rows() - y);
+                if (w <= 0 || h <= 0) {
+                    Log.e(TAG, "ROI越界: roi=" + roi + ", screen=" + screenMat.cols() + "x" + screenMat.rows());
+                    return new Point(-1, -1);
+                }
+                if (templateMat.cols() > w || templateMat.rows() > h) {
+                    Log.e(TAG, "模板比ROI大: tpl=" + templateMat.cols() + "x" + templateMat.rows() + ", roi=" + w + "x" + h);
+                    return new Point(-1, -1);
+                }
+                searchMat = new Mat(screenMat, new Rect(x, y, w, h));
+                roiOffset = new Point(x, y);
+            } else {
+                if (templateMat.cols() > screenMat.cols() || templateMat.rows() > screenMat.rows()) {
+                    Log.e(TAG, "模板比screen大");
+                    return new Point(-1, -1);
+                }
+                searchMat = screenMat;
+            }
+
+            int colorCode = (searchMat.channels() == 3) ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+            Imgproc.cvtColor(searchMat, graySearch, colorCode);
+
+            long cacheKey = templateMat.nativeObj;
+            Mat cached = grayTemplateCache.get(cacheKey);
+            if (cached != null && !cached.empty()) {
+                grayTemplate = cached;
+            } else {
+                grayTemplate = new Mat();
+                int tplCode = (templateMat.channels() == 3) ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+                Imgproc.cvtColor(templateMat, grayTemplate, tplCode);
+                grayTemplateCache.put(cacheKey, grayTemplate);
+            }
+
+            // mask 已是单通道灰度（由 getOrLoadTemplateMaskMat 转换），可直接用于灰度 matchTemplate
+            Imgproc.matchTemplate(graySearch, grayTemplate, result, TM_CCOEFF_NORMED, mask);
+
+            Core.MinMaxLocResult minMax = Core.minMaxLoc(result);
+            if (minMax.maxVal < threshold) {
+                return new Point(-1, -1);
+            }
+
+            return new Point(minMax.maxLoc.x + roiOffset.x, minMax.maxLoc.y + roiOffset.y);
+
+        } catch (Throwable t) {
+            Log.e(TAG, "fastSingleMatchGray(mask)异常", t);
+            return new Point(-1, -1);
+        } finally {
+            if (searchMat != null && searchMat != screenMat) searchMat.release();
         }
     }
 
