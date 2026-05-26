@@ -1109,6 +1109,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private CapturePickerHelper capturePickerHelper;
     private FileIOManager fileIOManager;
     
+    // ── 临时悬浮层追踪 ─────────────────────────────────────────────────────
+    private View activeBboxOverlayView;
+    private final Handler bboxDismissHandler = new Handler(Looper.getMainLooper());
+
     // ── 拆分出的管理器 ──────────────────────────────────────────────────────
     /** 步骤指示器 & 延迟进度悬浮层（从本类拆分，见 StepAndDelayOverlayManager）。 */
     private StepAndDelayOverlayManager stepDelayOverlayManager;
@@ -1324,6 +1328,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 清理Handler的pending消息，防止内存泄漏
         if (uiHandler != null) {
             uiHandler.removeCallbacksAndMessages(null);
+        }
+        bboxDismissHandler.removeCallbacksAndMessages(null);
+        if (activeBboxOverlayView != null) {
+            safeRemoveView(activeBboxOverlayView);
+            activeBboxOverlayView = null;
         }
         // appLaunchPollThread / appLaunchPollHandler 已由 AppLaunchTriggerManager.destroy() 清理
         if (taskActionPopupWindow != null) {
@@ -4215,6 +4224,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showBboxOverlay(int bx, int by, int bw, int bh) {
+        // 先移除上一个还未消失的 overlay，避免叠加
+        bboxDismissHandler.removeCallbacksAndMessages(null);
+        if (activeBboxOverlayView != null) {
+            safeRemoveView(activeBboxOverlayView);
+            activeBboxOverlayView = null;
+        }
+
         final android.graphics.Paint dimPaint = new android.graphics.Paint();
         dimPaint.setColor(0xAA000000);
         dimPaint.setStyle(android.graphics.Paint.Style.FILL);
@@ -4269,16 +4285,17 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         );
 
         wm.addView(overlayView, lp);
+        activeBboxOverlayView = overlayView;
 
-        Handler dismissHandler = new Handler(Looper.getMainLooper());
         Runnable dismiss = () -> {
-            try { wm.removeView(overlayView); } catch (Exception ignored) {}
+            safeRemoveView(activeBboxOverlayView);
+            activeBboxOverlayView = null;
         };
         overlayView.setOnClickListener(v -> {
-            dismissHandler.removeCallbacks(dismiss);
+            bboxDismissHandler.removeCallbacks(dismiss);
             dismiss.run();
         });
-        dismissHandler.postDelayed(dismiss, 4000);
+        bboxDismissHandler.postDelayed(dismiss, 4000);
     }
 
     @Override
