@@ -124,11 +124,19 @@ public class ScreenCaptureManager {
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
     private volatile long lastResumeAttemptMs = 0L;
+    private volatile boolean keepAliveDuringScript = false;
     private final Runnable idleCheckRunnable = new Runnable() {
         @Override
         public void run() {
             if (!isRunning.get()) return;
             long now = System.currentTimeMillis();
+            if (keepAliveDuringScript) {
+                lastPollMs = now;
+                if (captureHandler != null) {
+                    captureHandler.postDelayed(this, IDLE_PAUSE_THRESHOLD_MS);
+                }
+                return;
+            }
             long idleMs = now - lastPollMs;
             if (idleMs > FULL_CLEANUP_IDLE_THRESHOLD_MS) {
                 Log.i(TAG, "capture idle too long, cleanup session: " + idleMs + "ms");
@@ -289,6 +297,16 @@ public class ScreenCaptureManager {
 
     public boolean isRunning() {
         return isRunning.get();
+    }
+
+    public void setKeepAliveDuringScript(boolean keepAlive) {
+        keepAliveDuringScript = keepAlive;
+        if (keepAlive) {
+            lastPollMs = System.currentTimeMillis();
+            if (displayPaused && isRunning.get() && captureHandler != null) {
+                captureHandler.post(() -> resumeVirtualDisplaySurface("script_keep_alive"));
+            }
+        }
     }
 
     public int getFrameSeq() {
@@ -755,6 +773,7 @@ public class ScreenCaptureManager {
     public void cleanup() {
         isRunning.set(false);
         displayPaused = false;
+        keepAliveDuringScript = false;
         lastResumeAttemptMs = 0L;
         resetScheduled = false;
         consecutiveFrameFailures = 0;

@@ -60,6 +60,7 @@ import com.auto.master.Task.Task;
 import com.auto.master.Template.Template;
 
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
 
@@ -276,6 +277,7 @@ public final class ScriptRunner {
     public static void pauseCurrentScript() {
         if (currentExecuteContext != null) {
             currentExecuteContext.pause();
+            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
             Log.d(TAG, "脚本已暂停");
         }
     }
@@ -285,6 +287,7 @@ public final class ScriptRunner {
      */
     public static void resumeCurrentScript() {
         if (currentExecuteContext != null) {
+            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(true);
             currentExecuteContext.resume();
             Log.d(TAG, "脚本已恢复");
         }
@@ -296,6 +299,7 @@ public final class ScriptRunner {
     public static void stopCurrentScript() {
         if (currentExecuteContext != null) {
             currentExecuteContext.stop();
+            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
             // 中断执行线程，让阻塞的 operation 立即退出
             if (currentExecuteThread != null) {
                 currentExecuteThread.interrupt();
@@ -392,6 +396,7 @@ public final class ScriptRunner {
                     int consecutiveErrors = 0;
                     int operationsSinceNativeTrim = 0;
                     try {
+                        ScreenCaptureManager.getInstance().setKeepAliveDuringScript(true);
 //                    *************************************************
                         String projectName = "";
                         String entryTaskName = "";
@@ -568,6 +573,7 @@ public final class ScriptRunner {
                     } finally {
                         currentExecuteContext = null;
                         currentExecuteThread = null;
+                        ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
                         OpenCVHelper.releaseCurrentThreadBuffers();
 //                        if (wakeLock != null && wakeLock.isHeld()) {
 //                            wakeLock.release();
