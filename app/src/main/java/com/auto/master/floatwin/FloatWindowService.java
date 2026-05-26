@@ -2328,6 +2328,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             @Override public java.util.List<String> getCurrentProjectTaskIds() { return FloatWindowService.this.getCurrentProjectTaskIds(); }
             @Override public java.util.List<String> getTaskOperationIds(String taskId) { return FloatWindowService.this.getTaskOperationIds(taskId); }
             @Override public String getOperationDisplayLabel(String operationId) { return FloatWindowService.this.formatCurrentTaskOperationReference(operationId); }
+            @Override public java.util.List<OperationIdPickerAdapter.OperationPickItem> getCurrentProjectTaskPickItems() {
+                return FloatWindowService.this.getCurrentProjectTaskPickItems();
+            }
+            @Override public java.util.List<OperationIdPickerAdapter.OperationPickItem> getTaskOperationPickItems(String taskId) {
+                return FloatWindowService.this.getTaskOperationPickItems(taskId);
+            }
+            @Override public String getTaskDisplayLabel(String taskId) {
+                return FloatWindowService.this.formatTaskReference(taskId);
+            }
+            @Override public String getTaskOperationDisplayLabel(String taskId, String operationId) {
+                return FloatWindowService.this.formatTaskOperationReference(taskId, operationId);
+            }
         });
 
         dialogFactory.setTemplateHelper(new OperationDialogFactory.TemplateHelper() {
@@ -6191,6 +6203,93 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         } catch (Exception ignored) {
         }
         return ids;
+    }
+
+    private List<OperationIdPickerAdapter.OperationPickItem> getCurrentProjectTaskPickItems() {
+        List<OperationIdPickerAdapter.OperationPickItem> items = new ArrayList<>();
+        List<String> taskIds = getCurrentProjectTaskIds();
+        Project project = currentProjectDir == null ? null : findCachedProjectByName(currentProjectDir.getName());
+        if (project == null && currentProjectDir != null) {
+            project = loadProjectFromDir(currentProjectDir);
+        }
+        Map<String, Task> taskMap = project == null ? null : project.getTaskMap();
+        for (String taskId : taskIds) {
+            if (TextUtils.isEmpty(taskId)) {
+                continue;
+            }
+            Task task = taskMap == null ? null : taskMap.get(taskId);
+            String name = task == null || TextUtils.isEmpty(task.getName()) ? taskId : task.getName();
+            int operationCount = task == null || task.getOperationMap() == null ? getTaskOperationIds(taskId).size() : task.getOperationMap().size();
+            String meta = operationCount + " 个节点";
+            if (task != null && !TextUtils.isEmpty(task.getStartOperationId())) {
+                meta += " · 起点 " + task.getStartOperationId();
+            }
+            items.add(new OperationIdPickerAdapter.OperationPickItem(items.size() + 1, taskId, name, meta));
+        }
+        return items;
+    }
+
+    private List<OperationIdPickerAdapter.OperationPickItem> getTaskOperationPickItems(String taskId) {
+        List<OperationIdPickerAdapter.OperationPickItem> items = new ArrayList<>();
+        if (currentProjectDir == null || TextUtils.isEmpty(taskId)) {
+            return items;
+        }
+        Task task = findCurrentProjectTask(taskId);
+        List<OperationItem> operationItems = task == null
+                ? new ArrayList<>()
+                : buildOperationItemsFromTask(task);
+        if (operationItems.isEmpty()) {
+            File taskDir = new File(currentProjectDir, taskId);
+            operationItems = readOperationItemsDirect(taskDir);
+        }
+        for (OperationItem item : operationItems) {
+            if (item == null || TextUtils.isEmpty(item.id)) {
+                continue;
+            }
+            String name = TextUtils.isEmpty(item.name) ? "未命名" : item.name;
+            String type = TextUtils.isEmpty(item.type) ? "未知" : item.type;
+            items.add(new OperationIdPickerAdapter.OperationPickItem(items.size() + 1, item.id, name, type));
+        }
+        return items;
+    }
+
+    @Nullable
+    private Task findCurrentProjectTask(String taskId) {
+        if (currentProjectDir == null || TextUtils.isEmpty(taskId)) {
+            return null;
+        }
+        Project project = findCachedProjectByName(currentProjectDir.getName());
+        if (project == null) {
+            project = loadProjectFromDir(currentProjectDir);
+        }
+        Map<String, Task> taskMap = project == null ? null : project.getTaskMap();
+        return taskMap == null ? null : taskMap.get(taskId);
+    }
+
+    private String formatTaskReference(String taskId) {
+        if (TextUtils.isEmpty(taskId)) {
+            return "";
+        }
+        List<OperationIdPickerAdapter.OperationPickItem> items = getCurrentProjectTaskPickItems();
+        for (OperationIdPickerAdapter.OperationPickItem item : items) {
+            if (item != null && TextUtils.equals(taskId, item.id)) {
+                return String.format(Locale.getDefault(), "#%02d %s <%s>", item.order, item.name, item.id);
+            }
+        }
+        return taskId;
+    }
+
+    private String formatTaskOperationReference(String taskId, String operationId) {
+        if (TextUtils.isEmpty(operationId)) {
+            return "";
+        }
+        List<OperationIdPickerAdapter.OperationPickItem> items = getTaskOperationPickItems(taskId);
+        for (OperationIdPickerAdapter.OperationPickItem item : items) {
+            if (item != null && TextUtils.equals(operationId, item.id)) {
+                return formatOperationReferenceLabel(item);
+            }
+        }
+        return operationId;
     }
 
     private void bindAutoComplete(AutoCompleteTextView view, List<String> options) {

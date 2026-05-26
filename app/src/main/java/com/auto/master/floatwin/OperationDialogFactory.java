@@ -13,9 +13,13 @@ import android.widget.TextView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.auto.master.R;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
+import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
 import com.auto.master.utils.AdaptivePollingController;
 
 import org.json.JSONArray;
@@ -95,6 +99,40 @@ public class OperationDialogFactory {
         java.util.List<String> getCurrentProjectTaskIds();
         java.util.List<String> getTaskOperationIds(String taskId);
         String getOperationDisplayLabel(String operationId);
+
+        default java.util.List<OperationIdPickerAdapter.OperationPickItem> getCurrentProjectTaskPickItems() {
+            java.util.List<OperationIdPickerAdapter.OperationPickItem> items = new java.util.ArrayList<>();
+            java.util.List<String> ids = getCurrentProjectTaskIds();
+            if (ids != null) {
+                for (String id : ids) {
+                    if (!TextUtils.isEmpty(id)) {
+                        items.add(new OperationIdPickerAdapter.OperationPickItem(items.size() + 1, id, id, "Task"));
+                    }
+                }
+            }
+            return items;
+        }
+
+        default java.util.List<OperationIdPickerAdapter.OperationPickItem> getTaskOperationPickItems(String taskId) {
+            java.util.List<OperationIdPickerAdapter.OperationPickItem> items = new java.util.ArrayList<>();
+            java.util.List<String> ids = getTaskOperationIds(taskId);
+            if (ids != null) {
+                for (String id : ids) {
+                    if (!TextUtils.isEmpty(id)) {
+                        items.add(new OperationIdPickerAdapter.OperationPickItem(items.size() + 1, id, id, "Operation"));
+                    }
+                }
+            }
+            return items;
+        }
+
+        default String getTaskDisplayLabel(String taskId) {
+            return taskId == null ? "" : taskId;
+        }
+
+        default String getTaskOperationDisplayLabel(String taskId, String operationId) {
+            return operationId == null ? "" : operationId;
+        }
     }
 
     public interface TemplateHelper {
@@ -798,6 +836,112 @@ public class OperationDialogFactory {
         });
     }
 
+    private void showJumpTaskPickList(String title,
+                                      java.util.List<OperationIdPickerAdapter.OperationPickItem> items,
+                                      String currentSelectedId,
+                                      boolean allowClear,
+                                      OperationSelectedCallback callback) {
+        if (items == null) {
+            items = java.util.Collections.emptyList();
+        }
+        if (items.isEmpty()) {
+            host.showToast("没有可选择的项目");
+            return;
+        }
+
+        View pickerView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_operation_picker, null);
+        WindowManager.LayoutParams pickerLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(pickerLp, 360, 0.78f, 0.92f);
+        wm.addView(pickerView, pickerLp);
+        dialogHelpers.setupDialogMoveAndScale(pickerView, pickerLp, 360, 440, null);
+
+        TextView tvTitle = pickerView.findViewById(R.id.tv_picker_title);
+        EditText edtSearch = pickerView.findViewById(R.id.edt_picker_search);
+        RecyclerView rv = pickerView.findViewById(R.id.rv_picker);
+        TextView btnClear = pickerView.findViewById(R.id.btn_picker_clear);
+
+        tvTitle.setText(title);
+        rv.setLayoutManager(new LinearLayoutManager(host.getContext()));
+        OperationIdPickerAdapter adapter = new OperationIdPickerAdapter(items, currentSelectedId, id -> {
+            dialogHelpers.safeRemoveView(pickerView);
+            if (callback != null) {
+                callback.onOperationSelected(id);
+            }
+        });
+        rv.setAdapter(adapter);
+        if (!TextUtils.isEmpty(currentSelectedId)) {
+            for (int i = 0; i < items.size(); i++) {
+                if (TextUtils.equals(currentSelectedId, items.get(i).id)) {
+                    rv.scrollToPosition(i);
+                    break;
+                }
+            }
+        }
+
+        pickerView.findViewById(R.id.btn_picker_close).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(pickerView));
+        btnClear.setVisibility(allowClear ? View.VISIBLE : View.GONE);
+        btnClear.setOnClickListener(v -> {
+            dialogHelpers.safeRemoveView(pickerView);
+            if (callback != null) {
+                callback.onOperationSelected("");
+            }
+        });
+
+        edtSearch.setHint("搜索序号、名称、类型或ID");
+        edtSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.updateFilter(s == null ? "" : s.toString());
+                adapter.updateSelectedOperation(currentSelectedId);
+            }
+
+            @Override public void afterTextChanged(Editable s) {}
+        });
+    }
+
+    private void showJumpTaskPicker(String currentTaskId, OperationSelectedCallback callback) {
+        java.util.List<OperationIdPickerAdapter.OperationPickItem> items =
+                taskOperationHelper == null
+                        ? java.util.Collections.emptyList()
+                        : taskOperationHelper.getCurrentProjectTaskPickItems();
+        showJumpTaskPickList("选择目标 Task", items, currentTaskId, false, callback);
+    }
+
+    private void showJumpTaskOperationPicker(String taskId,
+                                             String currentOperationId,
+                                             OperationSelectedCallback callback) {
+        if (TextUtils.isEmpty(taskId)) {
+            host.showToast("请先选择目标 Task");
+            return;
+        }
+        java.util.List<OperationIdPickerAdapter.OperationPickItem> items =
+                taskOperationHelper == null
+                        ? java.util.Collections.emptyList()
+                        : taskOperationHelper.getTaskOperationPickItems(taskId);
+        showJumpTaskPickList("选择目标节点", items, currentOperationId, true, callback);
+    }
+
+    private void updateJumpTaskSelectionSummary(TextView taskSummary,
+                                                TextView operationSummary,
+                                                String taskId,
+                                                String operationId) {
+        if (taskSummary != null) {
+            String label = taskOperationHelper == null
+                    ? taskId
+                    : taskOperationHelper.getTaskDisplayLabel(taskId);
+            taskSummary.setText(TextUtils.isEmpty(label) ? "未选择目标 Task" : label);
+        }
+        if (operationSummary != null) {
+            String label = taskOperationHelper == null
+                    ? operationId
+                    : taskOperationHelper.getTaskOperationDisplayLabel(taskId, operationId);
+            operationSummary.setText(TextUtils.isEmpty(label) ? "未选择目标节点" : label);
+        }
+    }
+
     // ==================== Jump Task Operation ====================
 
     public void showAddJumpTaskDialog() {
@@ -817,6 +961,8 @@ public class OperationDialogFactory {
         TextView btnPickTargetTask = dialogView.findViewById(R.id.btn_pick_target_task);
         TextView btnPickTargetOperation = dialogView.findViewById(R.id.btn_pick_target_operation);
         TextView btnClearTargetOperation = dialogView.findViewById(R.id.btn_clear_target_operation);
+        TextView tvTargetTaskSummary = dialogView.findViewById(R.id.tv_target_task_summary);
+        TextView tvTargetOperationSummary = dialogView.findViewById(R.id.tv_target_operation_summary);
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
 
         prepareJumpTaskAutoComplete(edtTargetTask);
@@ -828,6 +974,7 @@ public class OperationDialogFactory {
         }
         bindJumpTaskTargetOperationSuggestions(edtTargetOperation, "");
         updateJumpTaskReturnSection(nextOperationSection, cbReturnAfterComplete);
+        updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, "", "");
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
@@ -860,13 +1007,28 @@ public class OperationDialogFactory {
                     : edtTargetOperation.getText().toString().trim();
                 if (!TextUtils.isEmpty(currentOperationId) && !operationIds.contains(currentOperationId)) {
                     edtTargetOperation.setText("", false);
+                    currentOperationId = "";
                 }
+                updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, currentOperationId);
                 lastTaskId = taskId;
             }
 
             @Override
             public void afterTextChanged(Editable s) {
             }
+        });
+
+        edtTargetOperation.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+                String operationId = s == null ? "" : s.toString().trim();
+                updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, operationId);
+            }
+
+            @Override public void afterTextChanged(Editable s) {}
         });
 
         cbReturnAfterComplete.setOnCheckedChangeListener((buttonView, isChecked) ->
@@ -882,7 +1044,13 @@ public class OperationDialogFactory {
             }
         });
 
-        btnPickTargetTask.setOnClickListener(v -> edtTargetTask.showDropDown());
+        btnPickTargetTask.setOnClickListener(v -> {
+            String current = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+            showJumpTaskPicker(current, taskId -> {
+                edtTargetTask.setText(taskId, false);
+                edtTargetTask.setSelection(edtTargetTask.length());
+            });
+        });
 
         btnPickTargetOperation.setOnClickListener(v -> {
             String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
@@ -891,11 +1059,18 @@ public class OperationDialogFactory {
                 edtTargetTask.requestFocus();
                 return;
             }
-            edtTargetOperation.requestFocus();
-            edtTargetOperation.showDropDown();
+            String current = edtTargetOperation.getText() == null ? "" : edtTargetOperation.getText().toString().trim();
+            showJumpTaskOperationPicker(taskId, current, pickedOperationId -> {
+                edtTargetOperation.setText(pickedOperationId, false);
+                edtTargetOperation.setSelection(edtTargetOperation.length());
+            });
         });
 
-        btnClearTargetOperation.setOnClickListener(v -> edtTargetOperation.setText("", false));
+        btnClearTargetOperation.setOnClickListener(v -> {
+            edtTargetOperation.setText("", false);
+            String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+            updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, "");
+        });
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
@@ -1345,6 +1520,8 @@ public class OperationDialogFactory {
         TextView btnPickTargetTask = dialogView.findViewById(R.id.btn_pick_target_task);
         TextView btnPickTargetOperation = dialogView.findViewById(R.id.btn_pick_target_operation);
         TextView btnClearTargetOperation = dialogView.findViewById(R.id.btn_clear_target_operation);
+        TextView tvTargetTaskSummary = dialogView.findViewById(R.id.tv_target_task_summary);
+        TextView tvTargetOperationSummary = dialogView.findViewById(R.id.tv_target_operation_summary);
         android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存修改");
 
@@ -1386,13 +1563,28 @@ public class OperationDialogFactory {
                     : edtTargetOperation.getText().toString().trim();
                 if (!TextUtils.isEmpty(currentOperationId) && !operationIds.contains(currentOperationId)) {
                     edtTargetOperation.setText("", false);
+                    currentOperationId = "";
                 }
+                updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, currentOperationId);
                 lastTaskId = taskId;
             }
 
             @Override
             public void afterTextChanged(android.text.Editable s) {
             }
+        });
+
+        edtTargetOperation.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+                String operationId = s == null ? "" : s.toString().trim();
+                updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, operationId);
+            }
+
+            @Override public void afterTextChanged(Editable s) {}
         });
 
         // Pre-fill with existing data
@@ -1411,6 +1603,7 @@ public class OperationDialogFactory {
                 edtTargetOperation.setText(targetOperationId, false);
                 setOperationReferenceText(edtNextOperation, nextOperationId);
                 cbReturnAfterComplete.setChecked(returnAfterComplete);
+                updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, targetTaskId, targetOperationId);
             }
         } catch (Exception e) {
             host.showToast("加载跳转 Task 节点失败: " + e.getMessage());
@@ -1433,7 +1626,13 @@ public class OperationDialogFactory {
             }
         });
 
-        btnPickTargetTask.setOnClickListener(v -> edtTargetTask.showDropDown());
+        btnPickTargetTask.setOnClickListener(v -> {
+            String current = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+            showJumpTaskPicker(current, taskId -> {
+                edtTargetTask.setText(taskId, false);
+                edtTargetTask.setSelection(edtTargetTask.length());
+            });
+        });
 
         btnPickTargetOperation.setOnClickListener(v -> {
             String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
@@ -1442,11 +1641,18 @@ public class OperationDialogFactory {
                 edtTargetTask.requestFocus();
                 return;
             }
-            edtTargetOperation.requestFocus();
-            edtTargetOperation.showDropDown();
+            String current = edtTargetOperation.getText() == null ? "" : edtTargetOperation.getText().toString().trim();
+            showJumpTaskOperationPicker(taskId, current, pickedOperationId -> {
+                edtTargetOperation.setText(pickedOperationId, false);
+                edtTargetOperation.setSelection(edtTargetOperation.length());
+            });
         });
 
-        btnClearTargetOperation.setOnClickListener(v -> edtTargetOperation.setText("", false));
+        btnClearTargetOperation.setOnClickListener(v -> {
+            edtTargetOperation.setText("", false);
+            String taskId = edtTargetTask.getText() == null ? "" : edtTargetTask.getText().toString().trim();
+            updateJumpTaskSelectionSummary(tvTargetTaskSummary, tvTargetOperationSummary, taskId, "");
+        });
 
         dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
