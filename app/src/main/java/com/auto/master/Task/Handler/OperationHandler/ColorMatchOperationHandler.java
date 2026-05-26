@@ -1,6 +1,7 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class ColorMatchOperationHandler extends OperationHandler {
 
     private static final String TAG = "ColorMatchHandler";
+    private static final int COLOR_POINT_ROI_PADDING_PX = 4;
     // 单点颜色读取与区域找色统一走 byte[]，避免不同 JNI 路径造成行为不一致
     private static final ThreadLocal<byte[]> sPixelBuf = new ThreadLocal<byte[]>() {
         @Override protected byte[] initialValue() { return new byte[4]; }
@@ -59,14 +61,12 @@ public class ColorMatchOperationHandler extends OperationHandler {
         // toMap() 只在循环退出后调用一次，将最后一次评估结果转为响应 Map。
         final int ruleCount = rules.size();
         PointMatchResult[] lastResults = new PointMatchResult[ruleCount];
-        // Always use the full frame — single-point ROIs collapse at scale<1.0 causing
-        // sanitizeRoi() to return null while captureRoi is still non-null, which makes
-        // evaluate() subtract the wrong offset and read pixel (0,0) instead of the target.
+        Rect captureRoi = buildCaptureRoi(rules);
         long start = System.currentTimeMillis();
         AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck(inputMap);
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
-            Mat screenMat = pollingController.acquireFrame();
+            Mat screenMat = pollingController.acquireFrame(captureRoi);
             if (screenMat == null || screenMat.empty()) {
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStartMs);
@@ -81,7 +81,7 @@ public class ColorMatchOperationHandler extends OperationHandler {
             List<Integer> firstMatchedPoint = null;
             for (int i = 0; i < ruleCount; i++) {
                 PointRule rule = rules.get(i);
-                PointMatchResult result = evaluate(screenMat, rule);
+                PointMatchResult result = evaluate(screenMat, rule, captureRoi);
                 lastResults[i] = result;  // 保存本轮结果，用于循环结束后构建响应
                 if (result.matched) {
                     matchedCount++;
@@ -126,6 +126,33 @@ public class ColorMatchOperationHandler extends OperationHandler {
         return true;
     }
 
+    private Rect buildCaptureRoi(List<PointRule> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return null;
+        }
+        int left = Integer.MAX_VALUE;
+        int top = Integer.MAX_VALUE;
+        int right = Integer.MIN_VALUE;
+        int bottom = Integer.MIN_VALUE;
+        for (PointRule rule : rules) {
+            if (rule == null) {
+                continue;
+            }
+            left = Math.min(left, rule.x);
+            top = Math.min(top, rule.y);
+            right = Math.max(right, rule.x);
+            bottom = Math.max(bottom, rule.y);
+        }
+        if (left == Integer.MAX_VALUE || top == Integer.MAX_VALUE) {
+            return null;
+        }
+        return new Rect(
+                left - COLOR_POINT_ROI_PADDING_PX,
+                top - COLOR_POINT_ROI_PADDING_PX,
+                right + COLOR_POINT_ROI_PADDING_PX + 1,
+                bottom + COLOR_POINT_ROI_PADDING_PX + 1);
+    }
+
     private Map<String, Object> buildResult(boolean matched, String reason, List<Integer> matchedPoint, List<Map<String, Object>> pointResults) {
         Map<String, Object> result = new HashMap<>();
         result.put(MetaOperation.MATCHED, matched);
@@ -140,11 +167,16 @@ public class ColorMatchOperationHandler extends OperationHandler {
         return result;
     }
 
-    private PointMatchResult evaluate(Mat screenMat, PointRule rule) {
+    private PointMatchResult evaluate(Mat screenMat, PointRule rule, Rect captureRoi) {
         ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+        Rect captureBase = mgr.toCaptureRect(captureRoi);
+        int baseX = captureBase == null ? 0 : captureBase.left;
+        int baseY = captureBase == null ? 0 : captureBase.top;
         // 与取色器保存坐标、ROI 换算统一使用整数边界映射，避免采到邻近像素。
         int localX = mgr.screenToCaptureX(rule.x);
         int localY = mgr.screenToCaptureY(rule.y);
+        localX -= baseX;
+        localY -= baseY;
         if (localX < 0 || localY < 0 || localX >= screenMat.cols() || localY >= screenMat.rows()) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }
