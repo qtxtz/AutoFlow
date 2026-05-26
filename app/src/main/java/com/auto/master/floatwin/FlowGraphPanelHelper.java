@@ -9,6 +9,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -37,6 +38,8 @@ final class FlowGraphPanelHelper {
         int dp(int value);
 
         void adaptPanelSizeToScreen(WindowManager.LayoutParams lp, int desiredWidthDp, int desiredHeightDp);
+
+        int[] getScreenSizePx();
 
         int getSharedPanelX();
 
@@ -68,6 +71,8 @@ final class FlowGraphPanelHelper {
     private Runnable refreshAction;
     private String selectedNodeId;
     private FlowGraphView currentGraphView;
+    private boolean fullscreen;
+    private SavedPanelBounds restoreBounds;
 
     FlowGraphPanelHelper(Host host) {
         this.host = host;
@@ -137,19 +142,23 @@ final class FlowGraphPanelHelper {
         host.getWindowManager().addView(panelView, panelLp);
 
         View dragHeader = panelView.findViewById(R.id.drag_header);
+        View dragHandle = panelView.findViewById(R.id.drag_handle);
         View resizeHandle = panelView.findViewById(R.id.resize_handle);
-        dragHeader.setOnTouchListener(new DragTouchListener(panelLp, host.getWindowManager(), panelView, (FloatWindowService) host.getContext(), true));
-        resizeHandle.setOnTouchListener(new PanelResizeTouchListener(
+        View.OnTouchListener dragTouchListener = new DragTouchListener(panelLp, host.getWindowManager(), panelView, (FloatWindowService) host.getContext(), true);
+        View.OnTouchListener resizeTouchListener = new PanelResizeTouchListener(
                 panelLp,
                 host.getWindowManager(),
                 panelView,
                 (FloatWindowService) host.getContext(),
                 host.dp(300),
                 host.dp(400)
-        ));
+        );
+        dragHeader.setOnTouchListener(dragTouchListener);
+        resizeHandle.setOnTouchListener(resizeTouchListener);
 
         FlowGraphView graphView = panelView.findViewById(R.id.flow_graph_view);
         graphView.setInteractionReadOnly(true);
+        ImageView fullscreenButton = panelView.findViewById(R.id.btn_flow_fullscreen);
         TextView selectedView = panelView.findViewById(R.id.tv_flow_selected);
         TextView editButton = panelView.findViewById(R.id.btn_flow_edit_node);
         TextView setNextButton = panelView.findViewById(R.id.btn_flow_set_next);
@@ -203,6 +212,14 @@ final class FlowGraphPanelHelper {
 
         panelView.findViewById(R.id.btn_flow_close).setOnClickListener(v -> closePanel());
         panelView.findViewById(R.id.btn_flow_back).setOnClickListener(v -> closePanel());
+        fullscreenButton.setOnClickListener(v -> toggleFullscreen(
+                fullscreenButton,
+                dragHeader,
+                dragHandle,
+                resizeHandle,
+                dragTouchListener,
+                resizeTouchListener
+        ));
         panelView.findViewById(R.id.btn_flow_center).setOnClickListener(v -> graphView.resetViewTransform());
         panelView.findViewById(R.id.btn_flow_auto_layout).setOnClickListener(v -> {
             graphView.autoArrange();
@@ -262,12 +279,95 @@ final class FlowGraphPanelHelper {
 
     private void closePanel() {
         if (panelView != null) {
-            host.rememberSharedPanelPosition(panelLp);
+            if (fullscreen && restoreBounds != null) {
+                host.rememberSharedPanelPosition(restoreBounds.toLayoutParamsSnapshot());
+            } else {
+                host.rememberSharedPanelPosition(panelLp);
+            }
             host.safeRemoveView(panelView);
             panelView = null;
             panelLp = null;
             refreshAction = null;
             selectedNodeId = null;
+            fullscreen = false;
+            restoreBounds = null;
+        }
+    }
+
+    private void toggleFullscreen(ImageView button,
+                                  View dragHeader,
+                                  View dragHandle,
+                                  View resizeHandle,
+                                  View.OnTouchListener dragTouchListener,
+                                  View.OnTouchListener resizeTouchListener) {
+        if (panelView == null || panelLp == null) {
+            return;
+        }
+        fullscreen = !fullscreen;
+        if (fullscreen) {
+            restoreBounds = SavedPanelBounds.from(panelLp);
+            int[] screen = host.getScreenSizePx();
+            panelLp.width = screen[0];
+            panelLp.height = screen[1];
+            panelLp.x = 0;
+            panelLp.y = 0;
+            button.setImageResource(R.drawable.ic_fullscreen_exit);
+            panelView.setBackgroundResource(R.drawable.panel_background_fullscreen);
+            dragHeader.setOnTouchListener(null);
+            dragHandle.setVisibility(View.GONE);
+            resizeHandle.setVisibility(View.GONE);
+            resizeHandle.setOnTouchListener(null);
+        } else {
+            if (restoreBounds != null) {
+                restoreBounds.applyTo(panelLp);
+            } else {
+                host.adaptPanelSizeToScreen(panelLp, 340, 520);
+                panelLp.x = host.getSharedPanelX();
+                panelLp.y = host.getSharedPanelY();
+            }
+            button.setImageResource(R.drawable.ic_fullscreen);
+            panelView.setBackgroundResource(R.drawable.panel_background);
+            dragHeader.setOnTouchListener(dragTouchListener);
+            dragHandle.setVisibility(View.VISIBLE);
+            resizeHandle.setVisibility(View.VISIBLE);
+            resizeHandle.setOnTouchListener(resizeTouchListener);
+            host.rememberSharedPanelPosition(panelLp);
+            restoreBounds = null;
+        }
+        try {
+            host.getWindowManager().updateViewLayout(panelView, panelLp);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static final class SavedPanelBounds {
+        final int width;
+        final int height;
+        final int x;
+        final int y;
+
+        SavedPanelBounds(int width, int height, int x, int y) {
+            this.width = width;
+            this.height = height;
+            this.x = x;
+            this.y = y;
+        }
+
+        static SavedPanelBounds from(WindowManager.LayoutParams lp) {
+            return new SavedPanelBounds(lp.width, lp.height, lp.x, lp.y);
+        }
+
+        void applyTo(WindowManager.LayoutParams lp) {
+            lp.width = width;
+            lp.height = height;
+            lp.x = x;
+            lp.y = y;
+        }
+
+        WindowManager.LayoutParams toLayoutParamsSnapshot() {
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
+            applyTo(lp);
+            return lp;
         }
     }
 

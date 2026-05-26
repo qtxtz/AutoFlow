@@ -1028,6 +1028,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public int[] getScreenSizePx() {
+                    return FloatWindowService.this.getScreenSizePx();
+                }
+
+                @Override
                 public int getSharedPanelX() {
                     return FloatWindowService.this.getSharedPanelX();
                 }

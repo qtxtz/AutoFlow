@@ -62,6 +62,17 @@
                 android:padding="7dp"
                 android:layout_marginStart="6dp" />
 
+            <!-- 全屏 / 还原 -->
+            <ImageView
+                android:id="@+id/btn_flow_fullscreen"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_fullscreen"
+                android:tint="#FFFFFF"
+                android:background="@drawable/panel_icon_action_bg"
+                android:padding="7dp"
+                android:layout_marginStart="6dp" />
+
             <!-- 关闭 -->
             <ImageView
                 android:id="@+id/btn_flow_close"
