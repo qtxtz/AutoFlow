@@ -242,7 +242,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="随机点采样比率"
+            android:text="随机采样 / ROI 比率"
             android:textSize="13sp"
             android:textColor="#4e5f74"
             android:layout_marginBottom="4dp"/>

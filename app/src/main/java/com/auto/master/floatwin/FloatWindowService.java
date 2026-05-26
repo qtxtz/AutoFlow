@@ -1093,6 +1093,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final String METHOD_TM_SQDIFF = "TM_SQDIFF (0)";
     private static final String METHOD_TM_SQDIFF_NORMED = "TM_SQDIFF_NORMED (1)";
     private static final String METHOD_RANDOM_SAMPLE = "随机点采样 (99)";
+    private static final String METHOD_RANDOM_ROI = "随机 ROI (100)";
 
     // ---- Extracted helper objects (Phase 2 refactoring) ----
     private OperationCrudHelper crudHelper;
@@ -6136,6 +6137,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         options.add(METHOD_TM_SQDIFF_NORMED);
         options.add(METHOD_TM_SQDIFF);
         options.add(METHOD_RANDOM_SAMPLE);
+        options.add(METHOD_RANDOM_ROI);
         return options;
     }
 
@@ -6151,6 +6153,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }
         String t = methodText.toUpperCase(Locale.ROOT);
+        if (methodText.contains("随机 ROI") || methodText.contains("随机ROI") || t.contains("RANDOM_ROI")) {
+            return MetaOperation.MATCH_METHOD_RANDOM_ROI;
+        }
         if (methodText.contains("随机点采样") || t.contains("RANDOM")) {
             return MetaOperation.MATCH_METHOD_RANDOM_SAMPLE;
         }
@@ -6177,6 +6182,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return METHOD_TM_CCOEFF;
             case MetaOperation.MATCH_METHOD_RANDOM_SAMPLE:
                 return METHOD_RANDOM_SAMPLE;
+            case MetaOperation.MATCH_METHOD_RANDOM_ROI:
+                return METHOD_RANDOM_ROI;
             case 5:
             default:
                 return METHOD_TM_CCOEFF_NORMED;
@@ -7955,7 +7962,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         try {
             inputMap.put(MetaOperation.MATCHUSEGRAY, chkGray != null && chkGray.isChecked());
             inputMap.put(MetaOperation.MATCHMETHOD, (double) methodCode);
-            if (methodCode == MetaOperation.MATCH_METHOD_RANDOM_SAMPLE) {
+            if (methodCode == MetaOperation.MATCH_METHOD_RANDOM_SAMPLE
+                    || methodCode == MetaOperation.MATCH_METHOD_RANDOM_ROI) {
                 inputMap.put(MetaOperation.MATCH_SAMPLE_RATIO, sampleRatio);
             } else {
                 inputMap.remove(MetaOperation.MATCH_SAMPLE_RATIO);
