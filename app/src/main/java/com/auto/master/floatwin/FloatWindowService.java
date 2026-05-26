@@ -4202,8 +4202,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "该模板没有设置搜索区域，将全屏搜索", Toast.LENGTH_SHORT).show();
             return;
         }
+        showBboxOverlay(bbox[0], bbox[1], bbox[2], bbox[3]);
+    }
 
-        final int bx = bbox[0], by = bbox[1], bw = bbox[2], bh = bbox[3];
+    @Override
+    public void showRawBboxPreview(int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) {
+            Toast.makeText(this, "无效的区域坐标", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showBboxOverlay(x, y, w, h);
+    }
+
+    private void showBboxOverlay(int bx, int by, int bw, int bh) {
         final android.graphics.Paint dimPaint = new android.graphics.Paint();
         dimPaint.setColor(0xAA000000);
         dimPaint.setStyle(android.graphics.Paint.Style.FILL);
@@ -4240,7 +4251,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 float labelY = by > dp(30) ? by - dp(6) : by + bh + dp(20);
                 float lx = bx + dp(4);
                 float textH = dp(16);
-                canvas.drawRect(lx - dp(2), labelY - textH + dp(2), lx + labelPaint.measureText(label) + dp(2), labelY + dp(4), labelBgPaint);
+                canvas.drawRect(lx - dp(2), labelY - textH + dp(2),
+                        lx + labelPaint.measureText(label) + dp(2), labelY + dp(4), labelBgPaint);
                 canvas.drawText(label, lx, labelY, labelPaint);
             }
         };

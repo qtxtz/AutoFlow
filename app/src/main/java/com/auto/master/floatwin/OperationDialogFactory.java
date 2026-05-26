@@ -2293,6 +2293,29 @@ public class OperationDialogFactory {
             if (matchMapHelper != null) matchMapHelper.importBboxFromTemplate(mainDialogView, edtBbox);
         });
 
+        // ── 预览搜索区域 ───────────────────────────────────────────────
+        row.findViewById(R.id.btn_preview_region).setOnClickListener(v -> {
+            String bboxText = edtBbox.getText().toString().trim();
+            if (TextUtils.isEmpty(bboxText)) {
+                host.showToast("请先填写区域坐标");
+                return;
+            }
+            try {
+                String[] parts = bboxText.split("[,，\\s]+");
+                if (parts.length < 4) {
+                    host.showToast("区域格式: x,y,w,h");
+                    return;
+                }
+                int x = Integer.parseInt(parts[0].trim());
+                int y = Integer.parseInt(parts[1].trim());
+                int w = Integer.parseInt(parts[2].trim());
+                int h = Integer.parseInt(parts[3].trim());
+                host.showRawBboxPreview(x, y, w, h);
+            } catch (Exception e) {
+                host.showToast("区域格式无效");
+            }
+        });
+
         // ── 多选模板 ──────────────────────────────────────────────────
         row.findViewById(R.id.btn_select_templates).setOnClickListener(v -> {
             if (matchMapHelper != null) {

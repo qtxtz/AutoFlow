@@ -56,4 +56,9 @@ public interface FloatWindowHost {
      * 若 manifest 中无 bbox 则 toast 提示"全屏搜索"。
      */
     void showTemplateBboxPreview(String templateFileName);
+
+    /**
+     * 直接用给定像素坐标在屏幕上显示 bbox 高亮覆盖层。
+     */
+    void showRawBboxPreview(int x, int y, int w, int h);
 }

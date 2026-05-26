@@ -13,16 +13,29 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="10dp">
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="图集匹配操作"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#7CB342"/>
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="图集匹配"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:textColor="#7CB342"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="命中任意一条区域规则即返回成功"
+                android:textSize="10sp"
+                android:textColor="#8a9a7a"/>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/btn_scale_dialog"
@@ -63,7 +76,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="操作名称"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="#4e5f74"
                 android:layout_marginBottom="4dp"/>
 
@@ -79,7 +92,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="超时(毫秒)"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="#4e5f74"
                 android:layout_marginBottom="4dp"/>
 
@@ -91,7 +104,7 @@
                 android:hint="使用默认值"
                 android:layout_marginBottom="14dp"/>
 
-            <!-- 匹配规则分隔线 -->
+            <!-- 匹配规则分隔标题 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -119,15 +132,6 @@
                     android:layout_weight="1"
                     android:background="#DDE3EA"/>
             </LinearLayout>
-
-            <!-- 说明文字 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="每条规则：指定区域 [x,y,w,h] + 模板文件 + 相似度阈值\n命中任意一条即返回成功"
-                android:textSize="11sp"
-                android:textColor="#7a8a9a"
-                android:layout_marginBottom="8dp"/>
 
             <!-- 动态匹配条目容器 -->
             <LinearLayout
@@ -302,7 +306,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="下一节点"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textColor="#4e5f74"
                 android:layout_marginBottom="4dp"/>
 
