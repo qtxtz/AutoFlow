@@ -45,4 +45,15 @@ public interface FloatWindowHost {
      * Get the current task directory
      */
     File getCurrentTaskDir();
+
+    /**
+     * 打开指定模板文件的 Mask 编辑器。
+     */
+    void showTemplateMaskEditorByName(String templateFileName, @androidx.annotation.Nullable Runnable onSaved);
+
+    /**
+     * 在屏幕上用覆盖层高亮显示该模板对应的搜索区域（bbox）。
+     * 若 manifest 中无 bbox 则 toast 提示"全屏搜索"。
+     */
+    void showTemplateBboxPreview(String templateFileName);
 }

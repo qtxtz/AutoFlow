@@ -1099,7 +1099,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final String METHOD_TM_CCORR_NORMED = "TM_CCORR_NORMED (3)";
     private static final String METHOD_TM_SQDIFF = "TM_SQDIFF (0)";
     private static final String METHOD_TM_SQDIFF_NORMED = "TM_SQDIFF_NORMED (1)";
-    private static final String METHOD_RANDOM_SAMPLE = "随机点采样 (99)";
+    private static final String METHOD_RANDOM_SAMPLE = "随机mask采样 (99)";
     private static final String METHOD_RANDOM_ROI = "随机 ROI (100)";
 
     // ---- Extracted helper objects (Phase 2 refactoring) ----
@@ -4160,6 +4160,136 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return TextUtils.isEmpty(scaleDirName) ? imgDir : new File(imgDir, scaleDirName);
     }
 
+    @Override
+    public void showTemplateBboxPreview(String templateFileName) {
+        File taskDir = currentTaskDir;
+        if (taskDir == null || !taskDir.isDirectory()) {
+            Toast.makeText(this, "当前任务不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (TextUtils.isEmpty(templateFileName)) {
+            Toast.makeText(this, "请先填写模板文件名", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = templateFileName.endsWith(".png") ? templateFileName : templateFileName + ".png";
+        String scaleDirName = getCurrentScaleDirName();
+        File templateDir = getTemplateItemDir(taskDir, scaleDirName);
+        File manifestFile = new File(templateDir, "manifest.json");
+
+        int[] bbox = null;
+        if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                if (!TextUtils.isEmpty(content.trim())) {
+                    JSONObject manifest = new JSONObject(content);
+                    if (manifest.has(name)) {
+                        JSONArray arr = manifest.getJSONArray(name);
+                        if (arr.length() >= 4) {
+                            bbox = new int[]{arr.getInt(0), arr.getInt(1), arr.getInt(2), arr.getInt(3)};
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "读取 manifest 失败", e);
+            }
+        }
+
+        if (bbox == null) {
+            Toast.makeText(this, "该模板没有设置搜索区域，将全屏搜索", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final int bx = bbox[0], by = bbox[1], bw = bbox[2], bh = bbox[3];
+        final android.graphics.Paint dimPaint = new android.graphics.Paint();
+        dimPaint.setColor(0xAA000000);
+        dimPaint.setStyle(android.graphics.Paint.Style.FILL);
+
+        final android.graphics.Paint fillPaint = new android.graphics.Paint();
+        fillPaint.setColor(0x55FF2222);
+        fillPaint.setStyle(android.graphics.Paint.Style.FILL);
+
+        final android.graphics.Paint borderPaint = new android.graphics.Paint();
+        borderPaint.setColor(0xFFFF3333);
+        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
+        borderPaint.setStrokeWidth(4f);
+
+        final android.graphics.Paint labelBgPaint = new android.graphics.Paint();
+        labelBgPaint.setColor(0xCC000000);
+        labelBgPaint.setStyle(android.graphics.Paint.Style.FILL);
+
+        final android.graphics.Paint labelPaint = new android.graphics.Paint();
+        labelPaint.setColor(0xFFFFFFFF);
+        labelPaint.setTextSize(dp(12));
+        labelPaint.setAntiAlias(true);
+
+        View overlayView = new View(this) {
+            @Override
+            protected void onDraw(android.graphics.Canvas canvas) {
+                int vw = getWidth(), vh = getHeight();
+                canvas.drawRect(0, 0, vw, by, dimPaint);
+                canvas.drawRect(0, by + bh, vw, vh, dimPaint);
+                canvas.drawRect(0, by, bx, by + bh, dimPaint);
+                canvas.drawRect(bx + bw, by, vw, by + bh, dimPaint);
+                canvas.drawRect(bx, by, bx + bw, by + bh, fillPaint);
+                canvas.drawRect(bx, by, bx + bw, by + bh, borderPaint);
+                String label = "区域: x=" + bx + " y=" + by + " w=" + bw + " h=" + bh;
+                float labelY = by > dp(30) ? by - dp(6) : by + bh + dp(20);
+                float lx = bx + dp(4);
+                float textH = dp(16);
+                canvas.drawRect(lx - dp(2), labelY - textH + dp(2), lx + labelPaint.measureText(label) + dp(2), labelY + dp(4), labelBgPaint);
+                canvas.drawText(label, lx, labelY, labelPaint);
+            }
+        };
+
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
+
+        wm.addView(overlayView, lp);
+
+        Handler dismissHandler = new Handler(Looper.getMainLooper());
+        Runnable dismiss = () -> {
+            try { wm.removeView(overlayView); } catch (Exception ignored) {}
+        };
+        overlayView.setOnClickListener(v -> {
+            dismissHandler.removeCallbacks(dismiss);
+            dismiss.run();
+        });
+        dismissHandler.postDelayed(dismiss, 4000);
+    }
+
+    @Override
+    public void showTemplateMaskEditorByName(String templateFileName, @Nullable Runnable onSaved) {
+        File taskDir = currentTaskDir;
+        if (taskDir == null || !taskDir.isDirectory()) {
+            Toast.makeText(this, "当前任务不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (TextUtils.isEmpty(templateFileName)) {
+            Toast.makeText(this, "请先填写模板文件名", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = templateFileName.endsWith(".png") ? templateFileName : templateFileName + ".png";
+        String scaleDirName = getCurrentScaleDirName();
+        File templateDir = getTemplateItemDir(taskDir, scaleDirName);
+        File templateFile = new File(templateDir, name);
+        if (!templateFile.exists()) {
+            Toast.makeText(this, "模板文件不存在，请先截图保存: " + name, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        TemplateLibraryAdapter.TemplateLibraryItem item =
+                new TemplateLibraryAdapter.TemplateLibraryItem(name, templateFile, 0);
+        item.scaleDirName = scaleDirName;
+        showTemplateMaskEditorFromLibrary(taskDir, item, onSaved);
+    }
+
     private void showTemplateMaskEditorFromLibrary(File taskDir,
                                                    TemplateLibraryAdapter.TemplateLibraryItem item,
                                                    @Nullable Runnable onChanged) {
@@ -6359,7 +6489,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (methodText.contains("随机 ROI") || methodText.contains("随机ROI") || t.contains("RANDOM_ROI")) {
             return MetaOperation.MATCH_METHOD_RANDOM_ROI;
         }
-        if (methodText.contains("随机点采样") || t.contains("RANDOM")) {
+        if (methodText.contains("随机mask采样") || t.contains("RANDOM")) {
             return MetaOperation.MATCH_METHOD_RANDOM_SAMPLE;
         }
         if (t.contains("SQDIFF_NORMED")) return 1;

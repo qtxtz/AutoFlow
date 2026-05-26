@@ -1712,6 +1712,12 @@ public class OperationDialogFactory {
             }
         });
 
+        dialogView.findViewById(R.id.btn_edit_mask).setOnClickListener(v ->
+            host.showTemplateMaskEditorByName(edtTemplateFile.getText().toString().trim(), null));
+
+        dialogView.findViewById(R.id.btn_preview_bbox).setOnClickListener(v ->
+            host.showTemplateBboxPreview(edtTemplateFile.getText().toString().trim()));
+
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
@@ -1897,6 +1903,12 @@ public class OperationDialogFactory {
                 templateHelper.beginTemplateCaptureFromDialog(dialogView, edtTemplateFile);
             }
         });
+
+        dialogView.findViewById(R.id.btn_edit_mask).setOnClickListener(v ->
+            host.showTemplateMaskEditorByName(edtTemplateFile.getText().toString().trim(), null));
+
+        dialogView.findViewById(R.id.btn_preview_bbox).setOnClickListener(v ->
+            host.showTemplateBboxPreview(edtTemplateFile.getText().toString().trim()));
 
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
