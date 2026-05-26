@@ -451,15 +451,17 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             resMap.put(MetaOperation.BBOX, matchedBbox);
             resMap.put(MetaOperation.MATCHED, true);
 
-            MAIN_HANDLER.postDelayed(() -> svc.showRectFeedback(
-                    (int) result.position.x,
-                    (int) result.position.y,
-                    screenW,
-                    screenH,
-                    120,
-                    0xFFCD0C0C,
-                    1.5f,
-                    0x00000000), RECT_FEEDBACK_DELAY_MS);
+            if (ctx == null || !ctx.suppressVisualFeedback) {
+                MAIN_HANDLER.postDelayed(() -> svc.showRectFeedback(
+                        (int) result.position.x,
+                        (int) result.position.y,
+                        screenW,
+                        screenH,
+                        120,
+                        0xFFCD0C0C,
+                        1.5f,
+                        0x00000000), RECT_FEEDBACK_DELAY_MS);
+            }
         }
 
         ctx.currentResponse = resMap;

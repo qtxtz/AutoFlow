@@ -91,7 +91,7 @@ public class ColorSearchOperationHandler extends OperationHandler {
             pollingController.sleepUntilNextIteration(loopStartMs);
         }
 
-        if (matched && matchedBbox != null) {
+        if (matched && matchedBbox != null && (ctx == null || !ctx.suppressVisualFeedback)) {
             AutoAccessibilityService svc = AutoAccessibilityService.get();
             if (svc != null && matchedBbox.size() >= 4) {
                 int x = matchedBbox.get(0);

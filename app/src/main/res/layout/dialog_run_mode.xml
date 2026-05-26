@@ -39,6 +39,17 @@
         android:layout_marginBottom="8dp" />
 
     <TextView
+        android:id="@+id/btn_run_focus"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:gravity="center"
+        android:text="专注运行（最低负载）"
+        android:textColor="#2f4f7c"
+        android:textStyle="bold"
+        android:background="@drawable/item_operation_compact_bg"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
         android:id="@+id/btn_run_mode_cancel"
         android:layout_width="match_parent"
         android:layout_height="38dp"

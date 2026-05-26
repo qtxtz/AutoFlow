@@ -156,9 +156,11 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                             target = new Point(bbox.get(0), bbox.get(1));
                         }
                         //        先画区域
-                        MAIN_HANDLER.post(() -> {
-                            svc.showClickFeedback((int) target.x, (int) target.y, 280);
-                        });
+                        if (!ctx.suppressVisualFeedback) {
+                            MAIN_HANDLER.post(() -> {
+                                svc.showClickFeedback((int) target.x, (int) target.y, 280);
+                            });
+                        }
 //                        try {
 //                            Thread.sleep(100);
 //                        } catch (Exception e) {

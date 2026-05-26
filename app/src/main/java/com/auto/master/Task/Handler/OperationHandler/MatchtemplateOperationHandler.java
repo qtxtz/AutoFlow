@@ -423,7 +423,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             response.put(MetaOperation.RESULT, result);
             response.put(MetaOperation.BBOX, bbox);
             response.put(MetaOperation.MATCHED, matched);
-            if (matched && result != null && bbox != null && bbox.size() >= 4 && svc != null) {
+            if (matched && result != null && bbox != null && bbox.size() >= 4 && svc != null
+                    && (ctx == null || !ctx.suppressVisualFeedback)) {
                 Point point = result.getLocation();
                 List<Integer> finalBbox = bbox;
                 getMainHandler().post(() ->

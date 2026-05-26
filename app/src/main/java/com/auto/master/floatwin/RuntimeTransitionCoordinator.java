@@ -79,8 +79,12 @@ final class RuntimeTransitionCoordinator {
         host.showToast("脚本已停止");
     }
 
-    void transitionAfterRunStart(boolean openProjectPanelNow) {
+    void transitionAfterRunStart(boolean openProjectPanelNow, boolean focusMode) {
         host.setBallVisible(true);
+        if (focusMode) {
+            smoothHideProjectPanel(null);
+            return;
+        }
         if (openProjectPanelNow) {
             host.showRuntimeAwareProjectPanel();
             return;

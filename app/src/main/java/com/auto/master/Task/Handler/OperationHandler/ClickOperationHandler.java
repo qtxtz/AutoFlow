@@ -94,7 +94,9 @@ public class ClickOperationHandler extends OperationHandler {
         ClickConfig config = resolveClickConfig(inputMap);
 
         getMainHandler().post(() -> {
-            svc.showClickFeedback((int) p.x, (int) p.y, 280);
+            if (ctx == null || !ctx.suppressVisualFeedback) {
+                svc.showClickFeedback((int) p.x, (int) p.y, 280);
+            }
             boolean accepted = svc.clickWithRetry((int) p.x, (int) p.y,
                     () -> {
                         notifyCompletion(result, true);

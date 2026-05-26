@@ -23,6 +23,9 @@ public class OperationContext {
     // 运行期变量池（跨节点共享）
     public Map<String, Object> variables = new HashMap<>();
 
+    // 专注运行模式：关闭点击圆点、匹配框等非必要视觉反馈。
+    public boolean suppressVisualFeedback = false;
+
     /**
      * 动态延时节点在 sleep 前通过此回调通知 Service 实际时长，
      * Service 据此启动倒计时覆盖层。

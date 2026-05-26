@@ -16,8 +16,14 @@ import com.auto.master.R;
  */
 public class ExecutionDialogHelper {
 
+    public enum RunMode {
+        WITH_PANEL,
+        BACKGROUND,
+        FOCUS
+    }
+
     public interface OnRunModeSelectedListener {
-        void onSelected(boolean openProjectPanelNow);
+        void onSelected(RunMode mode);
     }
 
     private final FloatWindowHost host;
@@ -106,18 +112,31 @@ public class ExecutionDialogHelper {
         dialogView.findViewById(R.id.btn_run_with_panel).setOnClickListener(v -> {
             dialogHelpers.safeRemoveView(dialogView);
             if (listener != null) {
-                listener.onSelected(true);
+                listener.onSelected(RunMode.WITH_PANEL);
             }
         });
 
         dialogView.findViewById(R.id.btn_run_background).setOnClickListener(v -> {
             dialogHelpers.safeRemoveView(dialogView);
             if (listener != null) {
-                listener.onSelected(false);
+                listener.onSelected(RunMode.BACKGROUND);
             }
         });
 
-        dialogView.findViewById(R.id.btn_run_mode_cancel).setOnClickListener(v ->
-                dialogHelpers.safeRemoveView(dialogView));
+        View focusButton = dialogView.findViewById(R.id.btn_run_focus);
+        if (focusButton != null) {
+            focusButton.setOnClickListener(v -> {
+                dialogHelpers.safeRemoveView(dialogView);
+                if (listener != null) {
+                    listener.onSelected(RunMode.FOCUS);
+                }
+            });
+        }
+
+        View cancelButton = dialogView.findViewById(R.id.btn_run_mode_cancel);
+        if (cancelButton != null) {
+            cancelButton.setOnClickListener(v ->
+                    dialogHelpers.safeRemoveView(dialogView));
+        }
     }
 }

@@ -223,6 +223,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private int opFailureCount = 0;
     private String latestFailureReason = "-";
     private long currentRunStartMs = 0L;
+    private boolean focusRunMode = false;
     // delay overlay state moved to StepAndDelayOverlayManager
 
     private String currentSearchQuery = "";
@@ -1600,14 +1601,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             }
 
-            Toast.makeText(this, "开始运行: " + launchData.startOperation.getName(), Toast.LENGTH_SHORT).show();
-            showRunModeMenu(v, showPanel -> startOperationWithMode(
+            showRunModeMenu(v, mode -> startOperationWithMode(
                     launchData.startOperation,
                     launchData.ctx,
                     launchData.projectName,
                     launchData.selectedTaskName,
                     launchData.selectedTaskOperations,
-                    showPanel
+                    mode
             ));
         });
 
@@ -1624,13 +1624,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
 
             PrecheckResult precheckResult = runPrecheck(launchData.selectedTask, launchData.selectedTaskName);
-            Runnable continueRun = () -> showRunModeMenu(v, showPanel -> startOperationWithMode(
+            Runnable continueRun = () -> showRunModeMenu(v, mode -> startOperationWithMode(
                     launchData.startOperation,
                     launchData.ctx,
                     launchData.projectName,
                     launchData.selectedTaskName,
                     launchData.selectedTaskOperations,
-                    showPanel
+                    mode
             ));
             showPrecheckDialog(precheckResult, continueRun);
             return true;
@@ -4832,6 +4832,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     @Override
     public void onOperationStart(String operationId, String operationName) {
         stopAppLaunchPolling();
+        if (focusRunMode) {
+            return;
+        }
         opStartTimeMs.put(operationId, System.currentTimeMillis());
         appendRunLog("[start] " + operationId + " | " + operationName);
         // 1. 更新运行状态面板
@@ -4893,6 +4896,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onNodePreDelayStart(String operationId, long durationMs) {
+        if (focusRunMode) {
+            return;
+        }
         OperationItem opItem = findRunningItem(operationId);
         if (opItem == null || durationMs <= 0L) {
             return;
@@ -4994,6 +5000,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onOperationComplete(String operationId, boolean success) {
+        if (focusRunMode) {
+            return;
+        }
         stepDelayOverlayManager.stopDelayIfMatch(operationId);
         Long startMs = opStartTimeMs.remove(operationId);
         long cost = startMs == null ? -1 : (System.currentTimeMillis() - startMs);
@@ -5017,7 +5026,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onScriptComplete() {
+        if (focusRunMode) {
+            handleFocusScriptComplete();
+            return;
+        }
         runtimeTransitionCoordinator.handleScriptComplete();
+    }
+
+    private void handleFocusScriptComplete() {
+        refreshAppLaunchPollingState();
+        stopDelayProgress();
+        hideStepOverlay();
+        flowGraphPanelHelper.clearHighlight();
+        currentRunningOperationId = "";
+        currentRunningOperationName = "";
+        isPaused = false;
+        setBallVisible(true);
+        ScriptRunner.clearExecutionListener();
+        focusRunMode = false;
     }
 
     private void refreshCurrentLevelList() {
@@ -7370,6 +7396,26 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                         String selectedTaskName,
                                         List<OperationItem> selectedTaskOperations,
                                         boolean openProjectPanelNow) {
+        startOperationWithMode(
+                startOperation,
+                ctx,
+                projectName,
+                selectedTaskName,
+                selectedTaskOperations,
+                openProjectPanelNow
+                        ? ExecutionDialogHelper.RunMode.WITH_PANEL
+                        : ExecutionDialogHelper.RunMode.BACKGROUND);
+    }
+
+    private void startOperationWithMode(MetaOperation startOperation,
+                                        OperationContext ctx,
+                                        String projectName,
+                                        String selectedTaskName,
+                                        List<OperationItem> selectedTaskOperations,
+                                        ExecutionDialogHelper.RunMode runMode) {
+        boolean focusMode = runMode == ExecutionDialogHelper.RunMode.FOCUS;
+        boolean openProjectPanelNow = runMode == ExecutionDialogHelper.RunMode.WITH_PANEL;
+        focusRunMode = focusMode;
         runningOperations.clear();
         runningOperations.addAll(selectedTaskOperations);
         totalOperationCount = selectedTaskOperations.size();
@@ -7377,25 +7423,31 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         currentRunningProject = projectName;
         currentRunningTask = selectedTaskName;
         isPaused = false;
-        beginRunLog(projectName, selectedTaskName, startOperation);
+        ctx.suppressVisualFeedback = focusMode;
+        beginRunLog(projectName, selectedTaskName, startOperation, !focusMode);
 
         try {
-            Log.d(TAG, "开始运行 operation: " + startOperation.getName() + " (" + startOperation.getId() + ")");
+            if (!focusMode) {
+                Toast.makeText(this, "开始运行: " + startOperation.getName(), Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "开始运行 operation: " + startOperation.getName() + " (" + startOperation.getId() + ")");
+            }
 
             ScriptRunner.setExecutionListener(this);
 
             // 动态延时倒计时回调：Handler 在 sleep 前通知，Service 在主线程启动覆盖层
-            ctx.delayCountdownNotifier = (operationId, durationMs, showCountdown) -> {
-                if (!showCountdown || durationMs <= 0) return;
-                uiHandler.post(() -> {
-                    OperationItem opItem = findRunningItem(operationId);
-                    if (opItem != null) {
-                        opItem.delayDurationMs = durationMs;
-                        opItem.delayShowCountdown = true;
-                        maybeStartDelayProgress(opItem);
-                    }
-                });
-            };
+            ctx.delayCountdownNotifier = focusMode
+                    ? null
+                    : (operationId, durationMs, showCountdown) -> {
+                        if (!showCountdown || durationMs <= 0) return;
+                        uiHandler.post(() -> {
+                            OperationItem opItem = findRunningItem(operationId);
+                            if (opItem != null) {
+                                opItem.delayDurationMs = durationMs;
+                                opItem.delayShowCountdown = true;
+                                maybeStartDelayProgress(opItem);
+                            }
+                        });
+                    };
 
             ScriptExecuteContext scriptExecuteContext = new ScriptExecuteContext();
             scriptExecuteContext.tobeHandledOperation = startOperation;
@@ -7403,22 +7455,27 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             scriptExecuteContext.running = true;
             ScriptRunner.runOperation(scriptExecuteContext);
 
-            transitionAfterRunStart(openProjectPanelNow);
+            transitionAfterRunStart(openProjectPanelNow, focusMode);
 
-            Log.d(TAG, "ScriptRunner.runOperation 已调用");
+            if (!focusMode) {
+                Log.d(TAG, "ScriptRunner.runOperation 已调用");
+            }
         } catch (Exception e) {
             Log.d("检验检验检验检验检验检验", "setupProjectPanel: " + e.toString());
             Toast.makeText(this, "运行失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            recordFailureReason("startup_exception");
-            appendRunLog("[error] 启动失败: " + e.getMessage());
-            persistCurrentRunLog();
-            CrashLogger.logHandledException(this, "startOperationWithMode", e);
-            CrashLogger.finishRunSession(this, "startup_exception");
+            if (!focusMode) {
+                recordFailureReason("startup_exception");
+                appendRunLog("[error] 启动失败: " + e.getMessage());
+                persistCurrentRunLog();
+                CrashLogger.logHandledException(this, "startOperationWithMode", e);
+                CrashLogger.finishRunSession(this, "startup_exception");
+            }
             ScriptRunner.clearExecutionListener();
+            focusRunMode = false;
         }
     }
 
-    private void beginRunLog(String projectName, String taskName, MetaOperation startOperation) {
+    private void beginRunLog(String projectName, String taskName, MetaOperation startOperation, boolean enableLogging) {
         currentRunStartMs = System.currentTimeMillis();
         currentRunLogs.clear();
         opStartTimeMs.clear();
@@ -7427,6 +7484,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         opSuccessCount = 0;
         opFailureCount = 0;
         latestFailureReason = "-";
+        if (!enableLogging) {
+            return;
+        }
         CrashLogger.startRunSession(
                 this,
                 projectName,
@@ -7528,9 +7588,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private void transitionAfterRunStart(boolean openProjectPanelNow) {
-        dockBallForRunningFromCurrentPosition();
-        runtimeTransitionCoordinator.transitionAfterRunStart(openProjectPanelNow);
+    private void transitionAfterRunStart(boolean openProjectPanelNow, boolean focusMode) {
+        if (!focusMode) {
+            dockBallForRunningFromCurrentPosition();
+        }
+        runtimeTransitionCoordinator.transitionAfterRunStart(openProjectPanelNow, focusMode);
     }
 
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
@@ -8397,6 +8459,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onTaskSwitch(String taskId, String taskName, List<OperationItem> operations) {
+        if (focusRunMode) {
+            return;
+        }
         stopDelayProgress();
         // Task 切换时更新悬浮窗显示的 operations 列表
         Log.d(TAG, "切换到 Task: " + taskName + " (" + taskId + "), operations: " + (operations != null ? operations.size() : 0));

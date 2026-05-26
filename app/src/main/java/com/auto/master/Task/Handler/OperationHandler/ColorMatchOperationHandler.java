@@ -111,7 +111,7 @@ public class ColorMatchOperationHandler extends OperationHandler {
             if (r != null) pointResults.add(r.toMap());
         }
 
-        if (matchedPoint != null) {
+        if (matchedPoint != null && (ctx == null || !ctx.suppressVisualFeedback)) {
             AutoAccessibilityService svc = AutoAccessibilityService.get();
             if (svc != null && matchedPoint.size() >= 2) {
                 int x = matchedPoint.get(0);
