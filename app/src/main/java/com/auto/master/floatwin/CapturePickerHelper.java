@@ -48,7 +48,7 @@ public class CapturePickerHelper {
         void onColorPointPicked(int x, int y, int color);
     }
 
-    private static final long PICKER_SETTLE_DELAY_MS = 220L;
+    private static final long PICKER_SETTLE_DELAY_MS = 80L;
 
     private final Host host;
 

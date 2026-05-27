@@ -152,6 +152,7 @@ public abstract class MetaOperation {
 
     // 模板保存目标子目录（如 "scale_100"），为空时由当前 CAPTURE_SCALE 决定
     public static String TARGET_SCALE_DIR = "TARGET_SCALE_DIR";
+    public static String PRE_CAPTURED_BITMAP = "__PRE_CAPTURED_BITMAP";
 
     // HTTP 请求参数
     public static String HTTP_URL = "HTTP_URL";

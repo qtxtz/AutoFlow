@@ -616,6 +616,21 @@ public class CropRegionOperationHandler extends OperationHandler {
         }
     }
 
+    @Nullable
+    private Bitmap takePreCapturedBitmap(Map<String, Object> inputMap) {
+        if (inputMap == null) {
+            return null;
+        }
+        Object raw = inputMap.remove(MetaOperation.PRE_CAPTURED_BITMAP);
+        if (raw instanceof Bitmap) {
+            Bitmap bitmap = (Bitmap) raw;
+            if (!bitmap.isRecycled()) {
+                return bitmap;
+            }
+        }
+        return null;
+    }
+
     private void updateTemplateRefinePreview(ImageView previewView,
                                              Bitmap sourceBitmap,
                                              int firstX,
@@ -1198,11 +1213,14 @@ public class CropRegionOperationHandler extends OperationHandler {
          */
         Bitmap cropped = null;
 
-        Bitmap full = ScreenCapture.captureLatestBitmap(
-                null,
-                TEMPLATE_CAPTURE_TIMEOUT_MS,
-                TEMPLATE_CAPTURE_INTERVAL_MS
-        );
+        Bitmap full = takePreCapturedBitmap(inputMap);
+        if (full == null) {
+            full = ScreenCapture.captureLatestBitmap(
+                    null,
+                    TEMPLATE_CAPTURE_TIMEOUT_MS,
+                    TEMPLATE_CAPTURE_INTERVAL_MS
+            );
+        }
         if (full == null || full.isRecycled()) {
             Log.w(TAG, "模板制作失败：未能获取有效截图，captureRunning="
                     + ScreenCaptureManager.getInstance().isRunning());

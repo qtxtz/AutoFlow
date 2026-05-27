@@ -203,9 +203,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final int PROJECT_PANEL_DOCK_TRIGGER_DP = 18;
     private static final int PROJECT_PANEL_DOCK_MARGIN_DP = 6;
     private static final long CAPTURE_UI_SETTLE_DELAY_MS = 320L;
+    private static final long CAPTURE_OVERLAY_LAUNCH_DELAY_MS = 80L;
     private static final long CAPTURE_PERMISSION_SETTLE_DELAY_MS = 900L;
     private static final long CAPTURE_READY_TIMEOUT_MS = 3200L;
     private static final int TEMPLATE_CAPTURE_PREVIEW_MAX_RETRIES = 240;
+    private final Object pendingCleanCaptureLock = new Object();
+    @Nullable
+    private Bitmap pendingCleanCaptureBitmap;
 
     // ========== 运行状态数据 ==========
     private List<OperationItem> runningOperations = new ArrayList<>();
@@ -4471,7 +4475,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
                         restoreViews.run();
                     }
-                }, CAPTURE_UI_SETTLE_DELAY_MS),
+                }, CAPTURE_OVERLAY_LAUNCH_DELAY_MS),
                 () -> {
                     CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
                     restoreViews.run();
@@ -7283,7 +7287,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             }
             waitAndRefreshTemplatePreview(dialogView, edtTemplateFile, startedAt, restoreViews);
-        }, CAPTURE_UI_SETTLE_DELAY_MS), () -> {
+        }, CAPTURE_OVERLAY_LAUNCH_DELAY_MS), () -> {
             CropRegionOperationHandler.clearTemplateCaptureEventListener(null);
             restoreViews.run();
         });
@@ -8240,19 +8244,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Nullable
     private Bitmap captureFreshScreenBitmap() {
+        Bitmap cached = takePendingCleanCaptureBitmap();
+        if (cached != null && !cached.isRecycled()) {
+            return cached;
+        }
         // 注意：此处不需要 Activity。真正取帧由 ScreenCaptureManager 的 MediaProjection 缓冲区提供，
         // Activity 只在首次初始化 ScreenCaptureManager 时才用到，运行中无需重新获取。
         AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.get();
         if (autoAccessibilityService == null) {
             return null;
         }
-        return ScreenCapture.captureLatestBitmap(null, 480L, 80L);
+        return ScreenCapture.captureLatestBitmap(null, 360L, 60L);
     }
 
     private void runAfterScreenCaptureReady(String purpose, Runnable onReady, Runnable onCancelled) {
         if (onReady == null) {
             return;
         }
+        clearPendingCleanCaptureBitmap();
         if (ScreenCapture.hasProjectionPermission()) {
             waitForCleanCaptureFrame(onReady, onCancelled, false);
             return;
@@ -8263,6 +8272,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         ScreenCapturePermissionActivity.request(this, granted -> postToUi(() -> {
             if (!granted) {
                 Toast.makeText(this, "录屏授权已取消，无法继续截图", Toast.LENGTH_SHORT).show();
+                clearPendingCleanCaptureBitmap();
                 if (onCancelled != null) {
                     onCancelled.run();
                 }
@@ -8281,29 +8291,40 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         final long deadline = SystemClock.uptimeMillis() + CAPTURE_READY_TIMEOUT_MS;
         panelDataExecutor.execute(() -> {
             boolean ready = false;
+            Bitmap readyBitmap = null;
             while (serviceAlive && SystemClock.uptimeMillis() <= deadline) {
-                ScreenCapture.waitForLatestFrame(null, 180L, 45L);
+                Mat frame = ScreenCapture.waitForLatestFrame(null, 180L, 45L);
                 int currentSeq = ScreenCapture.getFrameSequence();
                 long now = SystemClock.uptimeMillis();
                 if (ScreenCaptureManager.getInstance().isRunning()
                         && currentSeq > startFrameSeq
                         && now >= minReadyAt) {
+                    if (frame != null && !frame.empty()) {
+                        readyBitmap = OpenCVHelper.getInstance().matToBitmap(frame);
+                    }
                     ready = true;
                     break;
                 }
                 SystemClock.sleep(80L);
             }
             final boolean finalReady = ready;
+            final Bitmap finalReadyBitmap = readyBitmap;
             postToUi(() -> {
                 if (!serviceAlive) {
+                    recycleBitmap(finalReadyBitmap);
+                    clearPendingCleanCaptureBitmap();
                     if (onCancelled != null) {
                         onCancelled.run();
                     }
                     return;
                 }
                 if (finalReady) {
+                    setPendingCleanCaptureBitmap(finalReadyBitmap);
                     onReady.run();
+                    postToUiDelayed(this::clearPendingCleanCaptureBitmap, 2000L);
                 } else {
+                    recycleBitmap(finalReadyBitmap);
+                    clearPendingCleanCaptureBitmap();
                     Toast.makeText(this, "录屏会话启动失败，请重新授权后再试", Toast.LENGTH_SHORT).show();
                     if (onCancelled != null) {
                         onCancelled.run();
@@ -8311,6 +8332,35 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
             });
         });
+    }
+
+    private void setPendingCleanCaptureBitmap(@Nullable Bitmap bitmap) {
+        synchronized (pendingCleanCaptureLock) {
+            recycleBitmap(pendingCleanCaptureBitmap);
+            pendingCleanCaptureBitmap = bitmap;
+        }
+    }
+
+    @Nullable
+    private Bitmap takePendingCleanCaptureBitmap() {
+        synchronized (pendingCleanCaptureLock) {
+            Bitmap bitmap = pendingCleanCaptureBitmap;
+            pendingCleanCaptureBitmap = null;
+            return bitmap;
+        }
+    }
+
+    private void clearPendingCleanCaptureBitmap() {
+        synchronized (pendingCleanCaptureLock) {
+            recycleBitmap(pendingCleanCaptureBitmap);
+            pendingCleanCaptureBitmap = null;
+        }
+    }
+
+    private void recycleBitmap(@Nullable Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
     }
 
     private void postToUi(Runnable action) {
@@ -8586,7 +8636,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "截图功能不可用", Toast.LENGTH_SHORT).show();
             return false;
         }
-        handler.handle(cropOperation, new OperationContext());
+        Bitmap preCaptured = takePendingCleanCaptureBitmap();
+        if (preCaptured != null && !preCaptured.isRecycled()) {
+            inputMap.put(MetaOperation.PRE_CAPTURED_BITMAP, preCaptured);
+        }
+        boolean handled = handler.handle(cropOperation, new OperationContext());
+        if (!handled) {
+            Object unusedBitmap = inputMap.remove(MetaOperation.PRE_CAPTURED_BITMAP);
+            if (unusedBitmap instanceof Bitmap) {
+                recycleBitmap((Bitmap) unusedBitmap);
+            }
+            return false;
+        }
         Toast.makeText(this, "已进入框选截图，请在屏幕上选择模板区域", Toast.LENGTH_SHORT).show();
         return true;
     }
@@ -8908,7 +8969,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 restoreViews.run();
                 toastOnMain("框选失败: " + e.getMessage());
             }
-        }, 220), restoreViews);
+        }, CAPTURE_OVERLAY_LAUNCH_DELAY_MS), restoreViews);
     }
 
     @Override
