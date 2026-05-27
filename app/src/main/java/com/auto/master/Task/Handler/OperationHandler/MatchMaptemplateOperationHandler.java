@@ -19,7 +19,6 @@ import com.auto.master.utils.OpenCVHelper;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import org.json.JSONArray;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
@@ -238,7 +237,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                 return new MatchTaskResult(false, null, task);
             }
             Point positionInRoi = OpenCVHelper.getInstance()
-                    .fastSingleMatchGray(roi, task.info.mat, null, task.info.similarity, task.info.mask);
+                    .fastSingleMatchWithOptions(roi, task.info.mat, null, task.info.similarity, task.info.mask,false);
             if (positionInRoi != null && positionInRoi.x >= 0) {
                 ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
                 float invScaleX = mgr.getActualInvScaleX();
