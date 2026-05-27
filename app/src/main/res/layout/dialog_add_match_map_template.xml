@@ -204,6 +204,15 @@
                     android:buttonTint="#7CB342"
                     android:layout_marginBottom="8dp"/>
 
+                <CheckBox
+                    android:id="@+id/chk_use_gray"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启灰度匹配"
+                    android:textColor="#4e5f74"
+                    android:buttonTint="#7CB342"
+                    android:layout_marginBottom="8dp"/>
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

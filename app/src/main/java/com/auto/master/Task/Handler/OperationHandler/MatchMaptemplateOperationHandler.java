@@ -94,6 +94,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         String projectName = getStringSafe(inputMap, MetaOperation.PROJECT, "fallback");
         String taskName = getStringSafe(inputMap, MetaOperation.TASK, "");
         double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
+        boolean useGray = parseBoolean(inputMap.get(MetaOperation.MATCHUSEGRAY), false);
         long preDelayMs = inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
                 ? 0L
                 : parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
@@ -103,7 +104,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             return createTimeoutResponse(ctx, obj);
         }
 
-        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName);
+        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName, useGray);
         if (taskList.isEmpty()) {
             return createTimeoutResponse(ctx, obj);
         }
@@ -237,7 +238,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                 return new MatchTaskResult(false, null, task);
             }
             Point positionInRoi = OpenCVHelper.getInstance()
-                    .fastSingleMatchWithOptions(roi, task.info.mat, null, task.info.similarity, task.info.mask,false);
+                    .fastSingleMatchWithOptions(roi, task.info.mat, null, task.info.similarity, task.info.mask, task.info.useGray);
             if (positionInRoi != null && positionInRoi.x >= 0) {
                 ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
                 float invScaleX = mgr.getActualInvScaleX();
@@ -259,7 +260,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
     private List<MatchTask> buildTaskList(CompiledMatchPlan plan,
                                           String projectName,
-                                          String taskName) {
+                                          String taskName,
+                                          boolean useGray) {
         List<MatchTask> tasks = new ArrayList<>();
         Map<String, Mat> loadedTemplates = new HashMap<>();
         Map<String, Mat> loadedMasks = new HashMap<>();
@@ -285,7 +287,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                         priority++,
                         rule.templateName,
                         group.region,
-                        new TemplateInfo(templateMat, templateMask, rule.similarity)));
+                        new TemplateInfo(templateMat, templateMask, rule.similarity, useGray)));
             }
         }
         return tasks;
@@ -671,6 +673,25 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         return def;
     }
 
+    private boolean parseBoolean(Object raw, boolean def) {
+        if (raw instanceof Boolean) {
+            return (Boolean) raw;
+        }
+        if (raw instanceof Number) {
+            return ((Number) raw).intValue() != 0;
+        }
+        if (raw instanceof String) {
+            String text = ((String) raw).trim();
+            if ("true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(text) || "0".equals(text) || "no".equalsIgnoreCase(text)) {
+                return false;
+            }
+        }
+        return def;
+    }
+
     private static Mat safeSubmat(Mat screen, Rect region) {
         int x = Math.max(0, region.x);
         int y = Math.max(0, region.y);
@@ -737,13 +758,15 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         final Mat mat;
         final Mat mask;
         final double similarity;
+        final boolean useGray;
         final int width;
         final int height;
 
-        TemplateInfo(Mat mat, Mat mask, double similarity) {
+        TemplateInfo(Mat mat, Mat mask, double similarity, boolean useGray) {
             this.mat = mat;
             this.mask = mask;
             this.similarity = similarity;
+            this.useGray = useGray;
             this.width = mat.width();
             this.height = mat.height();
         }

@@ -2205,11 +2205,15 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
         EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
         CheckBox chkSuccessClick = dialogView.findViewById(R.id.chk_success_click);
+        CheckBox chkUseGray = dialogView.findViewById(R.id.chk_use_gray);
 
         edtTimeout.setText(defaultMatchTimeoutText());
         setupMatchDelayHint(edtPreDelay);
         if (chkSuccessClick != null) {
             chkSuccessClick.setChecked(true);
+        }
+        if (chkUseGray != null) {
+            chkUseGray.setChecked(false);
         }
 
         // 高级参数折叠
@@ -2284,6 +2288,7 @@ public class OperationDialogFactory {
                 inputMap.put("MATCHTIMEOUT", (double) timeout);
                 inputMap.put("MatchMap", matchMapJson);
                 inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick == null || chkSuccessClick.isChecked());
+                inputMap.put(MetaOperation.MATCHUSEGRAY, chkUseGray != null && chkUseGray.isChecked());
 
                 putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
@@ -2327,6 +2332,7 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
         EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
         CheckBox chkSuccessClick = dialogView.findViewById(R.id.chk_success_click);
+        CheckBox chkUseGray = dialogView.findViewById(R.id.chk_use_gray);
         android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
         setupMatchDelayHint(edtPreDelay);
@@ -2350,6 +2356,9 @@ public class OperationDialogFactory {
                 setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.MATCH_MAP, inputMap);
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(inputMap.optBoolean(MetaOperation.SUCCEESCLICK, true));
+                }
+                if (chkUseGray != null) {
+                    chkUseGray.setChecked(inputMap.optBoolean(MetaOperation.MATCHUSEGRAY, false));
                 }
 
                 // 恢复匹配条目（每个 bbox 对应一行，模板合并展示）
@@ -2376,6 +2385,9 @@ public class OperationDialogFactory {
                 edtTimeout.setText(defaultMatchTimeoutText());
                 if (chkSuccessClick != null) {
                     chkSuccessClick.setChecked(true);
+                }
+                if (chkUseGray != null) {
+                    chkUseGray.setChecked(false);
                 }
             }
         } catch (Exception e) {
@@ -2445,6 +2457,7 @@ public class OperationDialogFactory {
                 inputMap.put("MATCHTIMEOUT", (double) timeout);
                 inputMap.put("MatchMap", matchMapJson);
                 inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick == null || chkSuccessClick.isChecked());
+                inputMap.put(MetaOperation.MATCHUSEGRAY, chkUseGray != null && chkUseGray.isChecked());
 
                 putOptionalMatchPreDelay(inputMap, edtPreDelay);
                 fillPollingIntervalInputMap(dialogView, inputMap);
