@@ -16,7 +16,7 @@ import java.util.concurrent.Executors;
  * Listens for incoming notifications and fires matching automation tasks.
  *
  * Users must grant notification access via:
- *   Settings → Notifications → Notification access → AtommMaster
+ *   Settings → Notifications → Notification access → AutoMaster
  *
  * Matching logic:
  *   - If trigger.notificationPackage is set, only match notifications from that package

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AtomMaster"
+rootProject.name = "AutoMaster"
 include(":app")

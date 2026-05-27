@@ -1,7 +1,7 @@
 package com.auto.master.Task.Operation;
 
 /**
- * All supported operation types in AtommMaster.
+ * All supported operation types in AutoMaster.
  * Replaces legacy magic integer constants with a typed enum.
  */
 public enum OperationType {

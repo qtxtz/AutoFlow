@@ -140,7 +140,7 @@ public class AppLaunchTriggerManager {
 
     private void ensureThread() {
         if (pollThread != null) return;
-        pollThread = new HandlerThread("AutoFlow-AppLaunchPoll");
+        pollThread = new HandlerThread("AutoMaster-AppLaunchPoll");
         pollThread.start();
         pollHandler = new Handler(pollThread.getLooper());
     }

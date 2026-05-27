@@ -389,7 +389,7 @@ public final class ScriptRunner {
 //                        PowerManager pm = (PowerManager) com.auto.master.AtommApplication.instance
 //                                .getSystemService(Context.POWER_SERVICE);
 //                        if (pm != null) {
-//                            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AtommMaster:ScriptRunner");
+//                            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AutoMaster:ScriptRunner");
 //                            wakeLock.acquire(); // 持有至脚本结束，finally 块中主动释放
 //                        }
 //                    } catch (Exception ignored) {}
