@@ -63,7 +63,7 @@ public class SelectionOverlayView extends FrameLayout {
     // ===================== 绘制相关 =====================
     private final Paint dimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint cornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint clearPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private final Rect selection = new Rect();
@@ -92,8 +92,10 @@ public class SelectionOverlayView extends FrameLayout {
     private final Rect startRect = new Rect();
 
     // sizes
-    private int handleRadius;
     private int handleTouchSlop;
+    private int cornerTouchSlop;
+    private int cornerHandleLength;
+    private int cornerHandleOffset;
     private int minSize;
     private int borderWidth;
     private int precisionMagnifierThreshold;
@@ -128,8 +130,10 @@ public class SelectionOverlayView extends FrameLayout {
         setClickable(true);
         setFocusable(false);
 
-        handleRadius = dp(6);
         handleTouchSlop = dp(18);
+        cornerTouchSlop = dp(28);
+        cornerHandleLength = dp(24);
+        cornerHandleOffset = dp(2);
         //那个框的大小限制
         minSize = dp(10);
         borderWidth = dp(2);
@@ -142,8 +146,11 @@ public class SelectionOverlayView extends FrameLayout {
         borderPaint.setStyle(Paint.Style.STROKE);
         borderPaint.setStrokeWidth(borderWidth);
 
-        handlePaint.setColor(Color.WHITE);
-        handlePaint.setStyle(Paint.Style.FILL);
+        cornerPaint.setColor(0x99FF3B30);
+        cornerPaint.setStyle(Paint.Style.STROKE);
+        cornerPaint.setStrokeWidth(dp(2));
+        cornerPaint.setStrokeCap(Paint.Cap.ROUND);
+        cornerPaint.setStrokeJoin(Paint.Join.ROUND);
 
         clearPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
 
@@ -371,6 +378,7 @@ public class SelectionOverlayView extends FrameLayout {
             canvas.drawRect(r, t, w, b, dimPaint);   // 右
 
             canvas.drawRect(selection, borderPaint);
+            drawHandles(canvas);
         }
 
         private void maybeUpdateMagnifier(long now, float x, float y) {
@@ -502,10 +510,10 @@ public class SelectionOverlayView extends FrameLayout {
     private Mode hitTest(float x, float y) {
         if (!hasSelection) return Mode.NONE;
 
-        if (near(x, y, selection.left, selection.top)) return Mode.RESIZE_LT;
-        if (near(x, y, selection.right, selection.top)) return Mode.RESIZE_RT;
-        if (near(x, y, selection.left, selection.bottom)) return Mode.RESIZE_LB;
-        if (near(x, y, selection.right, selection.bottom)) return Mode.RESIZE_RB;
+        if (nearCorner(x, y, selection.left, selection.top)) return Mode.RESIZE_LT;
+        if (nearCorner(x, y, selection.right, selection.top)) return Mode.RESIZE_RT;
+        if (nearCorner(x, y, selection.left, selection.bottom)) return Mode.RESIZE_LB;
+        if (nearCorner(x, y, selection.right, selection.bottom)) return Mode.RESIZE_RB;
 
         int cx = (selection.left + selection.right) / 2;
         int cy = (selection.top + selection.bottom) / 2;
@@ -524,19 +532,28 @@ public class SelectionOverlayView extends FrameLayout {
         return Math.abs(x - px) <= handleTouchSlop && Math.abs(y - py) <= handleTouchSlop;
     }
 
+    private boolean nearCorner(float x, float y, int px, int py) {
+        return Math.abs(x - px) <= cornerTouchSlop && Math.abs(y - py) <= cornerTouchSlop;
+    }
+
     private void drawHandles(Canvas canvas) {
         int l = selection.left, t = selection.top, r = selection.right, b = selection.bottom;
-        int cx = (l + r) / 2, cy = (t + b) / 2;
 
-        canvas.drawCircle(l, t, handleRadius, handlePaint);
-        canvas.drawCircle(r, t, handleRadius, handlePaint);
-        canvas.drawCircle(l, b, handleRadius, handlePaint);
-        canvas.drawCircle(r, b, handleRadius, handlePaint);
+        drawCornerHandle(canvas, l, t, true, true);
+        drawCornerHandle(canvas, r, t, false, true);
+        drawCornerHandle(canvas, l, b, true, false);
+        drawCornerHandle(canvas, r, b, false, false);
+    }
 
-        canvas.drawCircle(l, cy, handleRadius, handlePaint);
-        canvas.drawCircle(r, cy, handleRadius, handlePaint);
-        canvas.drawCircle(cx, t, handleRadius, handlePaint);
-        canvas.drawCircle(cx, b, handleRadius, handlePaint);
+    private void drawCornerHandle(Canvas canvas, int x, int y, boolean left, boolean top) {
+        int horizontalStart = left ? x : x - cornerHandleLength;
+        int horizontalEnd = left ? x + cornerHandleLength : x;
+        int horizontalY = y + (top ? -cornerHandleOffset : cornerHandleOffset);
+        int verticalX = x + (left ? -cornerHandleOffset : cornerHandleOffset);
+        int verticalStart = top ? y : y - cornerHandleLength;
+        int verticalEnd = top ? y + cornerHandleLength : y;
+        canvas.drawLine(horizontalStart, horizontalY, horizontalEnd, horizontalY, cornerPaint);
+        canvas.drawLine(verticalX, verticalStart, verticalX, verticalEnd, cornerPaint);
     }
 
     // ===================== geometry helpers =====================
