@@ -153,7 +153,14 @@ public class BitmapManager {
      * 从缓存中移除Bitmap
      */
     public void removeBitmap(String path) {
-        bitmapCache.remove(path);
+        if (path == null) {
+            return;
+        }
+        for (String key : bitmapCache.snapshot().keySet()) {
+            if (key.equals(path) || key.startsWith(path + "_")) {
+                bitmapCache.remove(key);
+            }
+        }
     }
     
     /**

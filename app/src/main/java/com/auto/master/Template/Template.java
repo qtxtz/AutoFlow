@@ -173,6 +173,13 @@ public class Template {
 
     }
 
+    public static synchronized void clearTaskSingleManifestCache(String projectName, String taskName, String key) {
+        Map<String, List<Integer>> projectTaskManifestMap = manifestCache.get(projectName + "_" + taskName);
+        if (projectTaskManifestMap != null) {
+            projectTaskManifestMap.remove(key);
+        }
+    }
+
     // 不需要 synchronized：纯字符串拼接，无共享状态修改
     public static String taskCacheKey(String projectName, String taskName) {
         return projectName + "_" + taskName;
@@ -338,6 +345,7 @@ public class Template {
         if (old != null && !old.empty()) {
             old.release();
             totalCachedMats--;
+            OpenCVHelper.getInstance().clearGrayTemplateCache();
         }
     }
 

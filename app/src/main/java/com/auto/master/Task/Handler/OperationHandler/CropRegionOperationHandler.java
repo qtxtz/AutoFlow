@@ -209,9 +209,12 @@ public class CropRegionOperationHandler extends OperationHandler {
         }
         // 同时清除 Template mat 缓存，确保下次匹配使用新模板
         Template.clearTaskSingleMatCache(projectName, taskName, saveFileName);
+        Template.clearTaskSingleManifestCache(projectName, taskName, saveFileName);
         if (!android.text.TextUtils.isEmpty(maskFileName)) {
             Template.clearTaskSingleMatCache(projectName, taskName, maskFileName);
         }
+        MatchtemplateOperationHandler.clearRandomRoiCache();
+        MatchMaptemplateOperationHandler.clearMatchPlanCache();
 
         try (FileOutputStream fileOutputStream = new FileOutputStream(croppedImgFile, false)) {
             boolean success = cropped.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream);
@@ -248,6 +251,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                 Log.d(TAG, "manifest.json 不存在，将创建新文件");
             }
             saveManifestToFile(manifest, manifestFile);
+            Template.putTaskSingleManifestCache(projectName, taskName, saveFileName, stdBbox);
 
         } catch (Exception e) {
             return;
