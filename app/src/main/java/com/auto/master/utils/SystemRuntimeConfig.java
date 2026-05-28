@@ -20,7 +20,7 @@ public final class SystemRuntimeConfig {
     private static final String KEY_COLOR_MEDIUM_MS = "color_medium_ms";
     private static final String KEY_COLOR_SLOW_MS = "color_slow_ms";
 
-    public static final float DEFAULT_CAPTURE_SCALE = 0.5f;
+    public static final float DEFAULT_CAPTURE_SCALE = 0.4f;
     public static final long DEFAULT_IDLE_PAUSE_THRESHOLD_MS = 5000L;
 
     public float captureScale = DEFAULT_CAPTURE_SCALE;

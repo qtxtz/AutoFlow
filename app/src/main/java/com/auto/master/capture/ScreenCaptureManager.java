@@ -69,7 +69,7 @@ public class ScreenCaptureManager {
     // 修改时会自动对齐到 16 的倍数（scale<1.0）或 2 的倍数（scale=1.0），
     // 避免部分设备 MediaProjection size mismatch 问题。
     // 持久化：通过 CaptureScaleHelper 存储到 SharedPreferences。
-    public static volatile float CAPTURE_SCALE = 0.5f;
+    public static volatile float CAPTURE_SCALE = 0.4f;
 
     // ===== 屏幕参数 =====
     private int screenWidth, screenHeight, screenDpi;
