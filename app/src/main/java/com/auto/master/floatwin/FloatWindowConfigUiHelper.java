@@ -10,12 +10,14 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -83,6 +85,8 @@ final class FloatWindowConfigUiHelper {
     private static final String CONFIG_UI_DRAG_LABEL = "config_ui_component";
 
     private final Host host;
+    private View reusableComponentEditorView;
+    private WindowManager.LayoutParams reusableComponentEditorLp;
 
     FloatWindowConfigUiHelper(Host host) {
         this.host = host;
@@ -109,6 +113,10 @@ final class FloatWindowConfigUiHelper {
     }
 
     void showConfigUiDesignerDialog(NodeFloatButtonConfig cfg) {
+        if (!shouldUseLegacyConfigUiDesigner()) {
+            showConfigUiBuilderDialog(cfg);
+            return;
+        }
         NodeFloatButtonManager nodeFloatBtnManager = host.getNodeFloatButtonManager();
         ConfigUiStore configUiStore = host.getConfigUiStore();
         if (cfg == null || nodeFloatBtnManager == null || configUiStore == null) {
@@ -386,6 +394,373 @@ final class FloatWindowConfigUiHelper {
         }
     }
 
+    private boolean shouldUseLegacyConfigUiDesigner() {
+        return false;
+    }
+
+    private void showConfigUiBuilderDialog(NodeFloatButtonConfig cfg) {
+        NodeFloatButtonManager nodeFloatBtnManager = host.getNodeFloatButtonManager();
+        ConfigUiStore configUiStore = host.getConfigUiStore();
+        if (cfg == null || nodeFloatBtnManager == null || configUiStore == null) {
+            return;
+        }
+        cfg.ensureDefaults();
+        ensureNodeConfigOwnership(cfg);
+        String schemaId = ensureNodeConfigUiSchemaId(cfg);
+        ConfigUiSchema baseSchema = resolveNodeConfigUiSchema(cfg);
+        if (baseSchema == null) {
+            baseSchema = ConfigUiSchema.createDefault(schemaId, cfg.operationName + " 配置");
+        }
+        ConfigUiSchema workingSchema = cloneConfigUiSchema(baseSchema);
+        workingSchema.schemaId = schemaId;
+        workingSchema.ensureDefaults();
+
+        Context ctx = new android.view.ContextThemeWrapper(host.getContext(), R.style.Theme_AtomMaster);
+        View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_builder, null);
+        EditText nameInput = dialogView.findViewById(R.id.et_builder_schema_name);
+        HorizontalScrollView pageScroll = dialogView.findViewById(R.id.scroll_builder_pages);
+        LinearLayout pageTabs = dialogView.findViewById(R.id.layout_builder_pages);
+        TextView pageSummary = dialogView.findViewById(R.id.tv_builder_page_summary);
+        LinearLayout componentList = dialogView.findViewById(R.id.layout_builder_components);
+        final int[] currentPageIndex = {0};
+        final Runnable[] refreshRef = new Runnable[1];
+
+        nameInput.setText(TextUtils.isEmpty(workingSchema.name) ? cfg.operationName + " 配置" : workingSchema.name);
+
+        Runnable refresh = () -> {
+            workingSchema.ensureDefaults();
+            if (currentPageIndex[0] >= workingSchema.pages.size()) {
+                currentPageIndex[0] = Math.max(0, workingSchema.pages.size() - 1);
+            }
+            populateConfigUiPageTabs(pageScroll, pageTabs, workingSchema, currentPageIndex[0], index -> {
+                currentPageIndex[0] = index;
+                if (refreshRef[0] != null) {
+                    refreshRef[0].run();
+                }
+            });
+            ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+            String pageTitle = page == null || TextUtils.isEmpty(page.title)
+                    ? "页面 " + (currentPageIndex[0] + 1)
+                    : page.title;
+            if (pageSummary != null) {
+                int count = page == null || page.components == null ? 0 : page.components.size();
+                pageSummary.setText(pageTitle + " · " + count + " 个配置项");
+            }
+            renderConfigUiBuilderComponentList(componentList, workingSchema, currentPageIndex[0], refreshRef);
+        };
+        refreshRef[0] = refresh;
+        refresh.run();
+
+        dialogView.findViewById(R.id.btn_builder_add_page).setOnClickListener(v ->
+                showSimpleOverlayTextInputDialog(
+                        "新增页面",
+                        "页面名称",
+                        "页面 " + (workingSchema.pages.size() + 1),
+                        value -> {
+                            workingSchema.pages.add(ConfigUiPage.createDefault(
+                                    TextUtils.isEmpty(value) ? ("页面 " + (workingSchema.pages.size() + 1)) : value));
+                            currentPageIndex[0] = workingSchema.pages.size() - 1;
+                            refresh.run();
+                        }));
+        dialogView.findViewById(R.id.btn_builder_rename_page).setOnClickListener(v -> {
+            ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+            if (page == null) {
+                return;
+            }
+            showSimpleOverlayTextInputDialog(
+                    "页面改名",
+                    "新的页面名称",
+                    page.title,
+                    value -> {
+                        if (!TextUtils.isEmpty(value)) {
+                            page.title = value.trim();
+                            refresh.run();
+                        }
+                    });
+        });
+        dialogView.findViewById(R.id.btn_builder_delete_page).setOnClickListener(v -> {
+            if (workingSchema.pages.size() <= 1) {
+                host.showToast("至少保留一个页面");
+                return;
+            }
+            workingSchema.pages.remove(currentPageIndex[0]);
+            currentPageIndex[0] = Math.max(0, currentPageIndex[0] - 1);
+            refresh.run();
+        });
+
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_switch, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_SWITCH, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_select, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_SELECT, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_multi_select, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_MULTI_SELECT, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_text, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_TEXT, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_number, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_NUMBER, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_textarea, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_TEXTAREA, refresh);
+        bindBuilderAddButton(dialogView, R.id.btn_builder_add_title, workingSchema, currentPageIndex, ConfigUiComponent.TYPE_TITLE, refresh);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+
+        dialogView.findViewById(R.id.btn_builder_preview).setOnClickListener(v -> {
+            workingSchema.name = readTrimmedText(nameInput, cfg.operationName + " 配置");
+            String error = validateConfigUiSchema(workingSchema);
+            if (!TextUtils.isEmpty(error)) {
+                host.showToast(error);
+                return;
+            }
+            showVisualNodeRuntimeConfigDialog(cfg, cloneConfigUiSchema(workingSchema), workingSchema.name);
+        });
+        dialogView.findViewById(R.id.btn_builder_cancel).setOnClickListener(v -> dialog.dismiss());
+        dialogView.findViewById(R.id.btn_builder_save).setOnClickListener(v -> {
+            workingSchema.name = readTrimmedText(nameInput, cfg.operationName + " 配置");
+            String error = validateConfigUiSchema(workingSchema);
+            if (!TextUtils.isEmpty(error)) {
+                host.showToast(error);
+                return;
+            }
+            NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
+            if (updated == null) {
+                updated = cfg;
+            }
+            updated.ensureDefaults();
+            ensureNodeConfigOwnership(updated);
+            updated.configUiSchemaId = schemaId;
+            nodeFloatBtnManager.saveConfig(updated);
+            ConfigUiSchema schemaToSave = cloneConfigUiSchema(workingSchema);
+            stampSchemaOwnership(schemaToSave, updated);
+            configUiStore.saveSchema(schemaToSave);
+            dialog.dismiss();
+            host.showToast("配置面板已保存");
+        });
+
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    Math.min(host.dp(540), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.96f)),
+                    Math.min(host.dp(760), (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.92f)));
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
+    }
+
+    private void bindBuilderAddButton(View dialogView,
+                                      int buttonId,
+                                      ConfigUiSchema schema,
+                                      int[] currentPageIndex,
+                                      String type,
+                                      Runnable refresh) {
+        View button = dialogView.findViewById(buttonId);
+        if (button == null) {
+            return;
+        }
+        button.setOnClickListener(v -> {
+            ConfigUiPage page = getSafeConfigUiPage(schema, currentPageIndex[0]);
+            if (page == null) {
+                return;
+            }
+            page.ensureDefaults();
+            int index = countConfigUiComponents(schema) + 1;
+            ConfigUiComponent component = ConfigUiComponent.createPreset(type, index);
+            component.xDp = 0;
+            component.yDp = page.components.size() * 72;
+            page.components.add(component);
+            showConfigUiComponentEditDialog(component, refresh);
+            if (refresh != null) {
+                refresh.run();
+            }
+        });
+    }
+
+    private int countConfigUiComponents(ConfigUiSchema schema) {
+        int count = 0;
+        if (schema == null || schema.pages == null) {
+            return 0;
+        }
+        for (ConfigUiPage page : schema.pages) {
+            if (page != null && page.components != null) {
+                count += page.components.size();
+            }
+        }
+        return count;
+    }
+
+    private void renderConfigUiBuilderComponentList(LinearLayout container,
+                                                    ConfigUiSchema schema,
+                                                    int pageIndex,
+                                                    Runnable[] refreshRef) {
+        if (container == null) {
+            return;
+        }
+        container.removeAllViews();
+        ConfigUiPage page = getSafeConfigUiPage(schema, pageIndex);
+        if (page == null) {
+            return;
+        }
+        page.ensureDefaults();
+        if (page.components.isEmpty()) {
+            TextView empty = new TextView(container.getContext());
+            empty.setText("还没有配置项。上面点“勾选 / 选择 / 文本”等按钮添加。");
+            empty.setGravity(android.view.Gravity.CENTER);
+            empty.setTextColor(0xFF7B8794);
+            empty.setTextSize(13);
+            container.addView(empty, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    host.dp(120)));
+            return;
+        }
+        for (int i = 0; i < page.components.size(); i++) {
+            ConfigUiComponent component = page.components.get(i);
+            if (component == null) {
+                continue;
+            }
+            component.ensureDefaults();
+            container.addView(buildConfigUiBuilderRow(container.getContext(), page, component, i, refreshRef));
+        }
+    }
+
+    private View buildConfigUiBuilderRow(Context ctx,
+                                         ConfigUiPage page,
+                                         ConfigUiComponent component,
+                                         int index,
+                                         Runnable[] refreshRef) {
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(host.dp(10), host.dp(8), host.dp(10), host.dp(8));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFFFFFFFF);
+        bg.setCornerRadius(host.dp(8));
+        bg.setStroke(host.dp(1), 0xFFD7E1EB);
+        row.setBackground(bg);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.bottomMargin = host.dp(8);
+        row.setLayoutParams(rowLp);
+
+        TextView badge = new TextView(ctx);
+        badge.setText(componentBadgeText(component));
+        badge.setGravity(android.view.Gravity.CENTER);
+        badge.setTextColor(0xFFFFFFFF);
+        badge.setTextSize(12);
+        badge.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(parseColorSafe(component.accentColor, 0xFF3C6DE4));
+        badgeBg.setCornerRadius(host.dp(6));
+        badge.setBackground(badgeBg);
+        row.addView(badge, new LinearLayout.LayoutParams(host.dp(42), host.dp(34)));
+
+        LinearLayout textCol = new LinearLayout(ctx);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        textLp.leftMargin = host.dp(10);
+        row.addView(textCol, textLp);
+
+        TextView title = new TextView(ctx);
+        title.setText((index + 1) + ". " + (TextUtils.isEmpty(component.label) ? component.getDisplayTypeName() : component.label));
+        title.setTextColor(0xFF243244);
+        title.setTextSize(14);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        textCol.addView(title);
+
+        TextView meta = new TextView(ctx);
+        String key = component.bindsValue() ? component.fieldKey : "分组";
+        meta.setText(component.getDisplayTypeName() + " · " + key);
+        meta.setTextColor(0xFF7B8794);
+        meta.setTextSize(11);
+        textCol.addView(meta);
+
+        row.addView(buildBuilderMiniButton(ctx, "↑", 0xFF526273, v -> {
+            if (index <= 0) {
+                return;
+            }
+            ConfigUiComponent tmp = page.components.get(index - 1);
+            page.components.set(index - 1, component);
+            page.components.set(index, tmp);
+            if (refreshRef[0] != null) {
+                refreshRef[0].run();
+            }
+        }));
+        row.addView(buildBuilderMiniButton(ctx, "↓", 0xFF526273, v -> {
+            if (index >= page.components.size() - 1) {
+                return;
+            }
+            ConfigUiComponent tmp = page.components.get(index + 1);
+            page.components.set(index + 1, component);
+            page.components.set(index, tmp);
+            if (refreshRef[0] != null) {
+                refreshRef[0].run();
+            }
+        }));
+        row.addView(buildBuilderMiniButton(ctx, "编辑", 0xFF2F4F7C, v ->
+                showConfigUiComponentEditDialog(component, refreshRef[0])));
+        row.addView(buildBuilderMiniButton(ctx, "删", 0xFFC2410C, v -> {
+            page.components.remove(component);
+            if (refreshRef[0] != null) {
+                refreshRef[0].run();
+            }
+        }));
+        return row;
+    }
+
+    private TextView buildBuilderMiniButton(Context ctx, String text, int color, View.OnClickListener listener) {
+        TextView button = new TextView(ctx);
+        button.setText(text);
+        button.setTextColor(color);
+        button.setTextSize(12);
+        button.setGravity(android.view.Gravity.CENTER);
+        button.setBackgroundResource(R.drawable.item_operation_compact_bg);
+        button.setOnClickListener(listener);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                host.dp(text.length() > 1 ? 48 : 34),
+                host.dp(32));
+        lp.leftMargin = host.dp(6);
+        button.setLayoutParams(lp);
+        return button;
+    }
+
+    private String componentBadgeText(ConfigUiComponent component) {
+        if (ConfigUiComponent.TYPE_SWITCH.equals(component.type)) {
+            return "勾";
+        }
+        if (ConfigUiComponent.TYPE_SELECT.equals(component.type)) {
+            return "选";
+        }
+        if (ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type)) {
+            return "多";
+        }
+        if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)) {
+            return "数";
+        }
+        if (ConfigUiComponent.TYPE_TEXTAREA.equals(component.type)) {
+            return "多";
+        }
+        if (ConfigUiComponent.TYPE_ARRAY.equals(component.type)) {
+            return "组";
+        }
+        if (ConfigUiComponent.TYPE_TITLE.equals(component.type)) {
+            return "分";
+        }
+        return "文";
+    }
+
+    private int parseColorSafe(String raw, int fallback) {
+        if (TextUtils.isEmpty(raw)) {
+            return fallback;
+        }
+        try {
+            return Color.parseColor(raw.trim());
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
     boolean shouldRetainNodeConfigMetadata(@Nullable NodeFloatButtonConfig cfg) {
         if (cfg == null) {
             return false;
@@ -532,7 +907,7 @@ final class FloatWindowConfigUiHelper {
         ConfigUiFormRenderer.FormSession session =
                 ConfigUiFormRenderer.create(host.getContext(), schema, baseValues);
         View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_config_ui_runtime, null);
-        WindowManager.LayoutParams dialogLp = host.buildDialogLayoutParams(380, true);
+        WindowManager.LayoutParams dialogLp = host.buildDialogLayoutParams(430, true);
         dialogLp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
         host.getWindowManager().addView(dialogView, dialogLp);
 
@@ -540,7 +915,9 @@ final class FloatWindowConfigUiHelper {
         FrameLayout contentContainer = dialogView.findViewById(R.id.layout_config_ui_runtime_content);
         if (titleView != null) {
             titleView.setText(TextUtils.isEmpty(titleOverride)
+                    ? (TextUtils.isEmpty(schema.name)
                     ? ("运行配置: " + host.abbreviate(cfg.operationName, 14))
+                    : schema.name)
                     : titleOverride);
         }
         if (contentContainer != null) {
@@ -772,18 +1149,167 @@ final class FloatWindowConfigUiHelper {
         view.setTextColor(selected ? 0xFFFFFFFF : 0xFF526273);
     }
 
+    private View getReusableComponentEditorView(Context ctx) {
+        if (reusableComponentEditorView == null) {
+            reusableComponentEditorView = LayoutInflater.from(ctx)
+                    .inflate(R.layout.dialog_config_ui_component_edit, null);
+            reusableComponentEditorLp = host.buildDialogLayoutParams(460, true);
+            applyReusableComponentEditorViewport();
+            setupReusableComponentEditorDrag();
+        } else if (reusableComponentEditorLp == null) {
+            reusableComponentEditorLp = host.buildDialogLayoutParams(460, true);
+            applyReusableComponentEditorViewport();
+        } else {
+            applyReusableComponentEditorViewport();
+        }
+        reusableComponentEditorView.setVisibility(View.VISIBLE);
+        return reusableComponentEditorView;
+    }
+
+    private void applyReusableComponentEditorViewport() {
+        if (reusableComponentEditorLp == null) {
+            return;
+        }
+        android.util.DisplayMetrics metrics = host.getContext().getResources().getDisplayMetrics();
+        reusableComponentEditorLp.width = Math.min(host.dp(500), (int) (metrics.widthPixels * 0.96f));
+        reusableComponentEditorLp.height = Math.min(host.dp(760), (int) (metrics.heightPixels * 0.92f));
+        reusableComponentEditorLp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+    }
+
+    private void setupReusableComponentEditorDrag() {
+        if (reusableComponentEditorView == null || reusableComponentEditorLp == null) {
+            return;
+        }
+        View dragHeader = reusableComponentEditorView.findViewById(R.id.dialog_drag_header);
+        if (dragHeader == null) {
+            return;
+        }
+        dragHeader.setOnTouchListener(new View.OnTouchListener() {
+            private float lastRawX;
+            private float lastRawY;
+            private boolean dragging;
+            private long lastUpdateMs;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent ev) {
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        lastRawX = ev.getRawX();
+                        lastRawY = ev.getRawY();
+                        dragging = false;
+                        lastUpdateMs = 0;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = ev.getRawX() - lastRawX;
+                        float dy = ev.getRawY() - lastRawY;
+                        if (!dragging && Math.abs(dx) < host.dp(4) && Math.abs(dy) < host.dp(4)) {
+                            return true;
+                        }
+                        long now = System.currentTimeMillis();
+                        if (now - lastUpdateMs < 16L) {
+                            return true;
+                        }
+                        dragging = true;
+                        lastUpdateMs = now;
+                        reusableComponentEditorLp.x += (int) dx;
+                        reusableComponentEditorLp.y += (int) dy;
+                        clampReusableComponentEditorPosition();
+                        try {
+                            if (reusableComponentEditorView != null && reusableComponentEditorView.getParent() != null) {
+                                host.getWindowManager().updateViewLayout(reusableComponentEditorView, reusableComponentEditorLp);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                        lastRawX = ev.getRawX();
+                        lastRawY = ev.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        dragging = false;
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
+    }
+
+    private void clampReusableComponentEditorPosition() {
+        if (reusableComponentEditorLp == null) {
+            return;
+        }
+        android.util.DisplayMetrics metrics = host.getContext().getResources().getDisplayMetrics();
+        int halfW = reusableComponentEditorLp.width > 0
+                ? reusableComponentEditorLp.width / 2
+                : host.dp(250);
+        int edgeY = host.dp(40);
+        reusableComponentEditorLp.x = Math.max(-metrics.widthPixels / 2 + halfW,
+                Math.min(metrics.widthPixels / 2 - halfW, reusableComponentEditorLp.x));
+        reusableComponentEditorLp.y = Math.max(-metrics.heightPixels / 2 + edgeY,
+                Math.min(metrics.heightPixels / 2 - edgeY, reusableComponentEditorLp.y));
+    }
+
+    private void showReusableComponentEditor(View view) {
+        if (view == null || reusableComponentEditorLp == null) {
+            return;
+        }
+        applyReusableComponentEditorViewport();
+        try {
+            if (view.getParent() == null) {
+                host.getWindowManager().addView(view, reusableComponentEditorLp);
+            } else {
+                host.getWindowManager().updateViewLayout(view, reusableComponentEditorLp);
+            }
+            view.bringToFront();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void hideReusableComponentEditor() {
+        if (reusableComponentEditorView == null) {
+            return;
+        }
+        clearFocusAndHideKeyboard(reusableComponentEditorView);
+        try {
+            if (reusableComponentEditorView.getParent() != null) {
+                host.getWindowManager().removeView(reusableComponentEditorView);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     private void showConfigUiComponentEditDialog(ConfigUiComponent component, Runnable onSaved) {
         if (component == null) {
             return;
         }
         component.ensureDefaults();
         Context ctx = new android.view.ContextThemeWrapper(host.getContext(), R.style.Theme_AtomMaster);
-        View view = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_component_edit, null);
+        View view = getReusableComponentEditorView(ctx);
+        TextView titleView = view.findViewById(R.id.tv_component_editor_title);
         TextView typeView = view.findViewById(R.id.tv_component_type);
+        TextView keyHintView = view.findViewById(R.id.tv_component_key_hint);
+        TextView defaultLabelView = view.findViewById(R.id.tv_component_default_label);
+        TextView defaultHintView = view.findViewById(R.id.tv_component_default_hint);
+        TextView placeholderLabelView = view.findViewById(R.id.tv_component_placeholder_label);
+        TextView placeholderHintView = view.findViewById(R.id.tv_component_placeholder_hint);
+        TextView helperHintView = view.findViewById(R.id.tv_component_helper_hint);
+        TextView jsEquivalentView = view.findViewById(R.id.tv_component_js_equivalent);
+        TextView optionsHintView = view.findViewById(R.id.tv_component_options_hint);
+        View keyBlock = view.findViewById(R.id.layout_component_key_block);
+        View placeholderBlock = view.findViewById(R.id.layout_component_placeholder_block);
+        View defaultBlock = view.findViewById(R.id.layout_component_default_block);
+        View switchDefaultBlock = view.findViewById(R.id.layout_component_default_switch_block);
+        View helperBlock = view.findViewById(R.id.layout_component_helper_block);
+        View selectSection = view.findViewById(R.id.layout_component_select_section);
+        View numberSection = view.findViewById(R.id.layout_component_number_section);
+        View textSection = view.findViewById(R.id.layout_component_text_section);
+        View displayStyleBlock = view.findViewById(R.id.layout_component_display_style_block);
         EditText labelInput = view.findViewById(R.id.et_component_label);
         EditText keyInput = view.findViewById(R.id.et_component_key);
         EditText placeholderInput = view.findViewById(R.id.et_component_placeholder);
         EditText defaultInput = view.findViewById(R.id.et_component_default);
+        AutoCompleteTextView defaultSelectInput = view.findViewById(R.id.actv_component_default_select);
+        CheckBox switchDefaultInput = view.findViewById(R.id.cb_component_default_switch);
         EditText helperInput = view.findViewById(R.id.et_component_helper);
         EditText accentColorInput = view.findViewById(R.id.et_component_accent_color);
         AutoCompleteTextView displayStyleInput = view.findViewById(R.id.actv_component_display_style);
@@ -804,11 +1330,17 @@ final class FloatWindowConfigUiHelper {
         TextView optionsLabel = view.findViewById(R.id.tv_component_options_label);
         EditText optionsInput = view.findViewById(R.id.et_component_options);
 
-        typeView.setText("组件类型：" + component.getDisplayTypeName());
+        if (titleView != null) {
+            titleView.setText("编辑" + component.getDisplayTypeName());
+        }
+        typeView.setText(component.getDisplayTypeName());
         labelInput.setText(component.label);
         keyInput.setText(component.fieldKey);
         placeholderInput.setText(component.placeholder);
         defaultInput.setText(component.defaultValue);
+        if (switchDefaultInput != null) {
+            switchDefaultInput.setChecked(isConfigUiTruthy(component.defaultValue));
+        }
         helperInput.setText(component.helperText);
         accentColorInput.setText(component.accentColor);
         displayStyleInput.setAdapter(new ArrayAdapter<>(
@@ -822,6 +1354,7 @@ final class FloatWindowConfigUiHelper {
         displayStyleInput.setText(component.displayStyle, false);
         displayStyleInput.setOnClickListener(v -> displayStyleInput.showDropDown());
         optionsInput.setText(joinConfigUiOptions(component.options));
+        bindSelectDefaultDropdown(ctx, defaultSelectInput, component.options, component.defaultValue);
         widthInput.setText(String.valueOf(component.widthDp));
         heightInput.setText(String.valueOf(component.heightDp));
         scaleInput.setText(String.valueOf(component.scalePercent));
@@ -833,32 +1366,128 @@ final class FloatWindowConfigUiHelper {
         switchOnColorInput.setText(component.switchOnColor);
         switchOffColorInput.setText(component.switchOffColor);
         switchThumbColorInput.setText(component.switchThumbColor);
+        placeholderInput.setHint("占位提示");
+        defaultInput.setHint("默认值，例如 true / 1 / fast");
+        helperInput.setHint("辅助说明");
 
         boolean isTitle = ConfigUiComponent.TYPE_TITLE.equals(component.type);
         boolean isTextarea = ConfigUiComponent.TYPE_TEXTAREA.equals(component.type);
         boolean isSelect = ConfigUiComponent.TYPE_SELECT.equals(component.type);
+        boolean isMultiSelect = ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type);
         boolean isArray = ConfigUiComponent.TYPE_ARRAY.equals(component.type);
         boolean isSwitch = ConfigUiComponent.TYPE_SWITCH.equals(component.type);
         boolean isNumber = ConfigUiComponent.TYPE_NUMBER.equals(component.type);
-        keyInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
-        placeholderInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
-        defaultInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
-        sizeLayout.setVisibility(View.VISIBLE);
+        boolean isText = ConfigUiComponent.TYPE_TEXT.equals(component.type);
+        optionsInput.setText(isMultiSelect
+                ? joinConfigUiCandidates(component.options)
+                : joinConfigUiOptions(component.options));
+        if (keyHintView != null) {
+            String key = TextUtils.isEmpty(component.fieldKey) ? "变量名" : component.fieldKey;
+            keyHintView.setText("脚本运行时读取：vars." + key);
+        }
+        if (jsEquivalentView != null) {
+            jsEquivalentView.setText(buildConfigUiJsEquivalent(component));
+        }
+        if (defaultLabelView != null) {
+            if (isSelect) {
+                defaultLabelView.setText("默认选项值");
+            } else if (isMultiSelect) {
+                defaultLabelView.setText("默认选中数组");
+            } else if (isSwitch) {
+                defaultLabelView.setText("默认布尔值");
+            } else if (isNumber) {
+                defaultLabelView.setText("默认数字");
+            } else if (isArray) {
+                defaultLabelView.setText("默认数组");
+            } else {
+                defaultLabelView.setText("默认值");
+            }
+        }
+        if (defaultHintView != null) {
+            if (isSelect) {
+                defaultHintView.setText("从选项数组里选择一个 value。运行时 vars." + safeFieldKeyForHint(component) + " 等于这个字符串。");
+            } else if (isMultiSelect) {
+                defaultHintView.setText("填写默认选中的候选值数组。运行时 vars." + safeFieldKeyForHint(component) + " 是数组。");
+            } else if (isSwitch) {
+                defaultHintView.setText("勾选表示默认 true，不勾选表示默认 false。运行时变量类型是 boolean。");
+            } else if (isNumber) {
+                defaultHintView.setText("打开配置面板时自动填入的数字。");
+            } else if (isArray) {
+                defaultHintView.setText("可写 JSON 数组，例如 [\"A\",\"B\"]。");
+            } else {
+                defaultHintView.setText("打开配置面板时自动填入的值。");
+            }
+        }
+        if (placeholderLabelView != null) {
+            placeholderLabelView.setText(isArray ? "内容提示" : "输入提示");
+        }
+        if (placeholderHintView != null) {
+            placeholderHintView.setText(isArray
+                    ? "用户编辑数组时看到的提示。"
+                    : "输入框为空时显示，用来提醒用户怎么填。");
+        }
+        if (helperHintView != null) {
+            helperHintView.setText(isSwitch
+                    ? "可选，例如说明勾选后脚本会做什么。"
+                    : "可选，会显示在配置项附近。");
+        }
+        keyBlock.setVisibility(isTitle ? View.GONE : View.VISIBLE);
+        placeholderBlock.setVisibility((isTitle || isSwitch || isSelect || isMultiSelect) ? View.GONE : View.VISIBLE);
+        defaultBlock.setVisibility((isTitle || isSwitch) ? View.GONE : View.VISIBLE);
+        defaultInput.setVisibility(isSelect ? View.GONE : View.VISIBLE);
+        defaultSelectInput.setVisibility(isSelect ? View.VISIBLE : View.GONE);
+        switchDefaultBlock.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
+        helperBlock.setVisibility(isTitle ? View.GONE : View.VISIBLE);
+        selectSection.setVisibility((isSelect || isMultiSelect) ? View.VISIBLE : View.GONE);
+        numberSection.setVisibility(isNumber ? View.VISIBLE : View.GONE);
+        textSection.setVisibility((isTextarea || isArray || isText) ? View.VISIBLE : View.GONE);
+        sizeLayout.setVisibility(View.GONE);
+        scaleInput.setVisibility(View.GONE);
         accentColorInput.setVisibility(View.VISIBLE);
-        displayStyleInput.setVisibility(isSelect ? View.VISIBLE : View.GONE);
-        maxLinesInput.setVisibility((isTextarea || isArray || (!isTitle && !isSwitch && !isSelect && !isNumber)) ? View.VISIBLE : View.GONE);
+        displayStyleBlock.setVisibility(View.GONE);
+        displayStyleInput.setVisibility(View.GONE);
+        maxLinesInput.setVisibility((isTextarea || isArray || isText) ? View.VISIBLE : View.GONE);
         unitSuffixInput.setVisibility(isNumber ? View.VISIBLE : View.GONE);
         numberRulesLayout.setVisibility(isNumber ? View.VISIBLE : View.GONE);
-        switchThemeLabel.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
-        switchOnColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
-        switchOffColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
-        switchThumbColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
-        optionsLabel.setVisibility(isSelect ? View.VISIBLE : View.GONE);
-        optionsInput.setVisibility(isSelect ? View.VISIBLE : View.GONE);
+        switchThemeLabel.setVisibility(View.GONE);
+        switchOnColorInput.setVisibility(View.GONE);
+        switchOffColorInput.setVisibility(View.GONE);
+        switchThumbColorInput.setVisibility(View.GONE);
+        optionsLabel.setVisibility((isSelect || isMultiSelect) ? View.VISIBLE : View.GONE);
+        optionsInput.setVisibility((isSelect || isMultiSelect) ? View.VISIBLE : View.GONE);
+        if (optionsLabel != null && (isSelect || isMultiSelect)) {
+            optionsLabel.setText(isMultiSelect ? "候选项 candidates" : "可选项");
+        }
+        if (optionsHintView != null && (isSelect || isMultiSelect)) {
+            optionsHintView.setText(isMultiSelect
+                    ? "填写候选值数组。用户可选择任意多个，保存为数组。"
+                    : "填写一个数组。label 给用户看，value 会保存到变量里。");
+        }
+        if (optionsInput != null && isMultiSelect) {
+            optionsInput.setHint("[1,2,3,4,5,6,7,8,9,10]");
+        }
+        if (switchDefaultInput != null) {
+            updateSwitchDefaultText(switchDefaultInput);
+            switchDefaultInput.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    updateSwitchDefaultText(switchDefaultInput));
+        }
+        if (defaultSelectInput != null) {
+            defaultSelectInput.setOnClickListener(v -> {
+                List<ConfigUiOption> latestOptions = parseConfigUiOptions(optionsInput.getText() == null
+                        ? ""
+                        : optionsInput.getText().toString());
+                bindSelectDefaultDropdown(ctx, defaultSelectInput, latestOptions,
+                        defaultSelectInput.getText() == null ? "" : defaultSelectInput.getText().toString());
+                defaultSelectInput.showDropDown();
+            });
+        }
         if (isArray) {
             placeholderInput.setHint("每行一个元素，或粘贴 JSON 数组");
             defaultInput.setHint("默认值，例如 [\"A\",\"B\",1]");
             helperInput.setHint("辅助说明，例如：脚本里可直接用 vars.myArray[0]");
+        } else if (isMultiSelect) {
+            defaultInput.setHint("默认选中，例如 [1,2,3] 或 [\"1\",\"2\"]");
+            helperInput.setHint("辅助说明，例如：脚本里可用 vars." + safeFieldKeyForHint(component) + ".includes(1)");
         } else if (isTextarea) {
             placeholderInput.setHint("多行输入提示");
             defaultInput.setHint("默认值，可直接写多行文本");
@@ -869,38 +1498,30 @@ final class FloatWindowConfigUiHelper {
             defaultInput.setHint("默认值，例如 10 或 0.5");
         }
 
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
-                .setTitle("编辑组件")
-                .setView(view)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", null)
-                .create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    ? TYPE_APPLICATION_OVERLAY
-                    : WindowManager.LayoutParams.TYPE_PHONE);
-            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        TextView cancelBtn = view.findViewById(R.id.btn_component_editor_cancel);
+        TextView saveBtn = view.findViewById(R.id.btn_component_editor_save);
+        View closeTopBtn = view.findViewById(R.id.btn_close_top);
+        View.OnClickListener closeListener = v -> hideReusableComponentEditor();
+        if (cancelBtn != null) {
+            cancelBtn.setOnClickListener(closeListener);
         }
-        dialog.setOnShowListener(d -> {
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setLayout(
-                        Math.min(host.dp(500), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.96f)),
-                        Math.min(host.dp(760), (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.92f)));
-            }
-            TextView positiveBtn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
-            if (positiveBtn == null) {
-                return;
-            }
+        if (closeTopBtn != null) {
+            closeTopBtn.setOnClickListener(closeListener);
+        }
+        if (saveBtn != null) {
             final boolean[] saving = {false};
-            positiveBtn.setOnClickListener(v -> {
+            saveBtn.setText("保存");
+            saveBtn.setEnabled(true);
+            saveBtn.setOnClickListener(v -> {
                 if (saving[0]) {
                     return;
                 }
                 saving[0] = true;
                 v.setEnabled(false);
-                positiveBtn.setText("保存中...");
+                saveBtn.setText("保存中...");
                 clearFocusAndHideKeyboard(view);
                 view.post(() -> {
+                    boolean keepOpen = true;
                     try {
                         String label = readTrimmedText(labelInput, component.getDisplayTypeName());
                         String key = readTrimmedText(keyInput, "");
@@ -908,23 +1529,49 @@ final class FloatWindowConfigUiHelper {
                             host.showToast("请输入字段 Key");
                             return;
                         }
-                        List<ConfigUiOption> options = isSelect
+                        List<ConfigUiOption> options = (isSelect || isMultiSelect)
                                 ? parseConfigUiOptions(optionsInput.getText() == null ? "" : optionsInput.getText().toString())
                                 : new ArrayList<>();
                         if (isSelect && options.isEmpty()) {
                             host.showToast("下拉组件至少需要一个选项");
                             return;
                         }
+                        if (isMultiSelect && options.isEmpty()) {
+                            host.showToast("多选组件至少需要一个候选项");
+                            return;
+                        }
+                        String selectedDefault = readTrimmedText(defaultSelectInput, "");
+                        String selectDefaultValue = isSelect
+                                ? resolveSelectDefaultValue(options, selectedDefault)
+                                : "";
+                        if (isSelect && !TextUtils.isEmpty(selectedDefault) && TextUtils.isEmpty(selectDefaultValue)) {
+                            host.showToast("默认值必须来自选项数组");
+                            return;
+                        }
+                        String multiSelectDefaultValue = "";
+                        if (isMultiSelect) {
+                            multiSelectDefaultValue = normalizeMultiSelectDefaultValue(
+                                    options,
+                                    readTrimmedText(defaultInput, "[]"));
+                            if (multiSelectDefaultValue == null) {
+                                host.showToast("默认选中必须是候选项数组，例如 [1,2,3]");
+                                return;
+                            }
+                        }
                         component.label = label;
                         component.fieldKey = isTitle ? "" : key;
                         component.placeholder = isTitle ? "" : readTrimmedText(placeholderInput, "");
-                        component.defaultValue = isTitle ? "" : readTrimmedText(defaultInput, "");
+                        component.defaultValue = isTitle
+                                ? ""
+                                : (isSwitch && switchDefaultInput != null
+                                ? String.valueOf(switchDefaultInput.isChecked())
+                                : (isSelect ? selectDefaultValue : (isMultiSelect ? multiSelectDefaultValue : readTrimmedText(defaultInput, ""))));
                         component.helperText = readTrimmedText(helperInput, "");
                         component.accentColor = normalizeConfigUiColorInput(
                                 readTrimmedText(accentColorInput, component.accentColor),
                                 ConfigUiComponent.defaultAccentColorForType(component.type));
-                        component.displayStyle = isSelect
-                                ? readTrimmedText(displayStyleInput, ConfigUiComponent.DISPLAY_STYLE_AUTO)
+                        component.displayStyle = (isSelect || isMultiSelect)
+                                ? ConfigUiComponent.DISPLAY_STYLE_DROPDOWN
                                 : ConfigUiComponent.DISPLAY_STYLE_AUTO;
                         component.widthDp = Math.max(80, parseIntDefault(readTrimmedText(widthInput,
                                 String.valueOf(ConfigUiComponent.defaultWidthForType(component.type))),
@@ -953,22 +1600,23 @@ final class FloatWindowConfigUiHelper {
                                 : "";
                         component.options = options;
                         component.ensureDefaults();
-                        dialog.dismiss();
+                        keepOpen = false;
+                        hideReusableComponentEditor();
                         if (onSaved != null) {
                             onSaved.run();
                         }
                         host.showToast("组件已保存");
                     } finally {
-                        if (dialog.isShowing()) {
+                        if (keepOpen) {
                             saving[0] = false;
                             v.setEnabled(true);
-                            positiveBtn.setText("保存");
+                            saveBtn.setText("保存");
                         }
                     }
                 });
             });
-        });
-        dialog.show();
+        }
+        showReusableComponentEditor(view);
     }
 
     private void showConfigUiPagePickerDialog(ConfigUiSchema schema,
@@ -1016,6 +1664,245 @@ final class FloatWindowConfigUiHelper {
             return value.toUpperCase(Locale.ROOT);
         } catch (Exception ignored) {
             return fallback;
+        }
+    }
+
+    private boolean isConfigUiTruthy(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return false;
+        }
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        return "true".equals(value)
+                || "1".equals(value)
+                || "yes".equals(value)
+                || "on".equals(value)
+                || "开启".equals(value)
+                || "勾选".equals(value);
+    }
+
+    private void updateSwitchDefaultText(CheckBox checkBox) {
+        if (checkBox == null) {
+            return;
+        }
+        checkBox.setText(checkBox.isChecked()
+                ? "默认值 = true（运行前默认开启）"
+                : "默认值 = false（运行前默认关闭）");
+    }
+
+    private String safeFieldKeyForHint(ConfigUiComponent component) {
+        if (component == null || TextUtils.isEmpty(component.fieldKey)) {
+            return "变量名";
+        }
+        return component.fieldKey.trim();
+    }
+
+    private String buildConfigUiJsEquivalent(ConfigUiComponent component) {
+        if (component == null) {
+            return "等价 JS：const value = vars.xxx;";
+        }
+        component.ensureDefaults();
+        String key = safeFieldKeyForHint(component);
+        if (ConfigUiComponent.TYPE_SWITCH.equals(component.type)) {
+            return "变量类型：boolean\n等价 JS：const " + key + " = vars." + key + " === true;";
+        }
+        if (ConfigUiComponent.TYPE_SELECT.equals(component.type)) {
+            return "变量类型：string，值来自选项数组的 value\n等价 JS：const " + key + " = vars." + key + ";";
+        }
+        if (ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type)) {
+            return "变量类型：array，值来自 candidates\n等价 JS：const " + key + " = vars." + key + " || [];";
+        }
+        if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)) {
+            return "变量类型：number\n等价 JS：const " + key + " = Number(vars." + key + ");";
+        }
+        if (ConfigUiComponent.TYPE_ARRAY.equals(component.type)) {
+            return "变量类型：array\n等价 JS：const " + key + " = vars." + key + " || [];";
+        }
+        if (ConfigUiComponent.TYPE_TEXTAREA.equals(component.type) || ConfigUiComponent.TYPE_TEXT.equals(component.type)) {
+            return "变量类型：string\n等价 JS：const " + key + " = String(vars." + key + " ?? \"\");";
+        }
+        return "这个标题组件不绑定变量。";
+    }
+
+    private void bindSelectDefaultDropdown(Context ctx,
+                                           AutoCompleteTextView input,
+                                           List<ConfigUiOption> options,
+                                           String selectedValue) {
+        if (input == null) {
+            return;
+        }
+        String[] choices = buildSelectDefaultChoices(options);
+        input.setAdapter(new ArrayAdapter<>(ctx, android.R.layout.simple_list_item_1, choices));
+        input.setText(resolveSelectDefaultDisplay(options, selectedValue), false);
+    }
+
+    private String[] buildSelectDefaultChoices(List<ConfigUiOption> options) {
+        if (options == null || options.isEmpty()) {
+            return new String[0];
+        }
+        List<String> choices = new ArrayList<>();
+        for (ConfigUiOption option : options) {
+            if (option == null) {
+                continue;
+            }
+            String value = option.value == null ? "" : option.value.trim();
+            String label = option.label == null ? "" : option.label.trim();
+            if (TextUtils.isEmpty(value) && TextUtils.isEmpty(label)) {
+                continue;
+            }
+            if (TextUtils.isEmpty(value)) {
+                value = label;
+            }
+            if (TextUtils.isEmpty(label) || TextUtils.equals(label, value)) {
+                choices.add(value);
+            } else {
+                choices.add(label + " = " + value);
+            }
+        }
+        return choices.toArray(new String[0]);
+    }
+
+    private String resolveSelectDefaultDisplay(List<ConfigUiOption> options, String selectedValue) {
+        if (TextUtils.isEmpty(selectedValue)) {
+            return "";
+        }
+        String value = selectedValue.trim();
+        if (options == null) {
+            return value;
+        }
+        for (ConfigUiOption option : options) {
+            if (option == null) {
+                continue;
+            }
+            String optionValue = option.value == null ? "" : option.value.trim();
+            String optionLabel = option.label == null ? "" : option.label.trim();
+            if (TextUtils.isEmpty(optionValue)) {
+                optionValue = optionLabel;
+            }
+            if (TextUtils.equals(value, optionValue) || TextUtils.equals(value, optionLabel)) {
+                return TextUtils.isEmpty(optionLabel) || TextUtils.equals(optionLabel, optionValue)
+                        ? optionValue
+                        : optionLabel + " = " + optionValue;
+            }
+        }
+        return value;
+    }
+
+    private String resolveSelectDefaultValue(List<ConfigUiOption> options, String selectedDisplay) {
+        if (TextUtils.isEmpty(selectedDisplay)) {
+            return "";
+        }
+        String display = selectedDisplay.trim();
+        if (options == null) {
+            return "";
+        }
+        for (ConfigUiOption option : options) {
+            if (option == null) {
+                continue;
+            }
+            String optionValue = option.value == null ? "" : option.value.trim();
+            String optionLabel = option.label == null ? "" : option.label.trim();
+            if (TextUtils.isEmpty(optionValue)) {
+                optionValue = optionLabel;
+            }
+            String combined = TextUtils.isEmpty(optionLabel) || TextUtils.equals(optionLabel, optionValue)
+                    ? optionValue
+                    : optionLabel + " = " + optionValue;
+            if (TextUtils.equals(display, combined)
+                    || TextUtils.equals(display, optionValue)
+                    || TextUtils.equals(display, optionLabel)) {
+                return optionValue;
+            }
+        }
+        return "";
+    }
+
+    @Nullable
+    private String normalizeMultiSelectDefaultValue(List<ConfigUiOption> candidates, String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return "[]";
+        }
+        List<String> selectedValues = parseJsonArrayAsStrings(raw.trim());
+        if (selectedValues == null) {
+            return null;
+        }
+        Set<String> candidateValues = new HashSet<>();
+        if (candidates != null) {
+            for (ConfigUiOption option : candidates) {
+                if (option == null) {
+                    continue;
+                }
+                String value = option.value == null ? "" : option.value.trim();
+                String label = option.label == null ? "" : option.label.trim();
+                if (TextUtils.isEmpty(value)) {
+                    value = label;
+                }
+                if (!TextUtils.isEmpty(value)) {
+                    candidateValues.add(value);
+                }
+            }
+        }
+        for (String value : selectedValues) {
+            if (!candidateValues.contains(value)) {
+                return null;
+            }
+        }
+        return encodeJsonArrayFromStrings(selectedValues);
+    }
+
+    @Nullable
+    private List<String> parseJsonArrayAsStrings(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return new ArrayList<>();
+        }
+        try {
+            JSONArray array = new JSONArray(raw);
+            List<String> values = new ArrayList<>();
+            for (int i = 0; i < array.length(); i++) {
+                Object item = array.opt(i);
+                if (item == null || JSONObject.NULL.equals(item)) {
+                    continue;
+                }
+                values.add(String.valueOf(item).trim());
+            }
+            return values;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String encodeJsonArrayFromStrings(List<String> values) {
+        StringBuilder builder = new StringBuilder("[");
+        if (values != null) {
+            boolean first = true;
+            for (String rawValue : values) {
+                String value = rawValue == null ? "" : rawValue.trim();
+                if (TextUtils.isEmpty(value)) {
+                    continue;
+                }
+                if (!first) {
+                    builder.append(",");
+                }
+                first = false;
+                builder.append(jsonLiteralForCandidateValue(value));
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+    private String jsonLiteralForCandidateValue(String value) {
+        if (TextUtils.isEmpty(value)) {
+            return "\"\"";
+        }
+        String trimmed = value.trim();
+        if ("true".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed)) {
+            return trimmed.toLowerCase(Locale.ROOT);
+        }
+        try {
+            Double.parseDouble(trimmed);
+            return trimmed;
+        } catch (Exception ignored) {
+            return JSONObject.quote(trimmed);
         }
     }
 
@@ -1145,6 +2032,10 @@ final class FloatWindowConfigUiHelper {
                         && (component.options == null || component.options.isEmpty())) {
                     return "下拉组件至少需要一个选项";
                 }
+                if (ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type)
+                        && (component.options == null || component.options.isEmpty())) {
+                    return "多选组件至少需要一个候选项";
+                }
                 if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)
                         && !TextUtils.isEmpty(component.numberMin)
                         && !TextUtils.isEmpty(component.numberMax)) {
@@ -1177,6 +2068,34 @@ final class FloatWindowConfigUiHelper {
         if (TextUtils.isEmpty(raw)) {
             return result;
         }
+        String trimmedRaw = raw.trim();
+        if (trimmedRaw.startsWith("[")) {
+            try {
+                JSONArray array = new JSONArray(trimmedRaw);
+                for (int i = 0; i < array.length(); i++) {
+                    Object item = array.opt(i);
+                    if (item instanceof JSONObject) {
+                        JSONObject obj = (JSONObject) item;
+                        String label = obj.optString("label", "").trim();
+                        String value = obj.optString("value", "").trim();
+                        if (TextUtils.isEmpty(value)) {
+                            value = label;
+                        }
+                        if (!TextUtils.isEmpty(label) || !TextUtils.isEmpty(value)) {
+                            result.add(new ConfigUiOption(TextUtils.isEmpty(label) ? value : label, value));
+                        }
+                    } else if (item != null) {
+                        String value = String.valueOf(item).trim();
+                        if (!TextUtils.isEmpty(value)) {
+                            result.add(new ConfigUiOption(value, value));
+                        }
+                    }
+                }
+                return result;
+            } catch (Exception ignored) {
+                return result;
+            }
+        }
         String[] lines = raw.split("\\r?\\n");
         for (String line : lines) {
             String trimmed = line == null ? "" : line.trim();
@@ -1202,6 +2121,8 @@ final class FloatWindowConfigUiHelper {
             return "";
         }
         StringBuilder builder = new StringBuilder();
+        builder.append("[");
+        boolean first = true;
         for (ConfigUiOption option : options) {
             if (option == null) {
                 continue;
@@ -1211,16 +2132,48 @@ final class FloatWindowConfigUiHelper {
             if (label.isEmpty() && value.isEmpty()) {
                 continue;
             }
-            if (builder.length() > 0) {
-                builder.append('\n');
+            if (TextUtils.isEmpty(value)) {
+                value = label;
             }
-            if (TextUtils.equals(label, value) || value.isEmpty()) {
-                builder.append(label);
-            } else {
-                builder.append(label).append('=').append(value);
+            if (TextUtils.isEmpty(label)) {
+                label = value;
+            }
+            if (!first) {
+                builder.append(",");
+            }
+            first = false;
+            builder.append("\n  {\"label\":")
+                    .append(JSONObject.quote(label))
+                    .append(",\"value\":")
+                    .append(JSONObject.quote(value))
+                    .append("}");
+        }
+        if (!first) {
+            builder.append('\n');
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+    private String joinConfigUiCandidates(List<ConfigUiOption> options) {
+        if (options == null || options.isEmpty()) {
+            return "";
+        }
+        List<String> values = new ArrayList<>();
+        for (ConfigUiOption option : options) {
+            if (option == null) {
+                continue;
+            }
+            String value = option.value == null ? "" : option.value.trim();
+            String label = option.label == null ? "" : option.label.trim();
+            if (TextUtils.isEmpty(value)) {
+                value = label;
+            }
+            if (!TextUtils.isEmpty(value)) {
+                values.add(value);
             }
         }
-        return builder.toString();
+        return encodeJsonArrayFromStrings(values);
     }
 
     private String readTrimmedText(@Nullable TextView view, String fallback) {

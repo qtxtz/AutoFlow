@@ -26,15 +26,15 @@ public final class AdaptivePollingController {
         COLOR_CHECK
     }
 
-    public static final long DEFAULT_TEMPLATE_FAST_INTERVAL_MS = 220L;
-    public static final long DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS = 380L;
-    public static final long DEFAULT_TEMPLATE_SLOW_INTERVAL_MS = 560L;
-    public static final long DEFAULT_MATCH_MAP_FAST_INTERVAL_MS = 220L;
-    public static final long DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS = 380L;
-    public static final long DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS = 560L;
-    public static final long DEFAULT_COLOR_FAST_INTERVAL_MS = 220L;
-    public static final long DEFAULT_COLOR_MEDIUM_INTERVAL_MS = 380L;
-    public static final long DEFAULT_COLOR_SLOW_INTERVAL_MS = 560L;
+    public static volatile long DEFAULT_TEMPLATE_FAST_INTERVAL_MS = 220L;
+    public static volatile long DEFAULT_TEMPLATE_MEDIUM_INTERVAL_MS = 380L;
+    public static volatile long DEFAULT_TEMPLATE_SLOW_INTERVAL_MS = 560L;
+    public static volatile long DEFAULT_MATCH_MAP_FAST_INTERVAL_MS = 220L;
+    public static volatile long DEFAULT_MATCH_MAP_MEDIUM_INTERVAL_MS = 380L;
+    public static volatile long DEFAULT_MATCH_MAP_SLOW_INTERVAL_MS = 560L;
+    public static volatile long DEFAULT_COLOR_FAST_INTERVAL_MS = 220L;
+    public static volatile long DEFAULT_COLOR_MEDIUM_INTERVAL_MS = 380L;
+    public static volatile long DEFAULT_COLOR_SLOW_INTERVAL_MS = 560L;
 
     private final long fastIntervalMs;
     private final long mediumIntervalMs;

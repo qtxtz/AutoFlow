@@ -13,6 +13,7 @@ public class ConfigUiComponent {
     public static final String TYPE_NUMBER = "number";
     public static final String TYPE_SWITCH = "switch";
     public static final String TYPE_SELECT = "select";
+    public static final String TYPE_MULTI_SELECT = "multi_select";
     public static final String TYPE_ARRAY = "array";
     public static final String TYPE_TITLE = "title";
     public static final String DISPLAY_STYLE_AUTO = "auto";
@@ -162,6 +163,8 @@ public class ConfigUiComponent {
                 return "开关";
             case TYPE_SELECT:
                 return "下拉选择";
+            case TYPE_MULTI_SELECT:
+                return "多选";
             case TYPE_ARRAY:
                 return "数组";
             case TYPE_TITLE:
@@ -193,6 +196,9 @@ public class ConfigUiComponent {
             }
             return "自动布局";
         }
+        if (TYPE_MULTI_SELECT.equals(type)) {
+            return "多选数组";
+        }
         if (TYPE_NUMBER.equals(type)) {
             return TextUtils.isEmpty(unitSuffix) ? "步进输入" : ("步进输入 · " + unitSuffix);
         }
@@ -213,6 +219,9 @@ public class ConfigUiComponent {
             return 220;
         }
         if (TYPE_ARRAY.equals(type)) {
+            return 300;
+        }
+        if (TYPE_MULTI_SELECT.equals(type)) {
             return 300;
         }
         if (TYPE_TEXTAREA.equals(type)) {
@@ -237,6 +246,9 @@ public class ConfigUiComponent {
         if (TYPE_ARRAY.equals(type)) {
             return 150;
         }
+        if (TYPE_MULTI_SELECT.equals(type)) {
+            return 150;
+        }
         if (TYPE_TEXTAREA.equals(type)) {
             return 138;
         }
@@ -249,6 +261,9 @@ public class ConfigUiComponent {
         }
         if (TYPE_ARRAY.equals(type)) {
             return 6;
+        }
+        if (TYPE_MULTI_SELECT.equals(type)) {
+            return 4;
         }
         if (TYPE_TITLE.equals(type)) {
             return 2;
@@ -268,6 +283,9 @@ public class ConfigUiComponent {
         }
         if (TYPE_SELECT.equals(type)) {
             return "#1D4ED8";
+        }
+        if (TYPE_MULTI_SELECT.equals(type)) {
+            return "#7C3AED";
         }
         if (TYPE_ARRAY.equals(type)) {
             return "#0F766E";
@@ -314,6 +332,16 @@ public class ConfigUiComponent {
             component.options.add(new ConfigUiOption("选项 A", "A"));
             component.options.add(new ConfigUiOption("选项 B", "B"));
             component.spanSize = SPAN_HALF;
+        } else if (TYPE_MULTI_SELECT.equals(type)) {
+            component.label = "多选字段 " + index;
+            component.fieldKey = "multi_select_" + index;
+            component.helperText = "可以从候选项中选择任意多个，脚本里读取到的是数组。";
+            component.defaultValue = "[]";
+            for (int i = 1; i <= 20; i++) {
+                String value = String.valueOf(i);
+                component.options.add(new ConfigUiOption(value, value));
+            }
+            component.spanSize = SPAN_FULL;
         } else if (TYPE_ARRAY.equals(type)) {
             component.label = "数组字段 " + index;
             component.fieldKey = "array_" + index;

@@ -135,6 +135,7 @@ import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.OpenCVHelper;
 import com.auto.master.utils.OperationGsonUtils;
+import com.auto.master.utils.SystemRuntimeConfig;
 import com.auto.master.utils.UUIDGenerator;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -1202,6 +1203,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         
         // 初始化WindowManager
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        SystemRuntimeConfig.load(this).applyToRuntime();
 
         // 初始化IO管理器
         fileIOManager = new FileIOManager();
@@ -1523,6 +1525,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         TextView btnMoveUp = panelView.findViewById(R.id.btn_move_up);
         TextView btnMoveDown = panelView.findViewById(R.id.btn_move_down);
         TextView btnBatch = panelView.findViewById(R.id.btn_batch);
+        View btnSystemParams = panelView.findViewById(R.id.btn_system_params);
+        if (btnSystemParams != null) {
+            btnSystemParams.setOnClickListener(v -> showSystemRuntimeConfigDialog());
+        }
         btnBatch.setOnClickListener(v -> {
             if (currentLevel == NavigationLevel.OPERATION && isScriptActiveForUi()) {
                 removeProjectPanel();
@@ -2211,6 +2217,167 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void focusCurrentRunningOperation() {
         projectPanelUiHelper.focusCurrentRunningOperation();
+    }
+
+    private void showSystemRuntimeConfigDialog() {
+        initDialogFactory();
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_system_runtime_config, null);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(430, true);
+        if (dialogHelpers != null) {
+            dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 430, 0.82f, 0.92f);
+            dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 430, 520, null);
+        }
+        wm.addView(dialogView, dialogLp);
+
+        EditText captureScaleInput = dialogView.findViewById(R.id.et_system_capture_scale);
+        EditText idlePauseInput = dialogView.findViewById(R.id.et_system_idle_pause_ms);
+        View templatePolling = dialogView.findViewById(R.id.include_template_polling);
+        View matchMapPolling = dialogView.findViewById(R.id.include_match_map_polling);
+        View colorPolling = dialogView.findViewById(R.id.include_color_polling);
+
+        Runnable bindCurrentValues = () -> bindSystemRuntimeConfigValues(
+                dialogView,
+                captureScaleInput,
+                idlePauseInput,
+                templatePolling,
+                matchMapPolling,
+                colorPolling,
+                SystemRuntimeConfig.load(this));
+        bindCurrentValues.run();
+
+        dialogView.findViewById(R.id.btn_system_config_close).setOnClickListener(v -> safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_system_config_cancel).setOnClickListener(v -> safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_system_config_reset).setOnClickListener(v ->
+                bindSystemRuntimeConfigValues(
+                        dialogView,
+                        captureScaleInput,
+                        idlePauseInput,
+                        templatePolling,
+                        matchMapPolling,
+                        colorPolling,
+                        new SystemRuntimeConfig()));
+        dialogView.findViewById(R.id.btn_system_config_save).setOnClickListener(v -> {
+            try {
+                SystemRuntimeConfig cfg = readSystemRuntimeConfigFromInputs(
+                        captureScaleInput,
+                        idlePauseInput,
+                        templatePolling,
+                        matchMapPolling,
+                        colorPolling);
+                float previousScale = ScreenCaptureManager.CAPTURE_SCALE;
+                cfg.save(this);
+                cfg.applyToRuntime();
+                if (Math.abs(previousScale - cfg.captureScale) > 0.0001f) {
+                    ScreenCaptureManager.getInstance().setCaptureScale(cfg.captureScale);
+                }
+                safeRemoveView(dialogView);
+                Toast.makeText(this, "系统参数已保存", Toast.LENGTH_SHORT).show();
+            } catch (IllegalArgumentException e) {
+                Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void bindSystemRuntimeConfigValues(View root,
+                                               EditText captureScaleInput,
+                                               EditText idlePauseInput,
+                                               View templatePolling,
+                                               View matchMapPolling,
+                                               View colorPolling,
+                                               SystemRuntimeConfig cfg) {
+        if (cfg == null) {
+            cfg = new SystemRuntimeConfig();
+        }
+        cfg.normalize();
+        if (captureScaleInput != null) {
+            captureScaleInput.setText(trimSystemFloat(cfg.captureScale));
+        }
+        if (idlePauseInput != null) {
+            idlePauseInput.setText(String.valueOf(cfg.idlePauseThresholdMs));
+        }
+        bindPollingTriplet(templatePolling, cfg.templateFastMs, cfg.templateMediumMs, cfg.templateSlowMs);
+        bindPollingTriplet(matchMapPolling, cfg.matchMapFastMs, cfg.matchMapMediumMs, cfg.matchMapSlowMs);
+        bindPollingTriplet(colorPolling, cfg.colorFastMs, cfg.colorMediumMs, cfg.colorSlowMs);
+    }
+
+    private SystemRuntimeConfig readSystemRuntimeConfigFromInputs(EditText captureScaleInput,
+                                                                  EditText idlePauseInput,
+                                                                  View templatePolling,
+                                                                  View matchMapPolling,
+                                                                  View colorPolling) {
+        SystemRuntimeConfig cfg = new SystemRuntimeConfig();
+        cfg.captureScale = parseFloatInput(captureScaleInput, "CAPTURE_SCALE", 0.25f, 1.0f);
+        cfg.idlePauseThresholdMs = parseLongInput(idlePauseInput, "IDLE_PAUSE_THRESHOLD_MS", 500L, 120000L);
+        long[] template = readPollingTriplet(templatePolling, "模板匹配");
+        cfg.templateFastMs = template[0];
+        cfg.templateMediumMs = template[1];
+        cfg.templateSlowMs = template[2];
+        long[] matchMap = readPollingTriplet(matchMapPolling, "图集匹配");
+        cfg.matchMapFastMs = matchMap[0];
+        cfg.matchMapMediumMs = matchMap[1];
+        cfg.matchMapSlowMs = matchMap[2];
+        long[] color = readPollingTriplet(colorPolling, "颜色操作");
+        cfg.colorFastMs = color[0];
+        cfg.colorMediumMs = color[1];
+        cfg.colorSlowMs = color[2];
+        cfg.normalize();
+        return cfg;
+    }
+
+    private void bindPollingTriplet(View group, long fastMs, long mediumMs, long slowMs) {
+        if (group == null) {
+            return;
+        }
+        EditText fastInput = group.findViewById(R.id.et_system_poll_fast_ms);
+        EditText mediumInput = group.findViewById(R.id.et_system_poll_medium_ms);
+        EditText slowInput = group.findViewById(R.id.et_system_poll_slow_ms);
+        if (fastInput != null) fastInput.setText(String.valueOf(fastMs));
+        if (mediumInput != null) mediumInput.setText(String.valueOf(mediumMs));
+        if (slowInput != null) slowInput.setText(String.valueOf(slowMs));
+    }
+
+    private long[] readPollingTriplet(View group, String label) {
+        if (group == null) {
+            throw new IllegalArgumentException(label + "轮询参数缺失");
+        }
+        return new long[] {
+                parseLongInput(group.findViewById(R.id.et_system_poll_fast_ms), label + "快档", 10L, 5000L),
+                parseLongInput(group.findViewById(R.id.et_system_poll_medium_ms), label + "中档", 10L, 5000L),
+                parseLongInput(group.findViewById(R.id.et_system_poll_slow_ms), label + "慢档", 10L, 5000L)
+        };
+    }
+
+    private float parseFloatInput(EditText input, String label, float min, float max) {
+        String raw = input == null || input.getText() == null ? "" : input.getText().toString().trim();
+        try {
+            float value = Float.parseFloat(raw);
+            if (value < min || value > max) {
+                throw new IllegalArgumentException(label + "范围是 " + trimSystemFloat(min) + " - " + trimSystemFloat(max));
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(label + "必须是数字");
+        }
+    }
+
+    private long parseLongInput(EditText input, String label, long min, long max) {
+        String raw = input == null || input.getText() == null ? "" : input.getText().toString().trim();
+        try {
+            long value = Long.parseLong(raw);
+            if (value < min || value > max) {
+                throw new IllegalArgumentException(label + "范围是 " + min + " - " + max + " ms");
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(label + "必须是整数毫秒");
+        }
+    }
+
+    private String trimSystemFloat(float value) {
+        if (Math.abs(value - Math.round(value)) < 0.0001f) {
+            return String.valueOf(Math.round(value));
+        }
+        return String.format(Locale.US, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
     }
 
     // ==================== Dialog Factory 初始化 ====================

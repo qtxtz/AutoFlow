@@ -3,6 +3,7 @@ package com.auto.master.configui;
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
@@ -16,6 +17,8 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -28,9 +31,11 @@ import androidx.annotation.Nullable;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.auto.master.R;
 
@@ -121,11 +126,18 @@ public final class ConfigUiFormRenderer {
     public static FormSession create(Context context,
                                      ConfigUiSchema schema,
                                      Map<String, String> initialValues) {
+        return createRuntimePanel(context, schema, initialValues);
+    }
+
+    private static FormSession createRuntimePanel(Context context,
+                                                  ConfigUiSchema schema,
+                                                  Map<String, String> initialValues) {
         schema.ensureDefaults();
         Context themedContext = new ContextThemeWrapper(context, R.style.Theme_AtomMaster);
         List<FieldBinding> bindings = new ArrayList<>();
         LinearLayout root = new LinearLayout(themedContext);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(0, 0, 0, dp(themedContext, 4));
         root.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -134,26 +146,27 @@ public final class ConfigUiFormRenderer {
         tabScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout tabRow = new LinearLayout(themedContext);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
-        tabRow.setPadding(0, 0, 0, dp(themedContext, 8));
+        tabRow.setPadding(0, 0, 0, dp(themedContext, 6));
         tabScroll.addView(tabRow, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(tabScroll, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (schema.pages.size() > 1) {
+            root.addView(tabScroll, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
 
         FrameLayout pageContainer = new FrameLayout(themedContext);
-        pageContainer.setBackground(createPageHostBackground());
         LinearLayout.LayoutParams pageContainerLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(themedContext, 340));
+                ViewGroup.LayoutParams.WRAP_CONTENT);
         root.addView(pageContainer, pageContainerLp);
 
         List<View> pageViews = new ArrayList<>();
         List<TextView> tabs = new ArrayList<>();
         for (int i = 0; i < schema.pages.size(); i++) {
             ConfigUiPage page = schema.pages.get(i);
-            pageViews.add(buildPageView(themedContext, page, initialValues, bindings));
+            pageViews.add(buildRuntimePageView(themedContext, page, initialValues, bindings));
             TextView tab = buildTabView(themedContext, page.title, i == 0);
             final int index = i;
             tab.setOnClickListener(v -> showPage(pageContainer, pageViews, tabs, index));
@@ -169,6 +182,463 @@ public final class ConfigUiFormRenderer {
 
         showPage(pageContainer, pageViews, tabs, 0);
         return new FormSession(root, bindings);
+    }
+
+    private static View buildRuntimePageView(Context context,
+                                             ConfigUiPage page,
+                                             Map<String, String> initialValues,
+                                             List<FieldBinding> bindings) {
+        page.ensureDefaults();
+        LinearLayout pageRoot = new LinearLayout(context);
+        pageRoot.setOrientation(LinearLayout.VERTICAL);
+        pageRoot.setPadding(0, 0, 0, dp(context, 4));
+        pageRoot.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        if (page.components == null || page.components.isEmpty()) {
+            TextView emptyView = new TextView(context);
+            emptyView.setText("还没有可配置项");
+            emptyView.setTextColor(0xFF6B7280);
+            emptyView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            emptyView.setGravity(Gravity.CENTER);
+            pageRoot.addView(emptyView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(context, 120)));
+            return pageRoot;
+        }
+
+        CompactWrapLayout currentWrap = null;
+        for (ConfigUiComponent component : page.components) {
+            if (component == null) {
+                continue;
+            }
+            component.ensureDefaults();
+            if (ConfigUiComponent.TYPE_TITLE.equals(component.type)) {
+                currentWrap = null;
+                pageRoot.addView(buildRuntimeSectionTitle(context, component));
+                continue;
+            }
+            if (ConfigUiComponent.TYPE_SWITCH.equals(component.type)) {
+                if (currentWrap == null) {
+                    currentWrap = new CompactWrapLayout(context);
+                    currentWrap.setItemSpacing(dp(context, 8), dp(context, 6));
+                    LinearLayout.LayoutParams wrapLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT);
+                    wrapLp.bottomMargin = dp(context, 6);
+                    pageRoot.addView(currentWrap, wrapLp);
+                }
+                currentWrap.addView(buildRuntimeCheckBox(context, component, initialValues, bindings));
+            } else {
+                currentWrap = null;
+                pageRoot.addView(buildRuntimeFieldBlock(context, component, initialValues, bindings));
+            }
+        }
+        return pageRoot;
+    }
+
+    private static TextView buildRuntimeSectionTitle(Context context, ConfigUiComponent component) {
+        TextView title = new TextView(context);
+        title.setText(TextUtils.isEmpty(component.label) ? "配置" : component.label);
+        title.setTextColor(0xFF1F2937);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+        title.setPadding(dp(context, 2), dp(context, 8), dp(context, 2), dp(context, 4));
+        return title;
+    }
+
+    private static CheckBox buildRuntimeCheckBox(Context context,
+                                                 ConfigUiComponent component,
+                                                 Map<String, String> initialValues,
+                                                 List<FieldBinding> bindings) {
+        String initialValue = resolveInitialValue(component, initialValues);
+        CheckBox checkBox = new CheckBox(context);
+        checkBox.setText(TextUtils.isEmpty(component.label) ? component.fieldKey : component.label);
+        checkBox.setTextColor(0xFF222831);
+        checkBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        checkBox.setSingleLine(true);
+        checkBox.setEllipsize(TextUtils.TruncateAt.END);
+        checkBox.setGravity(Gravity.CENTER_VERTICAL);
+        checkBox.setMinHeight(dp(context, 30));
+        checkBox.setPadding(0, 0, dp(context, 4), 0);
+        int accent = resolveAccentColor(component);
+        checkBox.setButtonTintList(new ColorStateList(
+                new int[][] {
+                        new int[] { android.R.attr.state_checked },
+                        new int[] {}
+                },
+                new int[] { accent, 0xFF7B8794 }));
+        checkBox.setChecked(parseBooleanValue(initialValue));
+        final String key = component.fieldKey;
+        bindings.add(new FieldBinding() {
+            @Override
+            public String getKey() {
+                return key;
+            }
+
+            @Override
+            public String getValue() {
+                return String.valueOf(checkBox.isChecked());
+            }
+        });
+        return checkBox;
+    }
+
+    private static View buildRuntimeFieldBlock(Context context,
+                                               ConfigUiComponent component,
+                                               Map<String, String> initialValues,
+                                               List<FieldBinding> bindings) {
+        String initialValue = resolveInitialValue(component, initialValues);
+        LinearLayout block = new LinearLayout(context);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(0, dp(context, 5), 0, dp(context, 7));
+        LinearLayout.LayoutParams blockLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        block.setLayoutParams(blockLp);
+
+        TextView label = new TextView(context);
+        label.setText(TextUtils.isEmpty(component.label) ? component.getDisplayTypeName() : component.label);
+        label.setTextColor(0xFF374151);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
+        block.addView(label);
+
+        if (ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type) && component.options != null && !component.options.isEmpty()) {
+            block.addView(buildRuntimeMultiSelectOptions(context, component, initialValue, bindings));
+        } else if (ConfigUiComponent.TYPE_SELECT.equals(component.type) && component.options != null && !component.options.isEmpty()) {
+            block.addView(buildRuntimeSelectOptions(context, component, initialValue, bindings));
+        } else {
+            EditText input = new EditText(context);
+            input.setBackground(createRuntimeInputBackground(resolveAccentColor(component)));
+            input.setPadding(dp(context, 10), dp(context, 6), dp(context, 10), dp(context, 6));
+            input.setTextColor(0xFF1F2937);
+            input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            input.setHint(TextUtils.isEmpty(component.placeholder) ? "请输入" : component.placeholder);
+            input.setSingleLine(!ConfigUiComponent.TYPE_TEXTAREA.equals(component.type)
+                    && !ConfigUiComponent.TYPE_ARRAY.equals(component.type)
+                    && component.maxLines <= 1);
+            if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)) {
+                input.setInputType(InputType.TYPE_CLASS_NUMBER
+                        | InputType.TYPE_NUMBER_FLAG_DECIMAL
+                        | InputType.TYPE_NUMBER_FLAG_SIGNED);
+            } else if (ConfigUiComponent.TYPE_TEXTAREA.equals(component.type)
+                    || ConfigUiComponent.TYPE_ARRAY.equals(component.type)
+                    || component.maxLines > 1) {
+                input.setGravity(Gravity.TOP | Gravity.START);
+                input.setMinLines(Math.max(2, Math.min(component.maxLines, 5)));
+                input.setHorizontallyScrolling(false);
+                input.setInputType(InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+                input.setText(ConfigUiComponent.TYPE_ARRAY.equals(component.type)
+                        ? formatArrayEditorText(initialValue)
+                        : (initialValue == null ? "" : initialValue));
+            } else {
+                input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+            }
+            if (!ConfigUiComponent.TYPE_ARRAY.equals(component.type) || component.maxLines <= 1) {
+                input.setText(initialValue == null ? "" : initialValue);
+            }
+            LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            inputLp.topMargin = dp(context, 4);
+            block.addView(input, inputLp);
+            installScrollableChildTouchBridge(input);
+            final String key = component.fieldKey;
+            bindings.add(new FieldBinding() {
+                @Override
+                public String getKey() {
+                    return key;
+                }
+
+                @Override
+                public String getValue() {
+                    if (ConfigUiComponent.TYPE_ARRAY.equals(component.type)) {
+                        return encodeArrayEditorValue(input.getText());
+                    }
+                    if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)) {
+                        return normalizeNumericValue(
+                                input.getText() == null ? "" : input.getText().toString(),
+                                parseOptionalDouble(component.numberMin),
+                                parseOptionalDouble(component.numberMax));
+                    }
+                    return input.getText() == null ? "" : input.getText().toString().trim();
+                }
+            });
+        }
+
+        if (!TextUtils.isEmpty(component.helperText)) {
+            TextView helper = buildHelperView(context, component.helperText);
+            helper.setPadding(0, dp(context, 4), 0, 0);
+            block.addView(helper);
+        }
+        return block;
+    }
+
+    private static View buildRuntimeSelectOptions(Context context,
+                                                  ConfigUiComponent component,
+                                                  String initialValue,
+                                                  List<FieldBinding> bindings) {
+        AutoCompleteTextView input = new AutoCompleteTextView(context);
+        input.setBackground(createRuntimeInputBackground(resolveAccentColor(component)));
+        input.setPadding(dp(context, 10), dp(context, 6), dp(context, 10), dp(context, 6));
+        input.setTextColor(0xFF1F2937);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_NULL);
+        input.setThreshold(0);
+        input.setHint(TextUtils.isEmpty(component.placeholder) ? "请选择" : component.placeholder);
+
+        List<String> optionLabels = new ArrayList<>();
+        List<String> optionValues = new ArrayList<>();
+        for (ConfigUiOption option : component.options) {
+            if (option == null) {
+                continue;
+            }
+            String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+            String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+            if (TextUtils.isEmpty(optionLabel) && TextUtils.isEmpty(optionValue)) {
+                continue;
+            }
+            optionLabels.add(optionLabel);
+            optionValues.add(optionValue);
+        }
+        input.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_list_item_1, optionLabels));
+        final String[] selectedValue = { resolveInitialSelectValue(component, initialValue) };
+        input.setText(resolveSelectDisplayLabel(component, selectedValue[0]), false);
+        input.setOnClickListener(v -> input.showDropDown());
+        input.setOnItemClickListener((parent, view, position, id) -> {
+            if (position >= 0 && position < optionValues.size()) {
+                selectedValue[0] = optionValues.get(position);
+            }
+        });
+        final String key = component.fieldKey;
+        bindings.add(new FieldBinding() {
+            @Override
+            public String getKey() {
+                return key;
+            }
+
+            @Override
+            public String getValue() {
+                String currentText = input.getText() == null ? "" : input.getText().toString();
+                String resolved = resolveSelectValueFromDisplay(component, currentText);
+                if (!TextUtils.isEmpty(resolved)) {
+                    selectedValue[0] = resolved;
+                }
+                return selectedValue[0] == null ? "" : selectedValue[0];
+            }
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(context, 4);
+        input.setLayoutParams(lp);
+        return input;
+    }
+
+    private static String resolveSelectDisplayLabel(ConfigUiComponent component, String selectedValue) {
+        if (component == null || component.options == null || TextUtils.isEmpty(selectedValue)) {
+            return "";
+        }
+        for (ConfigUiOption option : component.options) {
+            if (option == null) {
+                continue;
+            }
+            String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+            String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+            if (TextUtils.equals(selectedValue, optionValue) || TextUtils.equals(selectedValue, optionLabel)) {
+                return optionLabel;
+            }
+        }
+        return selectedValue;
+    }
+
+    private static String resolveSelectValueFromDisplay(ConfigUiComponent component, String displayText) {
+        if (component == null || component.options == null || TextUtils.isEmpty(displayText)) {
+            return "";
+        }
+        for (ConfigUiOption option : component.options) {
+            if (option == null) {
+                continue;
+            }
+            String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+            String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+            if (TextUtils.equals(displayText, optionLabel) || TextUtils.equals(displayText, optionValue)) {
+                return optionValue;
+            }
+        }
+        return "";
+    }
+
+    private static View buildRuntimeMultiSelectOptions(Context context,
+                                                       ConfigUiComponent component,
+                                                       String initialValue,
+                                                       List<FieldBinding> bindings) {
+        CompactWrapLayout wrap = new CompactWrapLayout(context);
+        wrap.setItemSpacing(dp(context, 8), dp(context, 6));
+        wrap.setPadding(0, dp(context, 6), 0, 0);
+        final LinkedHashSet<String> selectedValues = parseJsonArrayValueSet(initialValue);
+        for (ConfigUiOption option : component.options) {
+            if (option == null) {
+                continue;
+            }
+            String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+            String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+            if (TextUtils.isEmpty(optionValue)) {
+                continue;
+            }
+            CheckBox checkBox = new CheckBox(context);
+            checkBox.setText(optionLabel);
+            checkBox.setTextColor(0xFF26323F);
+            checkBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            checkBox.setSingleLine(true);
+            checkBox.setEllipsize(TextUtils.TruncateAt.END);
+            checkBox.setGravity(Gravity.CENTER_VERTICAL);
+            checkBox.setMinHeight(dp(context, 30));
+            checkBox.setPadding(0, 0, dp(context, 4), 0);
+            int accent = resolveAccentColor(component);
+            checkBox.setButtonTintList(new ColorStateList(
+                    new int[][] {
+                            new int[] { android.R.attr.state_checked },
+                            new int[] {}
+                    },
+                    new int[] { accent, 0xFF7B8794 }));
+            checkBox.setChecked(selectedValues.contains(optionValue));
+            checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked) {
+                    selectedValues.add(optionValue);
+                } else {
+                    selectedValues.remove(optionValue);
+                }
+            });
+            wrap.addView(checkBox);
+        }
+        final String key = component.fieldKey;
+        bindings.add(new FieldBinding() {
+            @Override
+            public String getKey() {
+                return key;
+            }
+
+            @Override
+            public String getValue() {
+                return encodeJsonArrayValueSet(selectedValues);
+            }
+        });
+        return wrap;
+    }
+
+    private static TextView buildRuntimeChoiceView(Context context, String text) {
+        TextView view = new TextView(context);
+        view.setText(text);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        view.setSingleLine(true);
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        view.setGravity(Gravity.CENTER_VERTICAL);
+        view.setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 4));
+        view.setMinHeight(dp(context, 30));
+        view.setMinWidth(dp(context, 54));
+        return view;
+    }
+
+    private static void updateRuntimeChoiceStyles(List<TextView> views,
+                                                  List<String> values,
+                                                  String selectedValue,
+                                                  int accentColor) {
+        for (int i = 0; i < views.size(); i++) {
+            TextView view = views.get(i);
+            boolean selected = i < values.size() && TextUtils.equals(values.get(i), selectedValue);
+            view.setTextColor(selected ? 0xFFFFFFFF : 0xFF26323F);
+            view.setTypeface(view.getTypeface(), selected
+                    ? android.graphics.Typeface.BOLD
+                    : android.graphics.Typeface.NORMAL);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(view.getContext(), 4));
+            bg.setColor(selected ? accentColor : 0xFFFFFFFF);
+            bg.setStroke(dp(view.getContext(), 1), selected ? darkenColor(accentColor, 0.18f) : 0xFFB8C0CC);
+            view.setBackground(bg);
+        }
+    }
+
+    private static String resolveInitialValue(ConfigUiComponent component, Map<String, String> initialValues) {
+        String initialValue = initialValues == null ? null : initialValues.get(component.fieldKey);
+        if (TextUtils.isEmpty(initialValue)) {
+            initialValue = component.defaultValue;
+        }
+        return initialValue == null ? "" : initialValue;
+    }
+
+    private static boolean parseBooleanValue(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return false;
+        }
+        String text = raw.trim();
+        return "true".equalsIgnoreCase(text)
+                || "1".equals(text)
+                || "yes".equalsIgnoreCase(text)
+                || "on".equalsIgnoreCase(text);
+    }
+
+    private static LinkedHashSet<String> parseJsonArrayValueSet(String raw) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        if (TextUtils.isEmpty(raw)) {
+            return values;
+        }
+        try {
+            JSONArray array = new JSONArray(raw.trim());
+            for (int i = 0; i < array.length(); i++) {
+                Object item = array.opt(i);
+                if (item == null || JSONObject.NULL.equals(item)) {
+                    continue;
+                }
+                String value = String.valueOf(item).trim();
+                if (!TextUtils.isEmpty(value)) {
+                    values.add(value);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return values;
+    }
+
+    private static String encodeJsonArrayValueSet(Set<String> values) {
+        StringBuilder builder = new StringBuilder("[");
+        if (values != null) {
+            boolean first = true;
+            for (String rawValue : values) {
+                String value = rawValue == null ? "" : rawValue.trim();
+                if (TextUtils.isEmpty(value)) {
+                    continue;
+                }
+                if (!first) {
+                    builder.append(",");
+                }
+                first = false;
+                builder.append(jsonLiteralForValue(value));
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+    private static String jsonLiteralForValue(String value) {
+        if (TextUtils.isEmpty(value)) {
+            return "\"\"";
+        }
+        String trimmed = value.trim();
+        if ("true".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed)) {
+            return trimmed.toLowerCase(java.util.Locale.ROOT);
+        }
+        try {
+            Double.parseDouble(trimmed);
+            return trimmed;
+        } catch (Exception ignored) {
+            return JSONObject.quote(trimmed);
+        }
     }
 
     private static View buildPageView(Context context,
@@ -435,6 +905,59 @@ public final class ConfigUiFormRenderer {
                 @Override
                 public String getValue() {
                     return encodeArrayEditorValue(arrayInput.getText());
+                }
+            });
+        } else if (ConfigUiComponent.TYPE_MULTI_SELECT.equals(component.type)) {
+            wrapper.addView(buildSubtleCaption(context, "可选择任意多个，保存为数组。", contentScale));
+            CompactWrapLayout wrap = new CompactWrapLayout(context);
+            wrap.setItemSpacing(scaleDp(context, 8, contentScale), scaleDp(context, 6, contentScale));
+            wrap.setPadding(0, scaleDp(context, 6, contentScale), 0, 0);
+            final LinkedHashSet<String> selectedValues = parseJsonArrayValueSet(initialValue);
+            if (component.options != null) {
+                for (ConfigUiOption option : component.options) {
+                    if (option == null) {
+                        continue;
+                    }
+                    String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+                    String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+                    if (TextUtils.isEmpty(optionValue)) {
+                        continue;
+                    }
+                    CheckBox checkBox = new CheckBox(context);
+                    checkBox.setText(optionLabel);
+                    checkBox.setTextColor(0xFF26323F);
+                    checkBox.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * contentScale);
+                    checkBox.setSingleLine(true);
+                    checkBox.setEllipsize(TextUtils.TruncateAt.END);
+                    checkBox.setGravity(Gravity.CENTER_VERTICAL);
+                    checkBox.setButtonTintList(new ColorStateList(
+                            new int[][] {
+                                    new int[] { android.R.attr.state_checked },
+                                    new int[] {}
+                            },
+                            new int[] { accentColor, 0xFF7B8794 }));
+                    checkBox.setChecked(selectedValues.contains(optionValue));
+                    checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                        if (isChecked) {
+                            selectedValues.add(optionValue);
+                        } else {
+                            selectedValues.remove(optionValue);
+                        }
+                    });
+                    wrap.addView(checkBox);
+                }
+            }
+            wrapper.addView(wrap);
+            final String key = component.fieldKey;
+            bindings.add(new FieldBinding() {
+                @Override
+                public String getKey() {
+                    return key;
+                }
+
+                @Override
+                public String getValue() {
+                    return encodeJsonArrayValueSet(selectedValues);
                 }
             });
         } else if (ConfigUiComponent.TYPE_SELECT.equals(component.type)) {
@@ -858,6 +1381,14 @@ public final class ConfigUiFormRenderer {
         bg.setCornerRadius(16f);
         bg.setColor(0xFFFFFFFF);
         bg.setStroke(1, mixColorWithWhite(accentColor, 0.70f));
+        return bg;
+    }
+
+    private static GradientDrawable createRuntimeInputBackground(int accentColor) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(8f);
+        bg.setColor(0xFFFFFFFF);
+        bg.setStroke(1, mixColorWithWhite(accentColor, 0.62f));
         return bg;
     }
 
@@ -1298,6 +1829,87 @@ public final class ConfigUiFormRenderer {
             return 1.0f;
         }
         return Math.max(0.4f, Math.min(2.0f, component.scalePercent / 100f));
+    }
+
+    private static final class CompactWrapLayout extends ViewGroup {
+        private int horizontalSpacing;
+        private int verticalSpacing;
+
+        CompactWrapLayout(Context context) {
+            super(context);
+            horizontalSpacing = dp(context, 8);
+            verticalSpacing = dp(context, 6);
+        }
+
+        void setItemSpacing(int horizontalSpacing, int verticalSpacing) {
+            this.horizontalSpacing = Math.max(0, horizontalSpacing);
+            this.verticalSpacing = Math.max(0, verticalSpacing);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+            int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+            int maxWidth = widthMode == MeasureSpec.UNSPECIFIED
+                    ? Integer.MAX_VALUE
+                    : Math.max(0, widthSize - getPaddingLeft() - getPaddingRight());
+            int lineWidth = 0;
+            int lineHeight = 0;
+            int usedHeight = getPaddingTop();
+            int maxLineWidth = 0;
+            int childCount = getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                View child = getChildAt(i);
+                if (child.getVisibility() == GONE) {
+                    continue;
+                }
+                measureChild(child, widthMeasureSpec, heightMeasureSpec);
+                int childWidth = child.getMeasuredWidth();
+                int childHeight = child.getMeasuredHeight();
+                boolean wrap = lineWidth > 0 && lineWidth + horizontalSpacing + childWidth > maxWidth;
+                if (wrap) {
+                    usedHeight += lineHeight + verticalSpacing;
+                    maxLineWidth = Math.max(maxLineWidth, lineWidth);
+                    lineWidth = childWidth;
+                    lineHeight = childHeight;
+                } else {
+                    lineWidth += lineWidth == 0 ? childWidth : horizontalSpacing + childWidth;
+                    lineHeight = Math.max(lineHeight, childHeight);
+                }
+            }
+            usedHeight += lineHeight + getPaddingBottom();
+            maxLineWidth = Math.max(maxLineWidth, lineWidth);
+            int desiredWidth = maxLineWidth + getPaddingLeft() + getPaddingRight();
+            int measuredWidth = widthMode == MeasureSpec.EXACTLY ? widthSize : desiredWidth;
+            setMeasuredDimension(
+                    resolveSize(measuredWidth, widthMeasureSpec),
+                    resolveSize(usedHeight, heightMeasureSpec));
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            int maxWidth = Math.max(0, r - l - getPaddingLeft() - getPaddingRight());
+            int x = getPaddingLeft();
+            int y = getPaddingTop();
+            int lineHeight = 0;
+            int childCount = getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                View child = getChildAt(i);
+                if (child.getVisibility() == GONE) {
+                    continue;
+                }
+                int childWidth = child.getMeasuredWidth();
+                int childHeight = child.getMeasuredHeight();
+                if (x > getPaddingLeft() && x - getPaddingLeft() + horizontalSpacing + childWidth > maxWidth) {
+                    x = getPaddingLeft();
+                    y += lineHeight + verticalSpacing;
+                    lineHeight = 0;
+                }
+                child.layout(x, y, x + childWidth, y + childHeight);
+                x += childWidth + horizontalSpacing;
+                lineHeight = Math.max(lineHeight, childHeight);
+            }
+        }
     }
 
 }

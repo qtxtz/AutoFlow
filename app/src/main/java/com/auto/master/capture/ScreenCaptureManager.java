@@ -22,6 +22,7 @@ import android.view.WindowManager;
 
 import com.auto.master.Template.Template;
 import com.auto.master.auto.AutoAccessibilityService;
+import com.auto.master.utils.SystemRuntimeConfig;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -118,7 +119,7 @@ public class ScreenCaptureManager {
     // 若阈值小于常见操作（点击/手势/短延时）的耗时，会导致下次匹配一开始就在等 VD 重建，
     // 消耗大量超时时间，出现"一直拿到 null"的假性卡死。
     // 3000ms：手势/短延时通常 <2s，留足余量避免频繁暂停/恢复。
-    private static final long IDLE_PAUSE_THRESHOLD_MS = 5000L;
+    public static volatile long IDLE_PAUSE_THRESHOLD_MS = 5000L;
     private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private static final long RESUME_GRACE_WINDOW_MS = 800L;
     private volatile boolean displayPaused = false;
@@ -190,9 +191,7 @@ public class ScreenCaptureManager {
         projectionManager = (MediaProjectionManager) activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         displayManager = (DisplayManager) activity.getSystemService(Context.DISPLAY_SERVICE);
 
-        // 从持久化存储恢复上次保存的倍率
-//        CAPTURE_SCALE = CaptureScaleHelper.loadScale(appContext);
-        CAPTURE_SCALE = 0.4f;
+        SystemRuntimeConfig.load(appContext).applyToRuntime();
         updateScreenMetrics(activity);
         lastRotation = getCurrentPhysicalRotation(activity);
 

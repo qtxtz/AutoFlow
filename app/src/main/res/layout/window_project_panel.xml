@@ -89,6 +89,16 @@
                 android:tint="#4B5A6C" />
 
             <ImageView
+                android:id="@+id/btn_system_params"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@android:drawable/ic_menu_manage"
+                android:tint="#4B5A6C" />
+
+            <ImageView
                 android:id="@+id/btn_close"
                 android:layout_width="26dp"
                 android:layout_height="26dp"

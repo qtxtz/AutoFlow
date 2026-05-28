@@ -3,6 +3,7 @@ package com.auto.master;
 import android.app.Application;
 
 import com.auto.master.utils.CrashLogger;
+import com.auto.master.utils.SystemRuntimeConfig;
 
 public class AtommApplication extends Application {
 
@@ -13,5 +14,6 @@ public class AtommApplication extends Application {
         super.onCreate();
         instance = this;
         CrashLogger.install(this);
+        SystemRuntimeConfig.load(this).applyToRuntime();
     }
 }
