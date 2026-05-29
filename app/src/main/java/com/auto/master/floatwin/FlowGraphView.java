@@ -30,7 +30,7 @@ import java.util.Map;
  * Interactive flow graph canvas.
  *
  * Features:
- *  - Material-style node cards with type color bar
+ *  - Material-style circular nodes with type color ring
  *  - Pan (drag canvas) / Pinch-to-zoom
  *  - Long-press node body → drag to reposition node
  *  - Drag from port dot → connect to another node (set next/fallback)
@@ -73,7 +73,7 @@ public class FlowGraphView extends View {
     // ──────────────── Constants (dp values, converted in init) ────────────────
 
     private float NODE_W, NODE_H, NODE_GAP;
-    private float BAR_W;          // left type-color bar
+    private float BAR_W;          // type-color ring width
     private float CORNER_R;
     private float PORT_R;         // drawn radius of port dot
     private float PORT_HIT;       // touch hit radius for port
@@ -215,11 +215,11 @@ public class FlowGraphView extends View {
         float d = density;
         float s = getResources().getDisplayMetrics().scaledDensity;
 
-        NODE_W   = 248 * d;
-        NODE_H   = 72  * d;
-        NODE_GAP = 36  * d;
-        BAR_W    = 5   * d;
-        CORNER_R = 12  * d;
+        NODE_W   = 112 * d;
+        NODE_H   = 112 * d;
+        NODE_GAP = 42  * d;
+        BAR_W    = 4   * d;
+        CORNER_R = NODE_W / 2f;
         PORT_R   = 7   * d;
         PORT_HIT = 22  * d;
         ARROW_W  = 8   * d;
@@ -245,12 +245,14 @@ public class FlowGraphView extends View {
         pRunStroke.setStrokeWidth(2.5f * d);
 
         pTitle.setColor(0xFF1A2537);
-        pTitle.setTextSize(13 * s);
+        pTitle.setTextSize(12 * s);
         pTitle.setFakeBoldText(true);
+        pTitle.setTextAlign(Paint.Align.CENTER);
         titleTextPaint.set(pTitle);
 
         pSub.setColor(0xFF7A8798);
-        pSub.setTextSize(10 * s);
+        pSub.setTextSize(9 * s);
+        pSub.setTextAlign(Paint.Align.CENTER);
         subTextPaint.set(pSub);
 
         pIdxBg.setColor(0xFF3C6DE4);
@@ -482,7 +484,10 @@ public class FlowGraphView extends View {
     private String findNodeNear(float wx, float wy) {
         for (Node n : nodes) {
             RectF r = nodeRects.get(n.id);
-            if (r != null && r.contains(wx, wy)) return n.id;
+            if (r != null) {
+                float radius = Math.min(r.width(), r.height()) * 0.5f;
+                if (dist(wx - r.centerX(), wy - r.centerY()) <= radius) return n.id;
+            }
         }
         return null;
     }
@@ -1047,48 +1052,44 @@ public class FlowGraphView extends View {
         if (isDragging) canvas.save();
         if (isDragging) canvas.scale(1.04f, 1.04f, r.centerX(), r.centerY());
 
-        // Shadow + card background
-        canvas.drawRoundRect(r, CORNER_R, CORNER_R, pNodeBg);
-
-        // Running state overlay
-        if (isHighlighted) {
-            canvas.drawRoundRect(r, CORNER_R, CORNER_R, pRunFill);
-            canvas.drawRoundRect(r, CORNER_R, CORNER_R, pRunStroke);
-        } else if (isSelected) {
-            canvas.drawRoundRect(r, CORNER_R, CORNER_R, pSelStroke);
-        } else {
-            canvas.drawRoundRect(r, CORNER_R, CORNER_R, pStroke);
-        }
-
-        // Left color bar (clip to left rounded region)
         int typeColor = typeColor(n.type);
         pBar.setColor(typeColor);
-        tempRect.set(r.left, r.top, r.left + BAR_W, r.bottom);
-        canvas.save();
-        canvas.clipRect(tempRect);
-        canvas.drawRoundRect(r, CORNER_R, CORNER_R, pBar);
-        canvas.restore();
 
-        float textLeft = r.left + BAR_W + dp(42);
-        float textMaxW = r.width() - BAR_W - dp(42) - dp(8);
+        float cx = r.centerX();
+        float cy = r.centerY();
+        float radius = Math.min(r.width(), r.height()) * 0.5f;
+        float innerRadius = Math.max(0f, radius - BAR_W);
 
-        // Index badge (circle)
-        float badgeR   = dp(14);
-        float badgeCX  = r.left + BAR_W + dp(8) + badgeR;
-        float badgeCY  = r.top  + NODE_H / 2f;
+        // Type ring + node body
+        canvas.drawCircle(cx, cy, radius, pBar);
+        canvas.drawCircle(cx, cy, innerRadius, pNodeBg);
+
+        if (isHighlighted) {
+            canvas.drawCircle(cx, cy, innerRadius, pRunFill);
+            canvas.drawCircle(cx, cy, innerRadius, pRunStroke);
+        } else if (isSelected) {
+            canvas.drawCircle(cx, cy, innerRadius, pSelStroke);
+        } else {
+            canvas.drawCircle(cx, cy, innerRadius, pStroke);
+        }
+
+        float textMaxW = innerRadius * 1.52f;
+
+        float badgeR  = dp(13);
+        float badgeCY = r.top + dp(24);
         pIdxBg.setColor(typeColor);
-        canvas.drawCircle(badgeCX, badgeCY, badgeR, pIdxBg);
-        canvas.drawText(formatOrder(n.order), badgeCX, badgeCY + dp(4), pIdxTxt);
+        canvas.drawCircle(cx, badgeCY, badgeR, pIdxBg);
+        canvas.drawText(formatOrder(n.order), cx, badgeCY + dp(4), pIdxTxt);
 
         // Operation name
-        float titleY = r.top + NODE_H * 0.40f;
+        float titleY = cy + dp(6);
         canvas.drawText(ellipsize(safe(n.name), textMaxW, pTitle),
-                textLeft, titleY, pTitle);
+                cx, titleY, pTitle);
 
         // Type + ID subtext
         String sub = safe(n.type) + "  " + shortId(n.id);
         canvas.drawText(ellipsize(sub, textMaxW, pSub),
-                textLeft, r.top + NODE_H * 0.72f, pSub);
+                cx, cy + dp(26), pSub);
 
         if (isDragging) canvas.restore();
     }
