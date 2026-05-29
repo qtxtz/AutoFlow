@@ -95,6 +95,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         String taskName = getStringSafe(inputMap, MetaOperation.TASK, "");
         double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
         boolean useGray = parseBoolean(inputMap.get(MetaOperation.MATCHUSEGRAY), false);
+        boolean useMask = parseBoolean(inputMap.get(MetaOperation.MATCHUSEMASK), true);
         long preDelayMs = inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
                 ? 0L
                 : parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
@@ -104,7 +105,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             return createTimeoutResponse(ctx, obj);
         }
 
-        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName, useGray);
+        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName, useGray, useMask);
         if (taskList.isEmpty()) {
             return createTimeoutResponse(ctx, obj);
         }
@@ -261,7 +262,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
     private List<MatchTask> buildTaskList(CompiledMatchPlan plan,
                                           String projectName,
                                           String taskName,
-                                          boolean useGray) {
+                                          boolean useGray,
+                                          boolean useMask) {
         List<MatchTask> tasks = new ArrayList<>();
         Map<String, Mat> loadedTemplates = new HashMap<>();
         Map<String, Mat> loadedMasks = new HashMap<>();
@@ -278,10 +280,14 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                     }
                     loadedTemplates.put(rule.templateName, templateMat);
                 }
-                Mat templateMask = loadedMasks.get(rule.templateName);
-                if (!loadedMasks.containsKey(rule.templateName)) {
-                    templateMask = getOrLoadTemplateMaskMat(projectName, taskName, rule.templateName, templateMat);
-                    loadedMasks.put(rule.templateName, templateMask);
+                Mat templateMask = null;
+                if (useMask) {
+                    if (!loadedMasks.containsKey(rule.templateName)) {
+                        templateMask = getOrLoadTemplateMaskMat(projectName, taskName, rule.templateName, templateMat);
+                        loadedMasks.put(rule.templateName, templateMask);
+                    } else {
+                        templateMask = loadedMasks.get(rule.templateName);
+                    }
                 }
                 tasks.add(new MatchTask(
                         priority++,
