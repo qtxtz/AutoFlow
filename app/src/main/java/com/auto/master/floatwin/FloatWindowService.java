@@ -1116,6 +1116,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     
     // ── 临时悬浮层追踪 ─────────────────────────────────────────────────────
     private View activeBboxOverlayView;
+    private WindowManager activeBboxOverlayWm;
     private final Handler bboxDismissHandler = new Handler(Looper.getMainLooper());
 
     // ── 拆分出的管理器 ──────────────────────────────────────────────────────
@@ -1337,8 +1338,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         bboxDismissHandler.removeCallbacksAndMessages(null);
         if (activeBboxOverlayView != null) {
-            safeRemoveView(activeBboxOverlayView);
+            safeRemoveView(activeBboxOverlayWm, activeBboxOverlayView);
             activeBboxOverlayView = null;
+            activeBboxOverlayWm = null;
         }
         // appLaunchPollThread / appLaunchPollHandler 已由 AppLaunchTriggerManager.destroy() 清理
         if (taskActionPopupWindow != null) {
@@ -4410,8 +4412,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 先移除上一个还未消失的 overlay，避免叠加
         bboxDismissHandler.removeCallbacksAndMessages(null);
         if (activeBboxOverlayView != null) {
-            safeRemoveView(activeBboxOverlayView);
+            safeRemoveView(activeBboxOverlayWm, activeBboxOverlayView);
             activeBboxOverlayView = null;
+            activeBboxOverlayWm = null;
         }
 
         final android.graphics.Paint dimPaint = new android.graphics.Paint();
@@ -4456,9 +4459,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         };
 
-        int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
+        // 优先使用 AccessibilityService 的 WindowManager，TYPE_ACCESSIBILITY_OVERLAY
+        // 能覆盖导航栏区域（横屏时右侧导航栏也能覆盖），TYPE_APPLICATION_OVERLAY 则不行。
+        AutoAccessibilityService accSvc = AutoAccessibilityService.get();
+        WindowManager overlayWm;
+        int overlayType;
+        if (accSvc != null) {
+            WindowManager accWm = (WindowManager) accSvc.getSystemService(Context.WINDOW_SERVICE);
+            overlayWm = accWm != null ? accWm : wm;
+            overlayType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+        } else {
+            overlayWm = wm;
+            overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -4474,12 +4490,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
 
-        wm.addView(overlayView, lp);
+        overlayWm.addView(overlayView, lp);
         activeBboxOverlayView = overlayView;
+        activeBboxOverlayWm = overlayWm;
 
         Runnable dismiss = () -> {
-            safeRemoveView(activeBboxOverlayView);
+            safeRemoveView(activeBboxOverlayWm, activeBboxOverlayView);
             activeBboxOverlayView = null;
+            activeBboxOverlayWm = null;
         };
         overlayView.setOnClickListener(v -> {
             bboxDismissHandler.removeCallbacks(dismiss);
