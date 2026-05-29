@@ -4100,6 +4100,279 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== Close App Operation ====================
+
+    public void showAddCloseAppDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_close_app, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 500, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtAppPackage = dialogView.findViewById(R.id.edt_app_package);
+        TextView tvAppSummary = dialogView.findViewById(R.id.tv_app_summary);
+        EditText edtCloseDelay = dialogView.findViewById(R.id.edt_close_delay);
+        CheckBox cbReturnHome = dialogView.findViewById(R.id.cb_return_home);
+        CheckBox cbKillBackground = dialogView.findViewById(R.id.cb_kill_background);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+
+        if (launchAppHelper != null) {
+            launchAppHelper.refreshAppOptions(edtAppPackage);
+        }
+        updateCloseAppSummary(tvAppSummary, "");
+        edtCloseDelay.setText("800");
+        cbReturnHome.setChecked(true);
+        cbKillBackground.setChecked(true);
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_app).setOnClickListener(v -> {
+            if (launchAppHelper != null) {
+                String cur = edtAppPackage.getText() == null ? "" : edtAppPackage.getText().toString();
+                launchAppHelper.showAppPicker("选择要关闭的应用", cur, edtAppPackage, null, null);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        edtAppPackage.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (launchAppHelper != null) {
+                    updateCloseAppSummary(tvAppSummary, s == null ? "" : s.toString());
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String raw = edtAppPackage.getText() == null ? "" : edtAppPackage.getText().toString();
+            String packageName = launchAppHelper != null ? launchAppHelper.normalizePackageName(raw) : raw.trim();
+            String name = edtName.getText().toString().trim();
+            String delayStr = edtCloseDelay.getText().toString().trim();
+            String nextOp = safeText(edtNextOperation);
+
+            if (TextUtils.isEmpty(packageName)) {
+                edtAppPackage.setError("请选择或输入应用包名");
+                return;
+            }
+
+            long closeDelayMs;
+            try {
+                closeDelayMs = Long.parseLong(delayStr);
+            } catch (Exception e) {
+                edtCloseDelay.setError("请输入有效的毫秒数");
+                return;
+            }
+            if (closeDelayMs < 0L) {
+                edtCloseDelay.setError("等待时间不能小于 0");
+                return;
+            }
+
+            LaunchAppPickerAdapter.LaunchAppItem appItem =
+                    launchAppHelper != null ? launchAppHelper.findApp(packageName) : null;
+            if (TextUtils.isEmpty(name)) {
+                name = "关闭" + (appItem == null ? packageName : appItem.label);
+            }
+
+            try {
+                JSONObject operationObject = new JSONObject();
+                operationObject.put("id", idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis());
+                operationObject.put("name", name);
+                operationObject.put("type", 23);
+                operationObject.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.APP_PACKAGE, packageName);
+                if (appItem != null) {
+                    inputMap.put(MetaOperation.APP_LABEL, appItem.label);
+                }
+                inputMap.put(MetaOperation.APP_CLOSE_DELAY_MS, closeDelayMs);
+                inputMap.put(MetaOperation.APP_CLOSE_RETURN_HOME, cbReturnHome.isChecked());
+                inputMap.put(MetaOperation.APP_CLOSE_KILL_BACKGROUND, cbKillBackground.isChecked());
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                operationObject.put("inputMap", inputMap);
+
+                if (appendOperation(operationObject)) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) {
+                        addListener.onOperationAdded();
+                    }
+                }
+            } catch (Exception e) {
+                host.showToast("构建关闭应用节点失败: " + e.getMessage());
+            }
+        });
+    }
+
+    public void showEditCloseAppDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_close_app, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 500, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtAppPackage = dialogView.findViewById(R.id.edt_app_package);
+        TextView tvAppSummary = dialogView.findViewById(R.id.tv_app_summary);
+        EditText edtCloseDelay = dialogView.findViewById(R.id.edt_close_delay);
+        CheckBox cbReturnHome = dialogView.findViewById(R.id.cb_return_home);
+        CheckBox cbKillBackground = dialogView.findViewById(R.id.cb_kill_background);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        btnConfirm.setText("保存");
+
+        if (launchAppHelper != null) {
+            launchAppHelper.refreshAppOptions(edtAppPackage);
+        }
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        }
+
+        try {
+            edtName.setText(operationObject.optString("name", ""));
+            JSONObject inputMap = operationObject.optJSONObject("inputMap");
+            if (inputMap != null) {
+                String packageName = inputMap.optString(MetaOperation.APP_PACKAGE, "");
+                edtAppPackage.setText(packageName);
+                edtCloseDelay.setText(String.valueOf(inputMap.optLong(MetaOperation.APP_CLOSE_DELAY_MS, 800L)));
+                cbReturnHome.setChecked(inputMap.optBoolean(MetaOperation.APP_CLOSE_RETURN_HOME, true));
+                cbKillBackground.setChecked(inputMap.optBoolean(MetaOperation.APP_CLOSE_KILL_BACKGROUND, true));
+                setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                if (launchAppHelper != null) {
+                    updateCloseAppSummary(tvAppSummary, packageName);
+                }
+            }
+        } catch (Exception e) {
+            host.showToast("加载操作数据失败: " + e.getMessage());
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_app).setOnClickListener(v -> {
+            if (launchAppHelper != null) {
+                String cur = edtAppPackage.getText() == null ? "" : edtAppPackage.getText().toString();
+                launchAppHelper.showAppPicker("选择要关闭的应用", cur, edtAppPackage, null, null);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        edtAppPackage.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (launchAppHelper != null) {
+                    updateCloseAppSummary(tvAppSummary, s == null ? "" : s.toString());
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        btnConfirm.setOnClickListener(v -> {
+            String raw = edtAppPackage.getText() == null ? "" : edtAppPackage.getText().toString();
+            String packageName = launchAppHelper != null ? launchAppHelper.normalizePackageName(raw) : raw.trim();
+            String name = edtName.getText().toString().trim();
+            String delayStr = edtCloseDelay.getText().toString().trim();
+            String nextOp = safeText(edtNextOperation);
+
+            if (TextUtils.isEmpty(packageName)) {
+                edtAppPackage.setError("请选择或输入应用包名");
+                return;
+            }
+
+            long closeDelayMs;
+            try {
+                closeDelayMs = Long.parseLong(delayStr);
+            } catch (Exception e) {
+                edtCloseDelay.setError("请输入有效的毫秒数");
+                return;
+            }
+            if (closeDelayMs < 0L) {
+                edtCloseDelay.setError("等待时间不能小于 0");
+                return;
+            }
+
+            LaunchAppPickerAdapter.LaunchAppItem appItem =
+                    launchAppHelper != null ? launchAppHelper.findApp(packageName) : null;
+            if (TextUtils.isEmpty(name)) {
+                name = "关闭" + (appItem == null ? packageName : appItem.label);
+            }
+
+            try {
+                JSONObject updatedOperation = new JSONObject();
+                updatedOperation.put("id", operationId);
+                updatedOperation.put("name", name);
+                updatedOperation.put("type", 23);
+                updatedOperation.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.APP_PACKAGE, packageName);
+                if (appItem != null) {
+                    inputMap.put(MetaOperation.APP_LABEL, appItem.label);
+                }
+                inputMap.put(MetaOperation.APP_CLOSE_DELAY_MS, closeDelayMs);
+                inputMap.put(MetaOperation.APP_CLOSE_RETURN_HOME, cbReturnHome.isChecked());
+                inputMap.put(MetaOperation.APP_CLOSE_KILL_BACKGROUND, cbKillBackground.isChecked());
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                updatedOperation.put("inputMap", inputMap);
+
+                if (operationUpdater != null) {
+                    if (operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) {
+                            updateListener.onOperationUpdated();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
+    private void updateCloseAppSummary(TextView summaryView, String packageName) {
+        if (summaryView == null) {
+            return;
+        }
+        String normalized = launchAppHelper != null ? launchAppHelper.normalizePackageName(packageName) :
+                (packageName == null ? "" : packageName.trim());
+        if (TextUtils.isEmpty(normalized)) {
+            summaryView.setText("状态: 未选择应用");
+            return;
+        }
+        LaunchAppPickerAdapter.LaunchAppItem item =
+                launchAppHelper != null ? launchAppHelper.findApp(normalized) : null;
+        if (item == null) {
+            summaryView.setText("状态: 将尝试关闭 " + normalized);
+            return;
+        }
+        summaryView.setText("状态: " + item.label + " (" + item.packageName + ")");
+    }
+
     // ==================== Switch Branch Operation ====================
 
     public void showAddSwitchBranchDialog() {

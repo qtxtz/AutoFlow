@@ -77,6 +77,8 @@
     <color name="op_var_template_bg">#ECEFF1</color>
     <color name="op_app_launch">#E53935</color>
     <color name="op_app_launch_bg">#FFEBEE</color>
+    <color name="op_app_close">#C62828</color>
+    <color name="op_app_close_bg">#FFEBEE</color>
     <color name="op_back_key">#5E35B1</color>
     <color name="op_back_key_bg">#EDE7F6</color>
     <color name="op_http_request">#00838F</color>

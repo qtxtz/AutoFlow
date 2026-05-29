@@ -6,6 +6,7 @@ import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpTaskResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpToNextOperationResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResponseHandler;
+import com.auto.master.Task.Operation.AppCloseOperation;
 import com.auto.master.Task.Operation.AppLaunchOperation;
 import com.auto.master.Task.Operation.BackKeyOperation;
 import com.auto.master.Task.Operation.ClickOperation;
@@ -66,6 +67,7 @@ public class OperationHandlerManager {
         register(OperationType.HTTP_REQUEST, HttpRequestOperation.class, HttpRequestOperation::new, HttpRequestOperationHandler::new, "http", "http_request");
         register(OperationType.DYNAMIC_DELAY, DynamicDelayOperation.class, DynamicDelayOperation::new, DynamicDelayOperationHandler::new, "dynamic_delay", "dynamicdelay");
         register(OperationType.SET_CAPTURE_SCALE, SetCaptureScaleOperation.class, SetCaptureScaleOperation::new, SetCaptureScaleOperationHandler::new, "set_scale", "set_capture_scale", "capture_scale");
+        register(OperationType.APP_CLOSE, AppCloseOperation.class, AppCloseOperation::new, AppCloseOperationHandler::new, "close_app", "app_close", "kill_app");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -90,6 +92,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.HTTP_REQUEST.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.DYNAMIC_DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_CAPTURE_SCALE.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.APP_CLOSE.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

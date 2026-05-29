@@ -1811,6 +1811,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditLaunchAppDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 23) {
+                dialogFactory.showEditCloseAppDialog(selected.id, operationObject);
+                return;
+            }
             if (type == 15) {
                 dialogFactory.showEditSwitchBranchDialog(selected.id, operationObject);
                 return;
@@ -2674,7 +2678,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 "系统节点",
                 null,
                 Arrays.asList(
-                        new AddOperationMenuAdapter.MenuItem("launch_app", "启动应用", "拉起指定应用并等待前台", "启", R.color.op_app_launch, true)
+                        new AddOperationMenuAdapter.MenuItem("launch_app", "启动应用", "拉起指定应用并等待前台", "启", R.color.op_app_launch, true),
+                        new AddOperationMenuAdapter.MenuItem("close_app", "关闭应用", "退回桌面并请求结束后台进程", "关", R.color.op_app_close, true)
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
@@ -2749,6 +2754,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "launch_app":
                 dialogFactory.showAddLaunchAppDialog();
+                return;
+            case "close_app":
+                dialogFactory.showAddCloseAppDialog();
                 return;
             case "http_request":
                 dialogFactory.showAddHttpRequestDialog();

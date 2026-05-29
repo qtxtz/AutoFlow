@@ -214,6 +214,9 @@ public class OperationGsonHelper {
                 case 14:
                     buildAppLaunchInputMap(jsonObject, inputMap);
                     break;
+                case 23:
+                    buildAppCloseInputMap(jsonObject, inputMap);
+                    break;
             }
 
             // 通用的 nextOperationId
@@ -272,6 +275,26 @@ public class OperationGsonHelper {
             }
             if (jsonObject.has("launchDelayMs")) {
                 inputMap.put(MetaOperation.APP_LAUNCH_DELAY_MS, jsonObject.get("launchDelayMs").getAsLong());
+            }
+        }
+
+        private void buildAppCloseInputMap(JsonObject jsonObject, Map<String, Object> inputMap) {
+            if (jsonObject.has("packageName")) {
+                inputMap.put(MetaOperation.APP_PACKAGE, jsonObject.get("packageName").getAsString());
+            } else if (jsonObject.has("appPackage")) {
+                inputMap.put(MetaOperation.APP_PACKAGE, jsonObject.get("appPackage").getAsString());
+            }
+            if (jsonObject.has("appLabel")) {
+                inputMap.put(MetaOperation.APP_LABEL, jsonObject.get("appLabel").getAsString());
+            }
+            if (jsonObject.has("closeDelayMs")) {
+                inputMap.put(MetaOperation.APP_CLOSE_DELAY_MS, jsonObject.get("closeDelayMs").getAsLong());
+            }
+            if (jsonObject.has("returnHome")) {
+                inputMap.put(MetaOperation.APP_CLOSE_RETURN_HOME, jsonObject.get("returnHome").getAsBoolean());
+            }
+            if (jsonObject.has("killBackground")) {
+                inputMap.put(MetaOperation.APP_CLOSE_KILL_BACKGROUND, jsonObject.get("killBackground").getAsBoolean());
             }
         }
 

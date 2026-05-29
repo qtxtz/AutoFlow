@@ -125,6 +125,9 @@ public abstract class MetaOperation {
     public static String APP_LABEL = "APP_LABEL";
     public static String APP_SKIP_IF_FOREGROUND = "APP_SKIP_IF_FOREGROUND";
     public static String APP_LAUNCH_DELAY_MS = "APP_LAUNCH_DELAY_MS";
+    public static String APP_CLOSE_DELAY_MS = "APP_CLOSE_DELAY_MS";
+    public static String APP_CLOSE_RETURN_HOME = "APP_CLOSE_RETURN_HOME";
+    public static String APP_CLOSE_KILL_BACKGROUND = "APP_CLOSE_KILL_BACKGROUND";
 
     // SWITCH_BRANCH 参数
     public static String SWITCH_VAR_NAME = "SWITCH_VAR_NAME";
