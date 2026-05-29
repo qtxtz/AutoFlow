@@ -308,7 +308,7 @@ final class FlowGraphPanelHelper {
             restoreBounds = SavedPanelBounds.from(panelLp);
             int[] screen = host.getScreenSizePx();
             panelLp.width = screen[0];
-            panelLp.height = screen[1];
+            panelLp.height = Math.max(1, screen[1] - host.dp(28));
             panelLp.x = 0;
             panelLp.y = 0;
             button.setImageResource(R.drawable.ic_fullscreen_exit);
