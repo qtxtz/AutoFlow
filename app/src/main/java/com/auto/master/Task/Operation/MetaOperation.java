@@ -79,6 +79,7 @@ public abstract class MetaOperation {
     public static final int MATCH_METHOD_RANDOM_ROI = 100;
 
     public static String MATCHUSEGRAY = "MATCHUSEGRAY";
+    public static String MATCHUSEMASK = "MATCHUSEMASK";
 
     public static String MATCHUSECANNARY = "MATCHUSECANNARY";
 

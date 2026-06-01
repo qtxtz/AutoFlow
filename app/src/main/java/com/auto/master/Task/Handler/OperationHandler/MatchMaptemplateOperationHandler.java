@@ -48,6 +48,10 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
     private static final long RECT_FEEDBACK_DELAY_MS = 24L;
     private static final int MAX_PLAN_CACHE_ENTRIES = 32;
     private static final int POOL_SIZE = 2;
+    private static final int MIN_USEFUL_MASK_PIXELS = 16;
+    private static final double MIN_USEFUL_MASK_COVERAGE = 0.03d;
+    private static final double FULL_MASK_CROP_RATIO = 0.92d;
+    private static final double DENSE_CROPPED_MASK_RATIO = 0.86d;
 
     private static final android.os.Handler MAIN_HANDLER =
             new android.os.Handler(android.os.Looper.getMainLooper());
@@ -95,6 +99,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         String taskName = getStringSafe(inputMap, MetaOperation.TASK, "");
         double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), MetaOperation.DEFAULT_MATCH_TIMEOUT_MS);
         boolean useGray = parseBoolean(inputMap.get(MetaOperation.MATCHUSEGRAY), false);
+        boolean useMask = parseBoolean(inputMap.get(MetaOperation.MATCHUSEMASK), true);
         long preDelayMs = inputMap.containsKey(MetaOperation.NODE_PRE_DELAY_MS)
                 ? 0L
                 : parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
@@ -104,7 +109,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             return createTimeoutResponse(ctx, obj);
         }
 
-        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName, useGray);
+        List<MatchTask> taskList = buildTaskList(plan, projectName, taskName, useGray, useMask);
         if (taskList.isEmpty()) {
             return createTimeoutResponse(ctx, obj);
         }
@@ -240,12 +245,20 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             Point positionInRoi = OpenCVHelper.getInstance()
                     .fastSingleMatchWithOptions(roi, task.info.mat, null, task.info.similarity, task.info.mask, task.info.useGray);
             if (positionInRoi != null && positionInRoi.x >= 0) {
+                double fullCaptureX = positionInRoi.x - task.info.matchOffsetX;
+                double fullCaptureY = positionInRoi.y - task.info.matchOffsetY;
+                if (fullCaptureX < 0
+                        || fullCaptureY < 0
+                        || fullCaptureX + task.info.width > roi.cols()
+                        || fullCaptureY + task.info.height > roi.rows()) {
+                    return new MatchTaskResult(false, null, task);
+                }
                 ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
                 float invScaleX = mgr.getActualInvScaleX();
                 float invScaleY = mgr.getActualInvScaleY();
                 Point positionGlobal = new Point(
-                        Math.round(positionInRoi.x * invScaleX) + task.region.x,
-                        Math.round(positionInRoi.y * invScaleY) + task.region.y);
+                        Math.round(fullCaptureX * invScaleX) + task.region.x,
+                        Math.round(fullCaptureY * invScaleY) + task.region.y);
                 return new MatchTaskResult(true, positionGlobal, task);
             }
         } catch (Exception e) {
@@ -261,7 +274,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
     private List<MatchTask> buildTaskList(CompiledMatchPlan plan,
                                           String projectName,
                                           String taskName,
-                                          boolean useGray) {
+                                          boolean useGray,
+                                          boolean useMask) {
         List<MatchTask> tasks = new ArrayList<>();
         Map<String, Mat> loadedTemplates = new HashMap<>();
         Map<String, Mat> loadedMasks = new HashMap<>();
@@ -278,19 +292,179 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                     }
                     loadedTemplates.put(rule.templateName, templateMat);
                 }
-                Mat templateMask = loadedMasks.get(rule.templateName);
-                if (!loadedMasks.containsKey(rule.templateName)) {
-                    templateMask = getOrLoadTemplateMaskMat(projectName, taskName, rule.templateName, templateMat);
-                    loadedMasks.put(rule.templateName, templateMask);
+                Mat templateMask = null;
+                if (useMask) {
+                    if (!loadedMasks.containsKey(rule.templateName)) {
+                        templateMask = getOrLoadTemplateMaskMat(projectName, taskName, rule.templateName, templateMat);
+                        loadedMasks.put(rule.templateName, templateMask);
+                    } else {
+                        templateMask = loadedMasks.get(rule.templateName);
+                    }
                 }
+                TemplateInfo templateInfo = buildTemplateInfo(
+                        projectName,
+                        taskName,
+                        rule.templateName,
+                        templateMat,
+                        templateMask,
+                        rule.similarity,
+                        useGray);
                 tasks.add(new MatchTask(
                         priority++,
                         rule.templateName,
                         group.region,
-                        new TemplateInfo(templateMat, templateMask, rule.similarity, useGray)));
+                        templateInfo));
             }
         }
         return tasks;
+    }
+
+    private TemplateInfo buildTemplateInfo(String projectName,
+                                           String taskName,
+                                           String templateName,
+                                           Mat templateMat,
+                                           Mat templateMask,
+                                           double similarity,
+                                           boolean useGray) {
+        if (templateMask == null || templateMask.empty()) {
+            return new TemplateInfo(templateMat, null, similarity, useGray,
+                    templateMat.width(), templateMat.height(), 0, 0);
+        }
+
+        MaskStats stats = analyzeMask(templateMask);
+        if (!stats.useful) {
+            return new TemplateInfo(templateMat, null, similarity, useGray,
+                    templateMat.width(), templateMat.height(), 0, 0);
+        }
+
+        int fullArea = Math.max(1, templateMat.width() * templateMat.height());
+        int cropArea = Math.max(1, stats.bounds.width * stats.bounds.height);
+        double cropRatio = cropArea / (double) fullArea;
+        if (cropRatio >= FULL_MASK_CROP_RATIO && stats.densityInBounds >= DENSE_CROPPED_MASK_RATIO) {
+            return new TemplateInfo(templateMat, null, similarity, useGray,
+                    templateMat.width(), templateMat.height(), 0, 0);
+        }
+
+        Mat optimizedTemplate = getOrCreateSubmatCache(
+                projectName,
+                taskName,
+                optimizedTemplateCacheKey(templateName, templateMat, templateMask, stats.bounds),
+                templateMat,
+                stats.bounds);
+        if (optimizedTemplate == null || optimizedTemplate.empty()) {
+            return new TemplateInfo(templateMat, null, similarity, useGray,
+                    templateMat.width(), templateMat.height(), 0, 0);
+        }
+
+        Mat optimizedMask = null;
+        boolean keepMask = stats.densityInBounds < DENSE_CROPPED_MASK_RATIO;
+        if (keepMask) {
+            optimizedMask = getOrCreateSubmatCache(
+                    projectName,
+                    taskName,
+                    optimizedMaskCacheKey(templateName, templateMat, templateMask, stats.bounds),
+                    templateMask,
+                    stats.bounds);
+            if (optimizedMask == null || optimizedMask.empty()) {
+                keepMask = false;
+            }
+        }
+
+        // 有 mask 时强制灰度路径，避免退到 4 通道 masked matchTemplate 慢路径。
+        return new TemplateInfo(
+                optimizedTemplate,
+                keepMask ? optimizedMask : null,
+                similarity,
+                useGray || keepMask,
+                templateMat.width(),
+                templateMat.height(),
+                stats.bounds.x,
+                stats.bounds.y);
+    }
+
+    private static Mat getOrCreateSubmatCache(String projectName,
+                                              String taskName,
+                                              String key,
+                                              Mat source,
+                                              Rect bounds) {
+        Mat cached = Template.getTaskSingleMutCache(projectName, taskName, key);
+        if (cached != null && !cached.empty()) {
+            return cached;
+        }
+        try {
+            Mat cropped = source.submat(bounds).clone();
+            if (cropped.empty()) {
+                cropped.release();
+                return null;
+            }
+            Template.putTaskSingleMatCache(projectName, taskName, key, cropped);
+            return cropped;
+        } catch (Throwable t) {
+            Log.w(TAG, "创建优化 mask 模板失败: " + t.getMessage());
+            return null;
+        }
+    }
+
+    private static String optimizedTemplateCacheKey(String templateName,
+                                                    Mat templateMat,
+                                                    Mat maskMat,
+                                                    Rect bounds) {
+        return templateName + "#maskopt_tpl#"
+                + templateMat.nativeObj + "#"
+                + maskMat.nativeObj + "#"
+                + bounds.x + "," + bounds.y + "," + bounds.width + "," + bounds.height;
+    }
+
+    private static String optimizedMaskCacheKey(String templateName,
+                                                Mat templateMat,
+                                                Mat maskMat,
+                                                Rect bounds) {
+        return templateName + "#maskopt_mask#"
+                + templateMat.nativeObj + "#"
+                + maskMat.nativeObj + "#"
+                + bounds.x + "," + bounds.y + "," + bounds.width + "," + bounds.height;
+    }
+
+    private static MaskStats analyzeMask(Mat mask) {
+        if (mask == null || mask.empty() || mask.channels() != 1) {
+            return MaskStats.notUseful();
+        }
+        int rows = mask.rows();
+        int cols = mask.cols();
+        int total = rows * cols;
+        if (total <= 0) {
+            return MaskStats.notUseful();
+        }
+        byte[] bytes = new byte[total];
+        int read = mask.get(0, 0, bytes);
+        if (read <= 0) {
+            return MaskStats.notUseful();
+        }
+
+        int minX = cols;
+        int minY = rows;
+        int maxX = -1;
+        int maxY = -1;
+        int white = 0;
+        for (int y = 0; y < rows; y++) {
+            int rowBase = y * cols;
+            for (int x = 0; x < cols; x++) {
+                if ((bytes[rowBase + x] & 0xFF) == 0) {
+                    continue;
+                }
+                white++;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+        if (white < MIN_USEFUL_MASK_PIXELS || white / (double) total < MIN_USEFUL_MASK_COVERAGE) {
+            return MaskStats.notUseful();
+        }
+        Rect bounds = new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        double densityInBounds = white / (double) Math.max(1, bounds.width * bounds.height);
+        return new MaskStats(true, bounds, densityInBounds);
     }
 
     private Mat getOrLoadTemplateMat(String projectName, String taskName, String templateName) {
@@ -761,14 +935,41 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         final boolean useGray;
         final int width;
         final int height;
+        final int matchOffsetX;
+        final int matchOffsetY;
 
-        TemplateInfo(Mat mat, Mat mask, double similarity, boolean useGray) {
+        TemplateInfo(Mat mat,
+                     Mat mask,
+                     double similarity,
+                     boolean useGray,
+                     int width,
+                     int height,
+                     int matchOffsetX,
+                     int matchOffsetY) {
             this.mat = mat;
             this.mask = mask;
             this.similarity = similarity;
             this.useGray = useGray;
-            this.width = mat.width();
-            this.height = mat.height();
+            this.width = width;
+            this.height = height;
+            this.matchOffsetX = matchOffsetX;
+            this.matchOffsetY = matchOffsetY;
+        }
+    }
+
+    private static final class MaskStats {
+        final boolean useful;
+        final Rect bounds;
+        final double densityInBounds;
+
+        MaskStats(boolean useful, Rect bounds, double densityInBounds) {
+            this.useful = useful;
+            this.bounds = bounds;
+            this.densityInBounds = densityInBounds;
+        }
+
+        static MaskStats notUseful() {
+            return new MaskStats(false, new Rect(0, 0, 0, 0), 0d);
         }
     }
 

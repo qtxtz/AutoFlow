@@ -213,6 +213,16 @@
                     android:buttonTint="#7CB342"
                     android:layout_marginBottom="8dp"/>
 
+                <CheckBox
+                    android:id="@+id/chk_use_mask"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="使用模板 Mask（仅画笔区域参与匹配）"
+                    android:textColor="#4e5f74"
+                    android:buttonTint="#7CB342"
+                    android:checked="true"
+                    android:layout_marginBottom="8dp"/>
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

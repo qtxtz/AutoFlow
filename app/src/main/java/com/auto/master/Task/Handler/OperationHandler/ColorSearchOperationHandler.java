@@ -174,34 +174,28 @@ public class ColorSearchOperationHandler extends OperationHandler {
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
         int maxX = -1, maxY = -1;
 
-        // 使用实际轴向缩放系数（修正 16-byte 对齐后 captureSize ≠ screenSize × CAPTURE_SCALE）
         ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
-        float scaleX   = mgr.getActualScaleX();
-        float scaleY   = mgr.getActualScaleY();
+        float scaleX = mgr.getActualScaleX();
+        float scaleY = mgr.getActualScaleY();
         float invScaleX = scaleX > 0f ? 1.0f / scaleX : 1.0f;
         float invScaleY = scaleY > 0f ? 1.0f / scaleY : 1.0f;
-        int capOriginX = (int)(offsetX * scaleX);   // 与 sanitizeRoi 的 left 计算一致
-        int capOriginY = (int)(offsetY * scaleY);   // 与 sanitizeRoi 的 top 计算一致
-
         for (int row = 0; row < h; row++) {
             int rowBase = row * w * ch;
             for (int col = 0; col < w; col++) {
                 int base = rowBase + col * ch;
-                // OpenCV BGR → 对应 R=base+2, G=base+1, B=base+0
-                int dr = Math.abs(tR - (buf[base    ] & 0xFF));  // base+0 = R
-                if (dr > tolerance) continue;           // 提前剪枝 R 通道
-                int dg = Math.abs(tG - (buf[base + 1] & 0xFF));  // base+1 = G
-                if (dg > tolerance) continue;           // 提前剪枝 G 通道
-                int db = Math.abs(tB - (buf[base + 2] & 0xFF));  // base+2 = B
-                // max-channel-diff 判定
+                int dr = Math.abs(tR - (buf[base    ] & 0xFF));
+                if (dr > tolerance) continue;
+                int dg = Math.abs(tG - (buf[base + 1] & 0xFF));
+                if (dg > tolerance) continue;
+                int db = Math.abs(tB - (buf[base + 2] & 0xFF));
                 int diff = dr > dg ? (dr > db ? dr : db) : (dg > db ? dg : db);
                 if (diff > tolerance) continue;
 
                 matchedPixels++;
-                // (x+col, y+row) 是相对于 submat 的 capture 偏移，
-                // 加上 capture 起点后除以 scale 得到绝对 screen 坐标。
-                int px = (int)((capOriginX + x + col) * invScaleX);
-                int py = (int)((capOriginY + y + row) * invScaleY);
+                // offsetX/Y 是屏幕坐标原点，(x+col, y+row) 是 capture 空间偏移；
+                // 避免两次 floor 叠加（最多约 2px 偏差），改为一次 round。
+                int px = (int) Math.round(offsetX + (x + col) * invScaleX);
+                int py = (int) Math.round(offsetY + (y + row) * invScaleY);
                 if (px < minX) minX = px;
                 if (py < minY) minY = py;
                 if (px > maxX) maxX = px;
