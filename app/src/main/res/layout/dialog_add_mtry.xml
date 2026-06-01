@@ -138,6 +138,38 @@
                     android:textColor="#4e5f74"
                     android:buttonTint="#5E35B1"
                     android:checked="true" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#22000000"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="重试间隔延时 (ms)"
+                    android:textSize="12sp"
+                    android:textColor="#4e5f74"
+                    android:layout_marginBottom="4dp" />
+
+                <EditText
+                    android:id="@+id/edt_mtry_retry_delay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:hint="0 = 不延时（建议 500~2000）"
+                    android:layout_marginBottom="6dp" />
+
+                <CheckBox
+                    android:id="@+id/chk_mtry_retry_countdown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="重试延时时显示倒计时"
+                    android:textColor="#4e5f74"
+                    android:buttonTint="#5E35B1"
+                    android:checked="false" />
             </LinearLayout>
 
             <TextView

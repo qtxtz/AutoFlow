@@ -283,14 +283,14 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                 holder.selectionIndicator.setBackgroundColor(0xFFF44336);
             }
         } else if (isSelected) {
-            holder.itemView.setBackgroundColor(0xFFE8F0FE);
+            holder.itemView.setBackgroundColor(0x9907A6BB);
             if (holder.selectionIndicator != null) {
-                holder.selectionIndicator.setBackgroundColor(0xFF3C6DE4);
+                holder.selectionIndicator.setBackgroundColor(0xFF07A6BB);
             }
         } else {
             holder.itemView.setBackgroundColor(Color.TRANSPARENT);
             if (holder.selectionIndicator != null) {
-                holder.selectionIndicator.setBackgroundColor(0xFF3C6DE4);
+                holder.selectionIndicator.setBackgroundColor(0xFF07A6BB);
             }
         }
 

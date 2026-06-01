@@ -1,5 +1,7 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -9,6 +11,7 @@ import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Task.Project.Project;
 import com.auto.master.Task.Task;
 import com.auto.master.auto.ScriptExecuteContext;
+import com.auto.master.auto.ScriptRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +21,7 @@ public class MtryOperationHandler extends OperationHandler {
     private static final String TAG = "MtryOperationHandler";
     private static final int DEFAULT_ATTEMPTS = 1;
     private static final int MAX_ATTEMPTS = 1000;
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     MtryOperationHandler() {
         this.setType(25);
@@ -35,6 +39,11 @@ public class MtryOperationHandler extends OperationHandler {
         boolean runWrappedResponseHandler = parseBoolean(
                 inputMap == null ? null : inputMap.get(MetaOperation.MTRY_RUN_RESPONSE_HANDLER),
                 true);
+        long retryDelayMs = parseLong(inputMap == null ? null : inputMap.get(MetaOperation.MTRY_RETRY_DELAY_MS), 0L);
+        boolean retryShowCountdown = parseBoolean(
+                inputMap == null ? null : inputMap.get(MetaOperation.MTRY_RETRY_SHOW_COUNTDOWN),
+                false);
+        final String mtryOpId = obj.getId();
         if (TextUtils.isEmpty(wrappedOperationId)) {
             putMtryResponse(ctx, obj, false, 0, "未选择被包裹节点", null);
             return true;
@@ -70,6 +79,14 @@ public class MtryOperationHandler extends OperationHandler {
 
         for (int i = 0; i < attempts; i++) {
             usedAttempts = i + 1;
+
+            // 通知 UI：当前尝试序号
+            final int curAttempt = usedAttempts;
+            final ScriptRunner.ScriptExecutionListener listenerAttempt = ScriptRunner.getCurrentListener();
+            if (listenerAttempt != null) {
+                MAIN.post(() -> listenerAttempt.onMtryAttempt(mtryOpId, curAttempt, attempts));
+            }
+
             boolean ok;
             try {
                 ok = wrappedHandler.handle(wrapped, ctx);
@@ -93,7 +110,31 @@ public class MtryOperationHandler extends OperationHandler {
             if (TextUtils.isEmpty(lastError)) {
                 lastError = "第 " + usedAttempts + " 次未命中";
             }
-            Thread.yield();
+
+            // 重试延时（最后一次失败后不需要等待）
+            if (i < attempts - 1 && retryDelayMs > 0) {
+                if (retryShowCountdown) {
+                    final ScriptRunner.ScriptExecutionListener listenerDelay = ScriptRunner.getCurrentListener();
+                    final long dl = retryDelayMs;
+                    if (listenerDelay != null) {
+                        MAIN.post(() -> listenerDelay.onMtryRetryDelay(mtryOpId, dl));
+                    }
+                }
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } else {
+                Thread.yield();
+            }
+        }
+
+        // 清除 UI 尝试次数徽章
+        ScriptRunner.ScriptExecutionListener listenerFinal = ScriptRunner.getCurrentListener();
+        if (listenerFinal != null) {
+            MAIN.post(() -> listenerFinal.onMtryAttempt(mtryOpId, 0, 0));
         }
 
         putMtryResponse(ctx, obj, matched, usedAttempts, lastError, lastWrappedResponse);
@@ -261,6 +302,14 @@ public class MtryOperationHandler extends OperationHandler {
         }
         Object value = map.get(key);
         return value == null ? def : String.valueOf(value).trim();
+    }
+
+    private long parseLong(Object raw, long def) {
+        if (raw instanceof Number) return ((Number) raw).longValue();
+        if (raw instanceof String) {
+            try { return Long.parseLong(((String) raw).trim()); } catch (Exception ignored) {}
+        }
+        return def;
     }
 
     private Map<String, Object> copyResponse(Map<String, Object> response) {

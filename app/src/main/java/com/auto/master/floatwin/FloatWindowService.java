@@ -5697,6 +5697,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     @Override
+    public void onMtryAttempt(String operationId, int current, int total) {
+        if (focusRunMode) return;
+        stepDelayOverlayManager.showMtryAttempt(current, total);
+    }
+
+    @Override
+    public void onMtryRetryDelay(String operationId, long delayMs) {
+        if (focusRunMode) return;
+        stepDelayOverlayManager.startRetryDelay(operationId, delayMs);
+    }
+
+    @Override
     public void onOperationComplete(String operationId, boolean success) {
         if (focusRunMode) {
             return;

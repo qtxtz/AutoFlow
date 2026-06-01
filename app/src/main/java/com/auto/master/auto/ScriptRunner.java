@@ -93,6 +93,14 @@ public final class ScriptRunner {
 
         default void onNodePreDelayStart(String operationId, long durationMs) {
         }
+
+        /** MTry 开始第 current 次尝试（current=0 表示清除徽章）。 */
+        default void onMtryAttempt(String operationId, int current, int total) {
+        }
+
+        /** MTry 重试前延时开始，delayMs > 0 才调用。 */
+        default void onMtryRetryDelay(String operationId, long delayMs) {
+        }
         
         /**
          * operation 执行完成

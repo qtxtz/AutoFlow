@@ -5014,6 +5014,8 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtWrapped = dialogView.findViewById(R.id.edt_wrapped_operation);
         EditText edtAttempts = dialogView.findViewById(R.id.edt_mtry_attempts);
         CheckBox chkRunResponseHandler = dialogView.findViewById(R.id.chk_mtry_run_response_handler);
+        EditText edtRetryDelay = dialogView.findViewById(R.id.edt_mtry_retry_delay);
+        CheckBox chkRetryCountdown = dialogView.findViewById(R.id.chk_mtry_retry_countdown);
         AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
         AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
@@ -5021,6 +5023,9 @@ public class OperationDialogFactory {
         edtAttempts.setText("10");
         if (chkRunResponseHandler != null) {
             chkRunResponseHandler.setChecked(true);
+        }
+        if (edtRetryDelay != null) {
+            edtRetryDelay.setText("0");
         }
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
@@ -5035,6 +5040,12 @@ public class OperationDialogFactory {
                     edtAttempts.setText(inputMap.optString(MetaOperation.MTRY_ATTEMPTS, "10"));
                     if (chkRunResponseHandler != null) {
                         chkRunResponseHandler.setChecked(inputMap.optBoolean(MetaOperation.MTRY_RUN_RESPONSE_HANDLER, true));
+                    }
+                    if (edtRetryDelay != null) {
+                        edtRetryDelay.setText(String.valueOf(inputMap.optLong(MetaOperation.MTRY_RETRY_DELAY_MS, 0L)));
+                    }
+                    if (chkRetryCountdown != null) {
+                        chkRetryCountdown.setChecked(inputMap.optBoolean(MetaOperation.MTRY_RETRY_SHOW_COUNTDOWN, false));
                     }
                     setOperationReferenceText(edtNext, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
                     setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
@@ -5067,7 +5078,7 @@ public class OperationDialogFactory {
 
         btnConfirm.setOnClickListener(v -> saveMtryOperation(
                 dialogView, operationId, edtName, edtWrapped, edtAttempts,
-                chkRunResponseHandler, edtNext, edtFallback));
+                chkRunResponseHandler, edtRetryDelay, chkRetryCountdown, edtNext, edtFallback));
     }
 
     private void saveMtryOperation(View dialogView,
@@ -5076,6 +5087,8 @@ public class OperationDialogFactory {
                                    AutoCompleteTextView edtWrapped,
                                    EditText edtAttempts,
                                    CheckBox chkRunResponseHandler,
+                                   EditText edtRetryDelay,
+                                   CheckBox chkRetryCountdown,
                                    AutoCompleteTextView edtNext,
                                    AutoCompleteTextView edtFallback) {
         String name = safeText(edtName);
@@ -5122,6 +5135,14 @@ public class OperationDialogFactory {
             inputMap.put(MetaOperation.MTRY_ATTEMPTS, attempts);
             inputMap.put(MetaOperation.MTRY_RUN_RESPONSE_HANDLER,
                     chkRunResponseHandler == null || chkRunResponseHandler.isChecked());
+            long retryDelayMs = 0L;
+            if (edtRetryDelay != null) {
+                try { retryDelayMs = Math.max(0L, Long.parseLong(safeText(edtRetryDelay))); }
+                catch (Exception ignored) {}
+            }
+            inputMap.put(MetaOperation.MTRY_RETRY_DELAY_MS, retryDelayMs);
+            inputMap.put(MetaOperation.MTRY_RETRY_SHOW_COUNTDOWN,
+                    chkRetryCountdown != null && chkRetryCountdown.isChecked());
             if (!TextUtils.isEmpty(next)) {
                 inputMap.put(MetaOperation.NEXT_OPERATION_ID, next);
             }

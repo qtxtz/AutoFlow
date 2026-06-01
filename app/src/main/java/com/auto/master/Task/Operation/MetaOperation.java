@@ -145,6 +145,10 @@ public abstract class MetaOperation {
     public static String MTRY_WRAPPED_OPERATION_ID = "MTRY_WRAPPED_OPERATION_ID";
     public static String MTRY_ATTEMPTS = "MTRY_ATTEMPTS";
     public static String MTRY_RUN_RESPONSE_HANDLER = "MTRY_RUN_RESPONSE_HANDLER";
+    // 每次重试之间的延时（毫秒），0 表示不延时
+    public static String MTRY_RETRY_DELAY_MS = "MTRY_RETRY_DELAY_MS";
+    // 重试延时期间是否显示倒计时悬浮条
+    public static String MTRY_RETRY_SHOW_COUNTDOWN = "MTRY_RETRY_SHOW_COUNTDOWN";
 
     // Gesture 参数
     public static String GESTURE_TEMPLATE_ID = "GESTURE_TEMPLATE_ID";

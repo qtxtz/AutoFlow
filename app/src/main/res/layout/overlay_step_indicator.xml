@@ -46,6 +46,21 @@
             android:textSize="10sp" />
     </LinearLayout>
 
+    <!-- MTry 尝试次数徽章（平时 GONE，MTry 运行时显示） -->
+    <TextView
+        android:id="@+id/tv_mtry_attempt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:layout_marginStart="6dp"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:text="试 1/5"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:background="#995E35B1" />
+
     <!-- 转圈进度指示 -->
     <ProgressBar
         android:layout_width="14dp"

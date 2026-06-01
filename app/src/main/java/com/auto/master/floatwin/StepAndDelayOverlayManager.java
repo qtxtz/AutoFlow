@@ -107,6 +107,37 @@ public class StepAndDelayOverlayManager {
         });
     }
 
+    /**
+     * 更新步骤覆盖层上的 MTry 尝试次数徽章。
+     * current=0 / total=0 时隐藏徽章。
+     */
+    public void showMtryAttempt(int current, int total) {
+        uiHandler.post(() -> {
+            if (stepOverlayView == null) return;
+            TextView tvBadge = stepOverlayView.findViewById(R.id.tv_mtry_attempt);
+            if (tvBadge == null) return;
+            if (current <= 0 || total <= 0) {
+                tvBadge.setVisibility(View.GONE);
+            } else {
+                tvBadge.setText("试 " + current + "/" + total);
+                tvBadge.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    /** 启动 MTry 重试间延时倒计时覆盖层（复用已有延时 overlay）。 */
+    public void startRetryDelay(String operationId, long durationMs) {
+        uiHandler.post(() -> {
+            stopDelay();
+            if (durationMs <= 0) return;
+            activeDelayOperationId = operationId + "_retry";
+            activeDelayDurationMs = durationMs;
+            activeDelayStartMs = SystemClock.uptimeMillis();
+            renderDelayProgress(true, 0L, activeDelayDurationMs);
+            uiHandler.postDelayed(delayProgressRunnable, DELAY_TICK_MS);
+        });
+    }
+
     /** 根据操作类型标签返回对应的颜色值。 */
     public int getTypeColor(String typeLabel) {
         if (typeLabel == null) return 0xFF4CAF50;
