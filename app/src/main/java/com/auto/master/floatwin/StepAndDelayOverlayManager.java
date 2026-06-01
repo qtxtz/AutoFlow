@@ -118,6 +118,7 @@ public class StepAndDelayOverlayManager {
             case "模板匹配": return 0xFF00897B;
             case "颜色匹配": return 0xFFD84315;
             case "跳转Task": return 0xFFE53935;
+            case "多次尝试节点": return 0xFF5E35B1;
             case "条件分支": return 0xFFFF6F00;
             case "启动应用": return 0xFF43A047;
             default:       return 0xFF4CAF50;

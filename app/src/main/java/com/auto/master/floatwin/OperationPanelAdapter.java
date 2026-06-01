@@ -2,6 +2,8 @@ package com.auto.master.floatwin;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -11,7 +13,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
@@ -21,7 +25,10 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
+import com.auto.master.capture.CaptureScaleHelper;
+import com.auto.master.capture.ScreenCaptureManager;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -91,6 +98,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
     private String runningOperationId;
     private int prevPos = -1;
     private Map<String, Integer> floatBtnColorMap = Collections.emptyMap();
+    private File taskDir;
+    private final Map<String, Bitmap> previewBitmapCache = new HashMap<>();
 
     OperationPanelAdapter(
             List<OperationItem> operations,
@@ -123,6 +132,17 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                 notifyItemChanged(i);
             }
         }
+    }
+
+    void setTaskDir(File taskDir) {
+        String oldPath = this.taskDir == null ? "" : this.taskDir.getAbsolutePath();
+        String newPath = taskDir == null ? "" : taskDir.getAbsolutePath();
+        if (TextUtils.equals(oldPath, newPath)) {
+            return;
+        }
+        clearPreviewBitmapCache();
+        this.taskDir = taskDir;
+        notifyAllItemsChanged();
     }
 
     void submitOperations(List<OperationItem> newItems) {
@@ -172,7 +192,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                         && oldItem.nodePreDelayMs == newItem.nodePreDelayMs
                         && oldItem.nodePreDelayMinMs == newItem.nodePreDelayMinMs
                         && oldItem.nodePreDelayMaxMs == newItem.nodePreDelayMaxMs
-                        && oldItem.nodePreDelayRandom == newItem.nodePreDelayRandom;
+                        && oldItem.nodePreDelayRandom == newItem.nodePreDelayRandom
+                        && oldItem.templatePreviewNames.equals(newItem.templatePreviewNames);
             }
         });
         operations.clear();
@@ -210,7 +231,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                     || oldItem.nodePreDelayMs != newItem.nodePreDelayMs
                     || oldItem.nodePreDelayMinMs != newItem.nodePreDelayMinMs
                     || oldItem.nodePreDelayMaxMs != newItem.nodePreDelayMaxMs
-                    || oldItem.nodePreDelayRandom != newItem.nodePreDelayRandom) {
+                    || oldItem.nodePreDelayRandom != newItem.nodePreDelayRandom
+                    || !oldItem.templatePreviewNames.equals(newItem.templatePreviewNames)) {
                 return false;
             }
         }
@@ -290,6 +312,9 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                 holder.floatBtnDot.setVisibility(View.GONE);
             }
         }
+        TemplatePreview primaryPreview = findFirstTemplatePreview(item);
+        bindOperationVisual(holder, item, primaryPreview);
+        bindTemplatePreviewStrip(holder, item, primaryPreview == null ? null : primaryPreview.name);
 
         holder.itemView.setOnClickListener(v -> {
             if (batchMode) {
@@ -326,6 +351,207 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
     @Override
     public int getItemViewType(int position) {
         return VIEW_TYPE_OPERATION;
+    }
+
+    private void bindOperationVisual(ViewHolder holder, OperationItem item, TemplatePreview primaryPreview) {
+        if (holder.operationVisual == null || holder.operationVisualImage == null || holder.operationVisualText == null) {
+            return;
+        }
+        Context context = holder.itemView.getContext();
+        if (primaryPreview != null && primaryPreview.bitmap != null) {
+            if (holder.operationVisualBg != null) {
+                holder.operationVisualBg.setColor(0xFFFFFFFF);
+                holder.operationVisualBg.setStroke(dp(context, 1), 0x663C6DE4);
+            }
+            holder.operationVisualText.setVisibility(View.GONE);
+            holder.operationVisualImage.setVisibility(View.VISIBLE);
+            holder.operationVisualImage.clearColorFilter();
+            holder.operationVisualImage.setPadding(dp(context, 1), dp(context, 1), dp(context, 1), dp(context, 1));
+            holder.operationVisualImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            holder.operationVisualImage.setImageBitmap(primaryPreview.bitmap);
+            return;
+        }
+
+        OperationVisualSpec spec = getOperationVisualSpec(item == null ? null : item.type);
+        if (holder.operationVisualBg != null) {
+            holder.operationVisualBg.setColor(spec.bgColor);
+            holder.operationVisualBg.setStroke(dp(context, 1), spec.strokeColor);
+        }
+        holder.operationVisualImage.setPadding(dp(context, 6), dp(context, 6), dp(context, 6), dp(context, 6));
+        holder.operationVisualImage.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        if (!TextUtils.isEmpty(spec.text)) {
+            holder.operationVisualImage.setVisibility(View.GONE);
+            holder.operationVisualText.setVisibility(View.VISIBLE);
+            holder.operationVisualText.setText(spec.text);
+            holder.operationVisualText.setTextColor(spec.fgColor);
+        } else {
+            holder.operationVisualText.setVisibility(View.GONE);
+            holder.operationVisualImage.setVisibility(View.VISIBLE);
+            holder.operationVisualImage.setImageResource(spec.iconRes);
+            holder.operationVisualImage.setColorFilter(spec.fgColor);
+        }
+    }
+
+    private TemplatePreview findFirstTemplatePreview(OperationItem item) {
+        List<String> templates = item == null ? Collections.emptyList() : item.templatePreviewNames;
+        if (templates == null || templates.isEmpty() || taskDir == null) {
+            return null;
+        }
+        for (String templateName : templates) {
+            Bitmap bitmap = loadTemplatePreviewBitmap(templateName);
+            if (bitmap != null) {
+                return new TemplatePreview(templateName, bitmap);
+            }
+        }
+        return null;
+    }
+
+    private void bindTemplatePreviewStrip(ViewHolder holder, OperationItem item, String skipTemplateName) {
+        if (holder.templatePreviewStrip == null) {
+            return;
+        }
+        holder.templatePreviewStrip.removeAllViews();
+        List<String> templates = item == null ? Collections.emptyList() : item.templatePreviewNames;
+        if (templates == null || templates.isEmpty() || taskDir == null) {
+            holder.templatePreviewStrip.setVisibility(View.GONE);
+            return;
+        }
+
+        int added = 0;
+        for (String templateName : templates) {
+            if (!TextUtils.isEmpty(skipTemplateName) && TextUtils.equals(skipTemplateName, templateName)) {
+                continue;
+            }
+            if (added >= 3) {
+                break;
+            }
+            Bitmap bitmap = loadTemplatePreviewBitmap(templateName);
+            if (bitmap == null) {
+                continue;
+            }
+            ImageView imageView = new ImageView(holder.itemView.getContext());
+            int width = templates.size() == 1 ? dp(holder.itemView.getContext(), 42) : dp(holder.itemView.getContext(), 26);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, dp(holder.itemView.getContext(), 24));
+            lp.setMarginStart(dp(holder.itemView.getContext(), 4));
+            imageView.setLayoutParams(lp);
+            imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            imageView.setImageBitmap(bitmap);
+            imageView.setBackground(makePreviewBackground());
+            holder.templatePreviewStrip.addView(imageView);
+            added++;
+        }
+        holder.templatePreviewStrip.setVisibility(added > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private Bitmap loadTemplatePreviewBitmap(String templateName) {
+        if (taskDir == null || TextUtils.isEmpty(templateName)) {
+            return null;
+        }
+        File imgDir = new File(taskDir, "img");
+        File file = CaptureScaleHelper.resolveTemplateFile(
+                imgDir,
+                templateName,
+                ScreenCaptureManager.CAPTURE_SCALE);
+        if (file == null || !file.exists()) {
+            return null;
+        }
+        String cacheKey = file.getAbsolutePath() + "#" + file.lastModified();
+        Bitmap cached = previewBitmapCache.get(cacheKey);
+        if (cached != null && !cached.isRecycled()) {
+            return cached;
+        }
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = calculatePreviewSampleSize(bounds, 96, 64);
+        Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        if (bitmap != null) {
+            if (previewBitmapCache.size() > 64) {
+                clearPreviewBitmapCache();
+            }
+            previewBitmapCache.put(cacheKey, bitmap);
+        }
+        return bitmap;
+    }
+
+    private int calculatePreviewSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        int height = options == null ? 0 : options.outHeight;
+        int width = options == null ? 0 : options.outWidth;
+        int inSampleSize = 1;
+        if (height > reqHeight || width > reqWidth) {
+            int halfHeight = Math.max(1, height / 2);
+            int halfWidth = Math.max(1, width / 2);
+            while ((halfHeight / inSampleSize) >= reqHeight
+                    && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+        return Math.max(1, inSampleSize);
+    }
+
+    private GradientDrawable makePreviewBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(0xFFFFFFFF);
+        drawable.setStroke(1, 0x663C6DE4);
+        drawable.setCornerRadius(4f);
+        return drawable;
+    }
+
+    private OperationVisualSpec getOperationVisualSpec(String type) {
+        String normalized = type == null ? "" : type.trim();
+        switch (normalized) {
+            case "点击":
+            case "点击操作":
+            case "click":
+            case "手势":
+            case "swipe":
+                return new OperationVisualSpec(R.drawable.ic_op_touch, null,
+                        0xFFE8F7F1, 0x3360B58B, 0xFF0E8F67);
+            case "延时":
+            case "等待操作":
+            case "动态延时":
+            case "sleep":
+                return new OperationVisualSpec(R.drawable.ic_op_clock, null,
+                        0xFFFFF4DF, 0x33D9891F, 0xFFB85C00);
+            case "脚本变量":
+            case "数学运算":
+            case "模板变量":
+                return new OperationVisualSpec(0, "var",
+                        0xFFEAF1FF, 0x333C6DE4, 0xFF3167D8);
+            case "截图区域":
+            case "加载资源":
+            case "模板匹配":
+            case "图集匹配":
+            case "颜色匹配":
+            case "区域找色":
+                return new OperationVisualSpec(R.drawable.ic_file_image, null,
+                        0xFFEEF8FF, 0x334D94BE, 0xFF2C7DA0);
+            case "返回按键":
+                return new OperationVisualSpec(R.drawable.ic_back, null,
+                        0xFFF3F5F8, 0x338A97A6, 0xFF637083);
+            case "HTTP请求":
+                return new OperationVisualSpec(0, "API",
+                        0xFFFFEEF2, 0x33D45A72, 0xFFC23B57);
+            case "多路分支":
+                return new OperationVisualSpec(0, "IF",
+                        0xFFFFF7E8, 0x33D99B28, 0xFF9B6A08);
+            case "二分路":
+                return new OperationVisualSpec(0, "LOOP",
+                        0xFFF0EDFF, 0x33745ED9, 0xFF5B48BF);
+            default:
+                return new OperationVisualSpec(R.drawable.ic_operation, null,
+                        0xFFF1F5F9, 0x338A97A6, 0xFF6B7788);
+        }
+    }
+
+    private void clearPreviewBitmapCache() {
+        for (Bitmap bitmap : previewBitmapCache.values()) {
+            if (bitmap != null && !bitmap.isRecycled()) {
+                bitmap.recycle();
+            }
+        }
+        previewBitmapCache.clear();
     }
 
     private void showMenu(View anchor, OperationItem item, int position) {
@@ -604,6 +830,11 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         final TextView name;
         final TextView typeText;
         final TextView opId;
+        final FrameLayout operationVisual;
+        final ImageView operationVisualImage;
+        final TextView operationVisualText;
+        final GradientDrawable operationVisualBg;
+        final LinearLayout templatePreviewStrip;
         final View selectionIndicator;
         final View floatBtnDot;
         final GradientDrawable floatBtnDotBg;
@@ -618,6 +849,19 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             name = itemView.findViewById(R.id.list_item_text);
             typeText = itemView.findViewById(R.id.operation_type);
             opId = itemView.findViewById(R.id.operation_id);
+            operationVisual = itemView.findViewById(R.id.operation_visual);
+            operationVisualImage = itemView.findViewById(R.id.operation_visual_image);
+            operationVisualText = itemView.findViewById(R.id.operation_visual_text);
+            if (operationVisual != null) {
+                GradientDrawable bg = new GradientDrawable();
+                bg.setShape(GradientDrawable.RECTANGLE);
+                bg.setCornerRadius(dp(itemView.getContext(), 7));
+                operationVisual.setBackground(bg);
+                operationVisualBg = bg;
+            } else {
+                operationVisualBg = null;
+            }
+            templatePreviewStrip = itemView.findViewById(R.id.template_preview_strip);
             nodePreDelayText = itemView.findViewById(R.id.node_pre_delay_text);
             nodePreDelayButton = itemView.findViewById(R.id.btn_node_pre_delay);
             selectionIndicator = itemView.findViewById(R.id.selection_indicator);
@@ -632,6 +876,32 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             } else {
                 floatBtnDotBg = null;
             }
+        }
+    }
+
+    private static final class TemplatePreview {
+        final String name;
+        final Bitmap bitmap;
+
+        TemplatePreview(String name, Bitmap bitmap) {
+            this.name = name;
+            this.bitmap = bitmap;
+        }
+    }
+
+    private static final class OperationVisualSpec {
+        final int iconRes;
+        final String text;
+        final int bgColor;
+        final int strokeColor;
+        final int fgColor;
+
+        OperationVisualSpec(int iconRes, String text, int bgColor, int strokeColor, int fgColor) {
+            this.iconRes = iconRes;
+            this.text = text;
+            this.bgColor = bgColor;
+            this.strokeColor = strokeColor;
+            this.fgColor = fgColor;
         }
     }
 

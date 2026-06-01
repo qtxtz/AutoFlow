@@ -1860,6 +1860,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditDynamicDelayDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 25) {
+                dialogFactory.showEditMtryDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2677,6 +2681,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 null,
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("jump_task", "跳转任务", "切换到目标任务或节点", "跳", R.color.op_jump_task, true),
+                        new AddOperationMenuAdapter.MenuItem("mtry", "多次尝试节点", "包裹节点并重试，接管成功/失败流向", "试", R.color.op_mtry, true),
                         new AddOperationMenuAdapter.MenuItem("switch_branch", "分支判断", "根据条件选择不同路径", "支", R.color.op_condition, true),
                         new AddOperationMenuAdapter.MenuItem("loop", "二分之", "二分之判断", "二", R.color.op_condition, true)
                 )));
@@ -2751,6 +2756,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "jump_task":
                 dialogFactory.showAddJumpTaskDialog();
+                return;
+            case "mtry":
+                dialogFactory.showAddMtryDialog();
                 return;
             case "switch_branch":
                 dialogFactory.showAddSwitchBranchDialog();
@@ -3496,6 +3504,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         switchProjectPanelAdapter(operationPanelAdapter);
         attachOperationDragHelperIfNeeded(rv);
         operationPanelAdapter.initFloatBtnColors(nodeFloatButtonUiHelper.getFloatBtnColorMap());
+        operationPanelAdapter.setTaskDir(taskDir);
         operationPanelAdapter.submitOperations(operations);
         operationPanelAdapter.setBatchMode(operationBatchMode);
         operationPanelAdapter.setBatchSelectedIds(batchSelectedOperationIds);
@@ -3547,7 +3556,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         operations.add(new OperationItem(op.getName(), op.getId(), getOperationTypeName(op.getType()), i,
                                 extractDelayDurationMs(op), extractDelayShowCountdown(op),
                                 extractNodePreDelayMs(op), extractNodePreDelayMinMs(op),
-                                extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op)));
+                                extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op),
+                                extractTemplatePreviewNames(op)));
                         i++;
                     }
                 } else {
@@ -3561,7 +3571,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                             operations.add(new OperationItem(value.getName(), value.getId(), getOperationTypeName(value.getType()), i,
                                     extractDelayDurationMs(value), extractDelayShowCountdown(value),
                                     extractNodePreDelayMs(value), extractNodePreDelayMinMs(value),
-                                    extractNodePreDelayMaxMs(value), extractNodePreDelayRandom(value)));
+                                    extractNodePreDelayMaxMs(value), extractNodePreDelayRandom(value),
+                                    extractTemplatePreviewNames(value)));
                             i++;
                         }
                     }
@@ -3575,7 +3586,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                             operations.add(new OperationItem(op.getName(), op.getId(), getOperationTypeName(op.getType()), i,
                                     extractDelayDurationMs(op), extractDelayShowCountdown(op),
                                     extractNodePreDelayMs(op), extractNodePreDelayMinMs(op),
-                                    extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op)));
+                                    extractNodePreDelayMaxMs(op), extractNodePreDelayRandom(op),
+                                    extractTemplatePreviewNames(op)));
                             i++;
                         }
                     }
@@ -3668,6 +3680,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     batchSelectedOperationIds.addAll(selectedIds);
                     updateBatchActionCount();
                 });
+        adapter.setTaskDir(taskDir);
         adapter.setBatchMode(operationBatchMode);
         adapter.setBatchSelectedIds(batchSelectedOperationIds);
         rv.setAdapter(adapter);
@@ -3852,7 +3865,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                 extractNodePreDelayMs(op),
                                 extractNodePreDelayMinMs(op),
                                 extractNodePreDelayMaxMs(op),
-                                extractNodePreDelayRandom(op)));
+                                extractNodePreDelayRandom(op),
+                                extractTemplatePreviewNames(op)));
                     }
                     if (!operations.isEmpty()) {
                         return operations;
@@ -3921,7 +3935,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 boolean nodePreDelayRandom = inputMap != null
                         && inputMap.optBoolean(MetaOperation.NODE_PRE_DELAY_RANDOM, false);
                 operations.add(new OperationItem(name, id, typeName, i, delayMs, showCountdown,
-                        nodePreDelayMs, nodePreDelayMinMs, nodePreDelayMaxMs, nodePreDelayRandom));
+                        nodePreDelayMs, nodePreDelayMinMs, nodePreDelayMaxMs, nodePreDelayRandom,
+                        extractTemplatePreviewNames(typeInt, inputMap)));
             }
         } catch (Exception e) {
             Log.e(TAG, "load operations failed", e);
@@ -5550,6 +5565,117 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     public static boolean extractNodePreDelayRandom(@Nullable MetaOperation operation) {
         return OperationHandler.isNodePreDelayRandom(operation);
+    }
+
+    private static List<String> extractTemplatePreviewNames(@Nullable MetaOperation operation) {
+        if (operation == null || operation.getType() == null) {
+            return Collections.emptyList();
+        }
+        return extractTemplatePreviewNames(operation.getType(), operation.getInputMap());
+    }
+
+    private static List<String> extractTemplatePreviewNames(int type, @Nullable Map<String, Object> inputMap) {
+        if (inputMap == null || inputMap.isEmpty()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        switch (type) {
+            case 3:
+            case 4:
+            case 6:
+                addTemplatePreviewName(names, inputMap.get(MetaOperation.SAVEFILENAME));
+                break;
+            case 7:
+                addMatchMapTemplatePreviewNames(names, inputMap.get(MetaOperation.MATCHMAP));
+                break;
+            default:
+                break;
+        }
+        return names.isEmpty() ? Collections.emptyList() : new ArrayList<>(names);
+    }
+
+    private static List<String> extractTemplatePreviewNames(int type, @Nullable JSONObject inputMap) {
+        if (inputMap == null) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        switch (type) {
+            case 3:
+            case 4:
+            case 6:
+                addTemplatePreviewName(names, inputMap.opt(MetaOperation.SAVEFILENAME));
+                break;
+            case 7:
+                addMatchMapTemplatePreviewNames(names, inputMap.opt(MetaOperation.MATCHMAP));
+                break;
+            default:
+                break;
+        }
+        return names.isEmpty() ? Collections.emptyList() : new ArrayList<>(names);
+    }
+
+    private static void addTemplatePreviewName(Set<String> names, Object rawName) {
+        if (names == null || rawName == null) {
+            return;
+        }
+        String name = String.valueOf(rawName).trim();
+        if (TextUtils.isEmpty(name)
+                || "null".equalsIgnoreCase(name)
+                || CaptureScaleHelper.isTemplateMaskFileName(name)
+                || name.toLowerCase(Locale.ROOT).endsWith(".json")) {
+            return;
+        }
+        names.add(name);
+        if (!name.contains(".")) {
+            names.add(name + ".png");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void addMatchMapTemplatePreviewNames(Set<String> names, Object rawMatchMap) {
+        if (names == null || rawMatchMap == null) {
+            return;
+        }
+        if (rawMatchMap instanceof JSONObject) {
+            addMatchMapTemplatePreviewNames(names, (JSONObject) rawMatchMap);
+            return;
+        }
+        if (rawMatchMap instanceof Map) {
+            Map<?, ?> matchMap = (Map<?, ?>) rawMatchMap;
+            for (Object templateGroup : matchMap.values()) {
+                if (templateGroup instanceof Map) {
+                    for (Object templateName : ((Map<?, ?>) templateGroup).keySet()) {
+                        addTemplatePreviewName(names, templateName);
+                    }
+                }
+            }
+            return;
+        }
+        String raw = String.valueOf(rawMatchMap).trim();
+        if (TextUtils.isEmpty(raw) || "null".equalsIgnoreCase(raw)) {
+            return;
+        }
+        try {
+            addMatchMapTemplatePreviewNames(names, new JSONObject(raw));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void addMatchMapTemplatePreviewNames(Set<String> names, JSONObject matchMap) {
+        if (matchMap == null) {
+            return;
+        }
+        Iterator<String> bboxKeys = matchMap.keys();
+        while (bboxKeys.hasNext()) {
+            JSONObject templates = matchMap.optJSONObject(bboxKeys.next());
+            if (templates == null) {
+                continue;
+            }
+            Iterator<String> templateKeys = templates.keys();
+            while (templateKeys.hasNext()) {
+                addTemplatePreviewName(names, templateKeys.next());
+            }
+        }
     }
 
     // ── 延迟进度悬浮层：实现已迁移至 StepAndDelayOverlayManager，此处仅保留薄封装。
@@ -7812,7 +7938,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             items.add(new OperationItem(operation.getName(), operation.getId(), getOperationTypeName(operation.getType()),
                     opIndex++, extractDelayDurationMs(operation), extractDelayShowCountdown(operation),
                     extractNodePreDelayMs(operation), extractNodePreDelayMinMs(operation),
-                    extractNodePreDelayMaxMs(operation), extractNodePreDelayRandom(operation)));
+                    extractNodePreDelayMaxMs(operation), extractNodePreDelayRandom(operation),
+                    extractTemplatePreviewNames(operation)));
         }
         return items;
     }

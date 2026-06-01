@@ -141,6 +141,11 @@ public abstract class MetaOperation {
     public static String LOOP_BODY_NEXT = "LOOP_BODY_NEXT";
     public static String LOOP_EXIT_NEXT = "LOOP_EXIT_NEXT";
 
+    // MTry 包装节点参数
+    public static String MTRY_WRAPPED_OPERATION_ID = "MTRY_WRAPPED_OPERATION_ID";
+    public static String MTRY_ATTEMPTS = "MTRY_ATTEMPTS";
+    public static String MTRY_RUN_RESPONSE_HANDLER = "MTRY_RUN_RESPONSE_HANDLER";
+
     // Gesture 参数
     public static String GESTURE_TEMPLATE_ID = "GESTURE_TEMPLATE_ID";
     public static String COLOR_POINTS = "COLOR_POINTS";

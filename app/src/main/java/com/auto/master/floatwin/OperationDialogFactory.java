@@ -3332,6 +3332,7 @@ public class OperationDialogFactory {
         int id = view.getId();
         return id == R.id.edt_next_operation
                 || id == R.id.edt_fallback_operation
+                || id == R.id.edt_wrapped_operation
                 || id == R.id.edt_default_next
                 || id == R.id.edt_body_next
                 || id == R.id.edt_exit_next
@@ -4980,6 +4981,171 @@ public class OperationDialogFactory {
                 host.showToast("保存失败: " + e.getMessage());
             }
         });
+    }
+
+    // ==================== MTry Operation ====================
+
+    public void showAddMtryDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_mtry, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 460, null);
+
+        bindMtryDialog(dialogView, null, null);
+    }
+
+    public void showEditMtryDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_mtry, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 460, null);
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setText("保存");
+        }
+        bindMtryDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindMtryDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtWrapped = dialogView.findViewById(R.id.edt_wrapped_operation);
+        EditText edtAttempts = dialogView.findViewById(R.id.edt_mtry_attempts);
+        CheckBox chkRunResponseHandler = dialogView.findViewById(R.id.chk_mtry_run_response_handler);
+        AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+        AutoCompleteTextView edtFallback = dialogView.findViewById(R.id.edt_fallback_operation);
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+
+        edtAttempts.setText("10");
+        if (chkRunResponseHandler != null) {
+            chkRunResponseHandler.setChecked(true);
+        }
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        }
+
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject inputMap = operationObject.optJSONObject("inputMap");
+                if (inputMap != null) {
+                    setOperationReferenceText(edtWrapped, inputMap.optString(MetaOperation.MTRY_WRAPPED_OPERATION_ID, ""));
+                    edtAttempts.setText(inputMap.optString(MetaOperation.MTRY_ATTEMPTS, "10"));
+                    if (chkRunResponseHandler != null) {
+                        chkRunResponseHandler.setChecked(inputMap.optBoolean(MetaOperation.MTRY_RUN_RESPONSE_HANDLER, true));
+                    }
+                    setOperationReferenceText(edtNext, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                    setOperationReferenceText(edtFallback, inputMap.optString(MetaOperation.FALLBACKOPERATIONID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载多次尝试节点数据失败: " + e.getMessage());
+            }
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_wrapped).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择被包裹节点", operationId, edtWrapped);
+            }
+        });
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择成功后节点", operationId, edtNext);
+            }
+        });
+        dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择失败后节点", operationId, edtFallback);
+            }
+        });
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        btnConfirm.setOnClickListener(v -> saveMtryOperation(
+                dialogView, operationId, edtName, edtWrapped, edtAttempts,
+                chkRunResponseHandler, edtNext, edtFallback));
+    }
+
+    private void saveMtryOperation(View dialogView,
+                                   String operationId,
+                                   EditText edtName,
+                                   AutoCompleteTextView edtWrapped,
+                                   EditText edtAttempts,
+                                   CheckBox chkRunResponseHandler,
+                                   AutoCompleteTextView edtNext,
+                                   AutoCompleteTextView edtFallback) {
+        String name = safeText(edtName);
+        String wrapped = safeText(edtWrapped);
+        String attemptsText = safeText(edtAttempts);
+        String next = safeText(edtNext);
+        String fallback = safeText(edtFallback);
+
+        if (TextUtils.isEmpty(name)) {
+            edtName.setError("请填写操作名称");
+            return;
+        }
+        if (TextUtils.isEmpty(wrapped)) {
+            edtWrapped.setError("请选择被包裹节点");
+            return;
+        }
+        if (!TextUtils.isEmpty(operationId) && TextUtils.equals(operationId, wrapped)) {
+            edtWrapped.setError("不能包裹自身");
+            return;
+        }
+
+        long attempts;
+        try {
+            attempts = Long.parseLong(attemptsText);
+        } catch (Exception e) {
+            edtAttempts.setError("请输入 1~1000 的整数");
+            return;
+        }
+        if (attempts <= 0 || attempts > 1000) {
+            edtAttempts.setError("请输入 1~1000 的整数");
+            return;
+        }
+
+        try {
+            JSONObject op = new JSONObject();
+            boolean isEdit = !TextUtils.isEmpty(operationId);
+            op.put("id", isEdit ? operationId : (idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis()));
+            op.put("name", name);
+            op.put("type", 25);
+            op.put("responseType", 1);
+
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.MTRY_WRAPPED_OPERATION_ID, wrapped);
+            inputMap.put(MetaOperation.MTRY_ATTEMPTS, attempts);
+            inputMap.put(MetaOperation.MTRY_RUN_RESPONSE_HANDLER,
+                    chkRunResponseHandler == null || chkRunResponseHandler.isChecked());
+            if (!TextUtils.isEmpty(next)) {
+                inputMap.put(MetaOperation.NEXT_OPERATION_ID, next);
+            }
+            if (!TextUtils.isEmpty(fallback)) {
+                inputMap.put(MetaOperation.FALLBACKOPERATIONID, fallback);
+            }
+            op.put("inputMap", inputMap);
+
+            if (isEdit) {
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, op.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) updateListener.onOperationUpdated();
+                }
+            } else {
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(op);
+                crudHelper.writeOperationsArray(operations, "已添加多次尝试节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存多次尝试节点失败: " + e.getMessage());
+        }
     }
 
     // ==================== Switch Branch Helper Methods ====================

@@ -1163,6 +1163,7 @@ public class FlowGraphView extends View {
             case "模板匹配": return 0xFF00897B;
             case "地图匹配": return 0xFF00695C;
             case "跳转Task": return 0xFFE53935;
+            case "多次尝试节点": return 0xFF5E35B1;
             case "条件分支": return 0xFFFF6F00;
             case "变量脚本": return 0xFFAD1457;
             case "变量计算": return 0xFF6D4C41;

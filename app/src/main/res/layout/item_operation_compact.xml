@@ -35,10 +35,37 @@
         android:textSize="9sp"
         android:textStyle="bold" />
 
+    <FrameLayout
+        android:id="@+id/operation_visual"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/project_panel_icon_chip">
+
+        <ImageView
+            android:id="@+id/operation_visual_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="6dp"
+            android:scaleType="centerInside" />
+
+        <TextView
+            android:id="@+id/operation_visual_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="var"
+            android:textColor="#3167D8"
+            android:textSize="8sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="7dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -116,6 +143,16 @@
             android:textSize="9sp" />
 
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/template_preview_strip"
+        android:layout_width="112dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:gravity="center_vertical|end"
+        android:orientation="horizontal"
+        android:visibility="gone" />
 
     <View
         android:id="@+id/float_btn_dot"

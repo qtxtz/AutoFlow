@@ -1,5 +1,9 @@
 package com.auto.master.floatwin;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class OperationItem {
     public String name;
     public String type;
@@ -11,6 +15,7 @@ public class OperationItem {
     public long nodePreDelayMinMs;
     public long nodePreDelayMaxMs;
     public boolean nodePreDelayRandom;
+    public List<String> templatePreviewNames = Collections.emptyList();
 
     public OperationItem(String name, String id, String type, int index) {
         this(name, id, type, index, 0L, true, 0L, false);
@@ -49,6 +54,22 @@ public class OperationItem {
                          long nodePreDelayMinMs,
                          long nodePreDelayMaxMs,
                          boolean nodePreDelayRandom) {
+        this(name, id, type, index, delayDurationMs, delayShowCountdown,
+                nodePreDelayMs, nodePreDelayMinMs, nodePreDelayMaxMs,
+                nodePreDelayRandom, Collections.emptyList());
+    }
+
+    public OperationItem(String name,
+                         String id,
+                         String type,
+                         int index,
+                         long delayDurationMs,
+                         boolean delayShowCountdown,
+                         long nodePreDelayMs,
+                         long nodePreDelayMinMs,
+                         long nodePreDelayMaxMs,
+                         boolean nodePreDelayRandom,
+                         List<String> templatePreviewNames) {
         this.name = name;
         this.id = id;
         this.type = type;
@@ -59,5 +80,8 @@ public class OperationItem {
         this.nodePreDelayMinMs = Math.max(0L, nodePreDelayMinMs);
         this.nodePreDelayMaxMs = Math.max(0L, nodePreDelayMaxMs);
         this.nodePreDelayRandom = nodePreDelayRandom;
+        this.templatePreviewNames = templatePreviewNames == null
+                ? Collections.emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(templatePreviewNames));
     }
 }

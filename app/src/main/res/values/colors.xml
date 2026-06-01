@@ -69,6 +69,8 @@
     <color name="op_jump_task_bg">#FBE9E7</color>
     <color name="op_condition">#F9A825</color>
     <color name="op_condition_bg">#FFF8E1</color>
+    <color name="op_mtry">#5E35B1</color>
+    <color name="op_mtry_bg">#EDE7F6</color>
     <color name="op_var_script">#D81B60</color>
     <color name="op_var_script_bg">#FCE4EC</color>
     <color name="op_var_math">#6D4C41</color>
