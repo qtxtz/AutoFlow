@@ -5359,6 +5359,222 @@ public class OperationDialogFactory {
         }
     }
 
+    // ==================== 截图区域操作 ====================
+
+    private static final String[] CROP_FORMAT_LABELS = {"JPEG（体积小，有损）", "PNG（无损，体积大）"};
+    private static final String[] CROP_FORMAT_VALUES = {"jpeg", "png"};
+
+    public void showAddCropRegionDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_crop_region, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 520, null);
+        bindCropRegionDialog(dialogView, null, null);
+    }
+
+    public void showEditCropRegionDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_crop_region, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 520, null);
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+        bindCropRegionDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindCropRegionDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName                   = dialogView.findViewById(R.id.edt_name);
+        EditText edtBbox                   = dialogView.findViewById(R.id.edt_bbox);
+        TextView tvBboxStatus              = dialogView.findViewById(R.id.tv_bbox_status);
+        android.widget.Spinner spinnerFmt  = dialogView.findViewById(R.id.spinner_format);
+        View tvQualityLabel                = dialogView.findViewById(R.id.tv_quality_label);
+        EditText edtQuality                = dialogView.findViewById(R.id.edt_quality);
+        EditText edtResultVar              = dialogView.findViewById(R.id.edt_result_var);
+        android.widget.CheckBox chkDataUri = dialogView.findViewById(R.id.chk_data_uri);
+        EditText edtPreDelay               = dialogView.findViewById(R.id.edt_pre_delay);
+        AutoCompleteTextView edtNext       = dialogView.findViewById(R.id.edt_next_operation);
+        AutoCompleteTextView edtFallback   = dialogView.findViewById(R.id.edt_fallback_operation);
+        View lyAdvancedToggle              = dialogView.findViewById(R.id.ly_advanced_toggle);
+        View lyAdvancedPanel               = dialogView.findViewById(R.id.ly_advanced_panel);
+        TextView tvAdvancedArrow           = dialogView.findViewById(R.id.tv_advanced_arrow);
+
+        // 格式 Spinner
+        android.widget.ArrayAdapter<String> fmtAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, CROP_FORMAT_LABELS);
+        fmtAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerFmt.setAdapter(fmtAdapter);
+        spinnerFmt.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
+                boolean jpeg = pos == 0;
+                if (tvQualityLabel != null) tvQualityLabel.setVisibility(jpeg ? View.VISIBLE : View.GONE);
+                if (edtQuality != null)     edtQuality.setVisibility(jpeg ? View.VISIBLE : View.GONE);
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p) {}
+        });
+
+        // 高级折叠
+        final boolean[] advExp = {false};
+        if (lyAdvancedToggle != null) {
+            lyAdvancedToggle.setOnClickListener(v -> {
+                advExp[0] = !advExp[0];
+                if (lyAdvancedPanel != null) lyAdvancedPanel.setVisibility(advExp[0] ? View.VISIBLE : View.GONE);
+                if (tvAdvancedArrow != null) tvAdvancedArrow.setText(advExp[0] ? "▲" : "▼");
+            });
+        }
+
+        // 预填充（编辑模式）
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    org.json.JSONArray bboxArr = im.optJSONArray(MetaOperation.BBOX);
+                    if (bboxArr != null && bboxArr.length() == 4) {
+                        edtBbox.setText(bboxArr.getInt(0) + "," + bboxArr.getInt(1)
+                                + "," + bboxArr.getInt(2) + "," + bboxArr.getInt(3));
+                        if (tvBboxStatus != null) tvBboxStatus.setVisibility(View.VISIBLE);
+                    }
+                    String savedFmt = im.optString(MetaOperation.CROP_FORMAT, "jpeg");
+                    for (int i = 0; i < CROP_FORMAT_VALUES.length; i++) {
+                        if (CROP_FORMAT_VALUES[i].equals(savedFmt)) { spinnerFmt.setSelection(i); break; }
+                    }
+                    edtQuality.setText(String.valueOf(im.optInt(MetaOperation.CROP_QUALITY, 80)));
+                    edtResultVar.setText(im.optString(MetaOperation.CROP_RESULT_VAR, ""));
+                    chkDataUri.setChecked(im.optBoolean(MetaOperation.CROP_DATA_URI, false));
+                    long pd = im.optLong(MetaOperation.NODE_PRE_DELAY_MS, 0);
+                    if (pd > 0) edtPreDelay.setText(String.valueOf(pd));
+                    setOperationReferenceText(edtNext,     im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                    setOperationReferenceText(edtFallback, im.optString(MetaOperation.FALLBACKOPERATIONID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载数据失败: " + e.getMessage());
+            }
+        }
+
+        // 框选
+        View btnPickBbox = dialogView.findViewById(R.id.btn_pick_bbox);
+        if (btnPickBbox != null) {
+            btnPickBbox.setOnClickListener(v -> {
+                if (regionPickHelper != null) {
+                    regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, tvBboxStatus);
+                    if (tvBboxStatus != null) tvBboxStatus.setVisibility(View.VISIBLE);
+                }
+            });
+        }
+
+        // 自动补全 + 选择器
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) showOperationPickerForField("选择下一节点", null, edtNext);
+        });
+        dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) showOperationPickerForField("选择失败节点", null, edtFallback);
+        });
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> saveCropRegionOperation(
+                    dialogView, operationId, operationObject,
+                    edtName, edtBbox, spinnerFmt, edtQuality,
+                    edtResultVar, chkDataUri, edtPreDelay, edtNext, edtFallback));
+        }
+    }
+
+    private void saveCropRegionOperation(
+            View dialogView, String operationId, JSONObject existingObj,
+            EditText edtName, EditText edtBbox,
+            android.widget.Spinner spinnerFmt, EditText edtQuality,
+            EditText edtResultVar, android.widget.CheckBox chkDataUri,
+            EditText edtPreDelay,
+            AutoCompleteTextView edtNext, AutoCompleteTextView edtFallback) {
+
+        String name       = edtName.getText().toString().trim();
+        String bboxStr    = edtBbox.getText().toString().trim();
+        int    fmtPos     = spinnerFmt.getSelectedItemPosition();
+        String format     = (fmtPos >= 0 && fmtPos < CROP_FORMAT_VALUES.length) ? CROP_FORMAT_VALUES[fmtPos] : "jpeg";
+        String qualityStr = edtQuality.getText().toString().trim();
+        String resultVar  = edtResultVar.getText().toString().trim();
+        boolean dataUri   = chkDataUri.isChecked();
+        String preDelayStr = edtPreDelay.getText().toString().trim();
+        String nextOp     = safeText(edtNext);
+        String fallbackOp = safeText(edtFallback);
+
+        if (TextUtils.isEmpty(name))      { edtName.setError("请填写操作名称"); return; }
+        if (TextUtils.isEmpty(bboxStr))   { edtBbox.setError("请填写截图区域"); return; }
+        if (TextUtils.isEmpty(resultVar)) { edtResultVar.setError("请填写存入变量名"); return; }
+
+        java.util.List<Integer> bbox = regionPickHelper != null
+                ? regionPickHelper.parseBboxInput(bboxStr) : parseBboxFallback(bboxStr);
+        if (bbox == null || bbox.size() != 4) { edtBbox.setError("格式错误，应为 x,y,宽,高"); return; }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            org.json.JSONArray bboxArr = new org.json.JSONArray();
+            for (int v : bbox) bboxArr.put(v);
+            inputMap.put(MetaOperation.BBOX,            bboxArr);
+            inputMap.put(MetaOperation.CROP_FORMAT,     format);
+            inputMap.put(MetaOperation.CROP_RESULT_VAR, resultVar);
+            if (dataUri) inputMap.put(MetaOperation.CROP_DATA_URI, true);
+            if (!TextUtils.isEmpty(qualityStr)) {
+                try { inputMap.put(MetaOperation.CROP_QUALITY, Integer.parseInt(qualityStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+            if (!TextUtils.isEmpty(preDelayStr)) {
+                try { inputMap.put(MetaOperation.NODE_PRE_DELAY_MS, Long.parseLong(preDelayStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+            if (!TextUtils.isEmpty(nextOp))     inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+            if (!TextUtils.isEmpty(fallbackOp)) inputMap.put(MetaOperation.FALLBACKOPERATIONID, fallbackOp);
+
+            boolean isEdit = operationId != null;
+            if (isEdit) {
+                JSONObject updated = new JSONObject();
+                updated.put("id",           operationId);
+                updated.put("name",         name);
+                updated.put("type",         3);
+                updated.put("responseType", 4);
+                updated.put("inputMap",     inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) updateListener.onOperationUpdated();
+                }
+            } else {
+                JSONObject opObj = new JSONObject();
+                if (idGenerator != null) opObj.put("id", idGenerator.generateId());
+                opObj.put("name",         name);
+                opObj.put("type",         3);
+                opObj.put("responseType", 4);
+                opObj.put("inputMap",     inputMap);
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(opObj);
+                crudHelper.writeOperationsArray(operations, "已添加截图区域节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存失败: " + e.getMessage());
+        }
+    }
+
+    private java.util.List<Integer> parseBboxFallback(String raw) {
+        try {
+            String[] parts = raw.split(",");
+            if (parts.length != 4) return null;
+            java.util.List<Integer> list = new java.util.ArrayList<>();
+            for (String p : parts) list.add(Integer.parseInt(p.trim()));
+            return list;
+        } catch (Exception e) { return null; }
+    }
+
     // ==================== 无障碍节点操作 ====================
 
     private static final String[] A11Y_FIND_MODE_LABELS = {

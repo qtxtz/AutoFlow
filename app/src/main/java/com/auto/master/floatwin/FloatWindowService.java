@@ -1781,6 +1781,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditDelayDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 3) {
+                int responseType = operationObject.optInt("responseType", 1);
+                if (responseType == 4) {
+                    dialogFactory.showEditCropRegionDialog(selected.id, operationObject);
+                    return;
+                }
+            }
             if (type == 8) {
                 dialogFactory.showEditJumpTaskDialog(selected.id, operationObject);
                 return;
@@ -2700,7 +2707,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 "即将支持",
                 null,
                 Arrays.asList(
-                        new AddOperationMenuAdapter.MenuItem("crop_region", "区域裁剪", "保留竞品风格入口，当前尚未开放", "裁", R.color.op_crop, false)
+                        new AddOperationMenuAdapter.MenuItem("crop_region", "截图区域", "截取屏幕区域并将图像编码为 Base64 存入变量", "截", R.color.op_crop, true)
                 )));
 
         return sections;
@@ -2773,7 +2780,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showAddAccessibilityNodeDialog();
                 return;
             case "crop_region":
-                Toast.makeText(this, "该类型将很快支持", Toast.LENGTH_SHORT).show();
+                dialogFactory.showAddCropRegionDialog();
                 return;
             default:
                 Toast.makeText(this, "暂不支持该节点类型", Toast.LENGTH_SHORT).show();

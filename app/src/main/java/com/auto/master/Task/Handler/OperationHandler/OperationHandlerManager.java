@@ -75,6 +75,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 2, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.CROP_REGION.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.CROP_REGION.getCode(), 4, ColorMatchResponseHandler::new);
         registerResponse(OperationType.LOAD_IMG_TO_MAT.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.MATCH_TEMPLATE.getCode(), 1, MatchTemplateDynamicJumpResponseHandler::new);
         registerResponse(OperationType.MATCH_TEMPLATE.getCode(), 2, JumpToNextOperationResponseHandler::new);

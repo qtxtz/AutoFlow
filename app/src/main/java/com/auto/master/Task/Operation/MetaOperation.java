@@ -167,6 +167,16 @@ public abstract class MetaOperation {
     public static String HTTP_STATUS_VAR = "HTTP_STATUS_VAR";
     public static String HTTP_TIMEOUT_MS = "HTTP_TIMEOUT_MS";
 
+    // 截图区域 → 变量 参数（responseType=4）
+    // base64 结果存入的变量名
+    public static String CROP_RESULT_VAR = "CROP_RESULT_VAR";
+    // 编码格式: "jpeg" | "png"（默认 "jpeg"）
+    public static String CROP_FORMAT = "CROP_FORMAT";
+    // JPEG 质量 0-100（默认 80，PNG 时忽略）
+    public static String CROP_QUALITY = "CROP_QUALITY";
+    // 是否在 base64 前加 data URI 前缀（默认 false）
+    public static String CROP_DATA_URI = "CROP_DATA_URI";
+
     // 无障碍节点 (AccessibilityNode) 参数
     // 查找模式: "text" | "textContains" | "textStartsWith" | "viewId" | "contentDesc" | "contentDescContains" | "className"
     public static String A11Y_FIND_MODE = "A11Y_FIND_MODE";

@@ -1375,10 +1375,77 @@ public class CropRegionOperationHandler extends OperationHandler {
                 }
             });
             return true;
+        } else if (responseType == 4) {
+            // ── 截图区域 → Base64 → 变量 ──────────────────────────────────
+            String resultVar = VariableRuntimeUtils.getString(inputMap, MetaOperation.CROP_RESULT_VAR, "").trim();
+            String format    = VariableRuntimeUtils.getString(inputMap, MetaOperation.CROP_FORMAT, "jpeg").trim().toLowerCase();
+            boolean dataUri  = false;
+            Object rawDataUri = inputMap.get(MetaOperation.CROP_DATA_URI);
+            if (rawDataUri instanceof Boolean) dataUri = (Boolean) rawDataUri;
+            else if (rawDataUri instanceof String) dataUri = "true".equalsIgnoreCase(((String) rawDataUri).trim());
+
+            int quality = 80;
+            Object rawQ = inputMap.get(MetaOperation.CROP_QUALITY);
+            if (rawQ instanceof Number)  quality = ((Number) rawQ).intValue();
+            else if (rawQ instanceof String) {
+                try { quality = Integer.parseInt(((String) rawQ).trim()); } catch (Exception ignored) {}
+            }
+            quality = Math.max(0, Math.min(100, quality));
+
+            // 目标 bitmap：优先用已裁剪的 cropped，否则用 full
+            Bitmap target = (cropped != null && !cropped.isRecycled()) ? cropped : full;
+            if (target == null || target.isRecycled()) {
+                Log.e(TAG, "responseType=4：无有效 bitmap");
+                putBase64FailureResponse(ctx, obj, "截图失败");
+                recycleBitmap(full);
+                recycleBitmap(cropped);
+                return true;
+            }
+
+            try {
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                android.graphics.Bitmap.CompressFormat cf = "png".equals(format)
+                        ? android.graphics.Bitmap.CompressFormat.PNG
+                        : android.graphics.Bitmap.CompressFormat.JPEG;
+                target.compress(cf, quality, baos);
+                String encoded = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
+                String result  = dataUri ? ("data:image/" + ("png".equals(format) ? "png" : "jpeg") + ";base64," + encoded) : encoded;
+
+                if (!android.text.TextUtils.isEmpty(resultVar)) {
+                    if (ctx.variables == null) ctx.variables = new java.util.HashMap<>();
+                    ctx.variables.put(resultVar, result);
+                }
+
+                java.util.HashMap<String, Object> res = new java.util.HashMap<>();
+                res.put(MetaOperation.MATCHED, true);
+                res.put(MetaOperation.RESULT,  result);
+                res.put("crop_base64_length",  (long) result.length());
+                ctx.currentResponse  = res;
+                ctx.lastOperation    = obj;
+                ctx.currentOperation = obj;
+
+            } catch (Exception e) {
+                Log.e(TAG, "base64 编码失败", e);
+                putBase64FailureResponse(ctx, obj, e.getMessage());
+            } finally {
+                recycleBitmap(full);
+                recycleBitmap(cropped);
+            }
+            return true;
         }
 
 
         return false;
+    }
+
+    private void putBase64FailureResponse(OperationContext ctx, MetaOperation obj, String reason) {
+        java.util.HashMap<String, Object> res = new java.util.HashMap<>();
+        res.put(MetaOperation.MATCHED, false);
+        res.put(MetaOperation.RESULT,  "");
+        res.put("crop_fail_reason",    reason == null ? "" : reason);
+        ctx.currentResponse  = res;
+        ctx.lastOperation    = obj;
+        ctx.currentOperation = obj;
     }
 
 
