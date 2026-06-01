@@ -1841,6 +1841,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditHttpRequestDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 24) {
+                dialogFactory.showEditAccessibilityNodeDialog(selected.id, operationObject);
+                return;
+            }
             if (type == 21) {
                 dialogFactory.showEditDynamicDelayDialog(selected.id, operationObject);
                 return;
@@ -2681,7 +2685,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 null,
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("launch_app", "启动应用", "拉起指定应用并等待前台", "启", R.color.op_app_launch, true),
-                        new AddOperationMenuAdapter.MenuItem("close_app", "关闭应用", "退回桌面并请求结束后台进程", "关", R.color.op_app_close, true)
+                        new AddOperationMenuAdapter.MenuItem("close_app", "关闭应用", "退回桌面并请求结束后台进程", "关", R.color.op_app_close, true),
+                        new AddOperationMenuAdapter.MenuItem("a11y_node", "无障碍节点", "通过无障碍服务查找并操作界面元素", "障", R.color.op_a11y_node, true)
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
@@ -2762,6 +2767,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "http_request":
                 dialogFactory.showAddHttpRequestDialog();
+                return;
+            case "a11y_node":
+            case "accessibility_node":
+                dialogFactory.showAddAccessibilityNodeDialog();
                 return;
             case "crop_region":
                 Toast.makeText(this, "该类型将很快支持", Toast.LENGTH_SHORT).show();
@@ -5254,6 +5263,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     @Override
+    public View getProjectPanelView() {
+        return projectPanelView;
+    }
+
+    @Override
     public File getProjectsRootDir() {
         File root = new File(getExternalFilesDir(null), "projects");
         if (!root.exists()) {
@@ -7305,7 +7319,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private Runnable hideViewsForCapture(View... viewsToHide) {
+    @Override
+    public Runnable hideViewsForCapture(View... viewsToHide) {
         List<View> restoreViews = new ArrayList<>();
         List<Integer> restoreStates = new ArrayList<>();
         if (viewsToHide != null) {

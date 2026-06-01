@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- NodeHighlightCanvas 由代码动态添加到此容器 -->
+    <FrameLayout
+        android:id="@+id/fl_node_canvas"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <!-- 顶部信息栏 -->
+    <LinearLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:background="#DD192738">
+
+        <TextView
+            android:id="@+id/tv_hint"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="点击界面元素选中节点"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp"/>
+
+        <TextView
+            android:id="@+id/tv_node_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="扫描中..."
+            android:textColor="#78909C"
+            android:textSize="12sp"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/btn_refresh"
+            android:layout_width="48dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="刷新"
+            android:textColor="#64B5F6"
+            android:textSize="12sp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="6dp"/>
+
+        <TextView
+            android:id="@+id/btn_list_mode"
+            android:layout_width="48dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="列表"
+            android:textColor="#A5D6A7"
+            android:textSize="12sp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="6dp"/>
+
+        <TextView
+            android:id="@+id/btn_close_scanner"
+            android:layout_width="34dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="#EF9A9A"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"/>
+    </LinearLayout>
+
+    <!-- 底部节点详情面板（选中节点后显示） -->
+    <LinearLayout
+        android:id="@+id/panel_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#EE0D1F2E"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <!-- 第一行：类型 + 属性标签 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:id="@+id/tv_sel_class"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_sel_props"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#78909C"
+                android:textSize="11sp"/>
+
+            <TextView
+                android:id="@+id/btn_deselect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="取消"
+                android:textColor="#78909C"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"/>
+        </LinearLayout>
+
+        <!-- 文字内容 -->
+        <TextView
+            android:id="@+id/tv_sel_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#80CBC4"
+            android:textSize="13sp"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone"/>
+
+        <!-- viewId -->
+        <TextView
+            android:id="@+id/tv_sel_view_id"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#80CBC4"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone"/>
+
+        <!-- contentDesc -->
+        <TextView
+            android:id="@+id/tv_sel_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#80CBC4"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone"/>
+
+        <!-- 坐标 -->
+        <TextView
+            android:id="@+id/tv_sel_bounds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#455A64"
+            android:textSize="11sp"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/tv_sel_quality"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#A5D6A7"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/tv_sel_equivalent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#78909C"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- 填入方式 chips -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="填入方式："
+            android:textColor="#78909C"
+            android:textSize="12sp"
+            android:layout_marginBottom="6dp"/>
+
+        <LinearLayout
+            android:id="@+id/ll_mode_chips"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp"/>
+
+        <!-- 操作按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btn_apply_node"
+                android:layout_width="0dp"
+                android:layout_height="42dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="填入对话框"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:background="@drawable/btn_edit_selector"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 列表模式面板（覆盖整个屏幕，默认隐藏） -->
+    <LinearLayout
+        android:id="@+id/panel_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#EE0D1F2E"
+        android:visibility="gone">
+
+        <!-- 列表顶栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:background="#22FFFFFF">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="节点列表"
+                android:textColor="#CFD8DC"
+                android:textSize="14sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/btn_back_highlight"
+                android:layout_width="48dp"
+                android:layout_height="30dp"
+                android:gravity="center"
+                android:text="高亮"
+                android:textColor="#A5D6A7"
+                android:textSize="12sp"
+                android:background="@drawable/item_operation_compact_bg"/>
+        </LinearLayout>
+
+        <!-- 搜索栏 -->
+        <EditText
+            android:id="@+id/edt_filter"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:background="#22FFFFFF"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:hint="按文字 / ID / 类名过滤..."
+            android:textColor="#ECEFF1"
+            android:textColorHint="#55FFFFFF"
+            android:textSize="13sp"
+            android:singleLine="true"
+            android:inputType="text"/>
+
+        <!-- 节点树列表 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_nodes"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="vertical"/>
+    </LinearLayout>
+
+</FrameLayout>

@@ -1,6 +1,7 @@
 package com.auto.master.floatwin;
 
 import android.content.Context;
+import android.view.View;
 import android.view.WindowManager;
 
 import java.io.File;
@@ -20,6 +21,20 @@ public interface FloatWindowHost {
      * Get the WindowManager for managing floating windows
      */
     WindowManager getWindowManager();
+
+    /**
+     * Main project/operation panel, used by fullscreen pickers that need a clean target app view.
+     */
+    default View getProjectPanelView() {
+        return null;
+    }
+
+    /**
+     * Temporarily hides floating UI while a picker/scanner inspects the underlying app.
+     */
+    default Runnable hideViewsForCapture(View... viewsToHide) {
+        return () -> {};
+    }
 
     /**
      * Convert dp to pixels

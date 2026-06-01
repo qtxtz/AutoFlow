@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="5dp"
+    android:paddingBottom="5dp"
+    android:paddingEnd="10dp">
+
+    <!-- 深度缩进占位（代码动态设置 paddingStart） -->
+
+    <!-- 类型色块 -->
+    <View
+        android:id="@+id/view_type_dot"
+        android:layout_width="3dp"
+        android:layout_height="28dp"
+        android:layout_marginEnd="8dp"/>
+
+    <!-- 主要信息列 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- 类名 + 标签行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_class_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#B0BEC5"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="6dp"/>
+
+            <!-- 可点击标签 -->
+            <TextView
+                android:id="@+id/tv_tag_clickable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:text="点"
+                android:textColor="#64B5F6"
+                android:textSize="9sp"
+                android:background="#2264B5F6"
+                android:layout_marginEnd="3dp"
+                android:visibility="gone"/>
+
+            <!-- 可滚动标签 -->
+            <TextView
+                android:id="@+id/tv_tag_scrollable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:text="滚"
+                android:textColor="#A5D6A7"
+                android:textSize="9sp"
+                android:background="#22A5D6A7"
+                android:layout_marginEnd="3dp"
+                android:visibility="gone"/>
+
+            <!-- 可编辑标签 -->
+            <TextView
+                android:id="@+id/tv_tag_editable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:text="输"
+                android:textColor="#CE93D8"
+                android:textSize="9sp"
+                android:background="#22CE93D8"
+                android:layout_marginEnd="3dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <!-- 文字内容 / viewId / contentDesc -->
+        <TextView
+            android:id="@+id/tv_node_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#80CBC4"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/tv_node_view_id"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#546E7A"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone"/>
+
+    </LinearLayout>
+
+    <!-- 子节点数量 -->
+    <TextView
+        android:id="@+id/tv_child_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#37474F"
+        android:textSize="10sp"
+        android:visibility="gone"/>
+
+</LinearLayout>

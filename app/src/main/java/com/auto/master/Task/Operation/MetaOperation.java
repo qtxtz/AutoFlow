@@ -167,6 +167,28 @@ public abstract class MetaOperation {
     public static String HTTP_STATUS_VAR = "HTTP_STATUS_VAR";
     public static String HTTP_TIMEOUT_MS = "HTTP_TIMEOUT_MS";
 
+    // 无障碍节点 (AccessibilityNode) 参数
+    // 查找模式: "text" | "textContains" | "textStartsWith" | "viewId" | "contentDesc" | "contentDescContains" | "className"
+    public static String A11Y_FIND_MODE = "A11Y_FIND_MODE";
+    // 查找值，支持 ${变量名} 模板替换
+    public static String A11Y_FIND_VALUE = "A11Y_FIND_VALUE";
+    // 可选：限定在指定包名内查找（如 com.example.app）
+    public static String A11Y_PACKAGE_FILTER = "A11Y_PACKAGE_FILTER";
+    // 动作: "click" | "longClick" | "getText" | "getDesc" | "setText" | "scrollUp" | "scrollDown" | "focus" | "exists"
+    public static String A11Y_ACTION = "A11Y_ACTION";
+    // setText 动作时的文字内容，支持 ${变量名}
+    public static String A11Y_ACTION_TEXT = "A11Y_ACTION_TEXT";
+    // getText / getDesc / exists 动作时结果存入的变量名
+    public static String A11Y_RESULT_VAR = "A11Y_RESULT_VAR";
+    // 当匹配到多个节点时取第几个（0=第一个）
+    public static String A11Y_MATCH_INDEX = "A11Y_MATCH_INDEX";
+    // 等待节点出现的超时（毫秒），0=不等待直接失败
+    public static String A11Y_TIMEOUT_MS = "A11Y_TIMEOUT_MS";
+    // 等待轮询间隔（毫秒）
+    public static String A11Y_POLL_INTERVAL_MS = "A11Y_POLL_INTERVAL_MS";
+    // 点击/长按前是否先将节点滚动至可见（true/false）
+    public static String A11Y_SCROLL_INTO_VIEW = "A11Y_SCROLL_INTO_VIEW";
+
 
     // 无参构造方法 - Gson 必需
     public MetaOperation() {}

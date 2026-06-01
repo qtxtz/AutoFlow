@@ -6,6 +6,7 @@ import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpTaskResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpToNextOperationResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResponseHandler;
+import com.auto.master.Task.Operation.AccessibilityNodeOperation;
 import com.auto.master.Task.Operation.AppCloseOperation;
 import com.auto.master.Task.Operation.AppLaunchOperation;
 import com.auto.master.Task.Operation.BackKeyOperation;
@@ -68,6 +69,7 @@ public class OperationHandlerManager {
         register(OperationType.DYNAMIC_DELAY, DynamicDelayOperation.class, DynamicDelayOperation::new, DynamicDelayOperationHandler::new, "dynamic_delay", "dynamicdelay");
         register(OperationType.SET_CAPTURE_SCALE, SetCaptureScaleOperation.class, SetCaptureScaleOperation::new, SetCaptureScaleOperationHandler::new, "set_scale", "set_capture_scale", "capture_scale");
         register(OperationType.APP_CLOSE, AppCloseOperation.class, AppCloseOperation::new, AppCloseOperationHandler::new, "close_app", "app_close", "kill_app");
+        register(OperationType.ACCESSIBILITY_NODE, AccessibilityNodeOperation.class, AccessibilityNodeOperation::new, AccessibilityNodeOperationHandler::new, "a11y_node", "accessibility", "accessibility_node");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -93,6 +95,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.DYNAMIC_DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_CAPTURE_SCALE.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.APP_CLOSE.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.ACCESSIBILITY_NODE.getCode(), 1, ColorMatchResponseHandler::new);
     }
 
     /**

@@ -26,7 +26,8 @@ public enum OperationType {
     HTTP_REQUEST(20, "HTTP请求", "http_request"),
     DYNAMIC_DELAY(21, "动态延时", "dynamic_delay"),
     SET_CAPTURE_SCALE(22, "采集倍率", "set_scale"),
-    APP_CLOSE(23, "关闭应用", "app_close");
+    APP_CLOSE(23, "关闭应用", "app_close"),
+    ACCESSIBILITY_NODE(24, "无障碍节点", "a11y_node");
 
     private final int code;
     private final String displayName;

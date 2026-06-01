@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/dialog_background">
+
+    <!-- 拖动标题栏 -->
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="无障碍节点"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#00838F"/>
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:text="放大"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="通过无障碍服务查找界面节点并执行操作，支持 ${变量名} 模板替换"
+                android:textSize="12sp"
+                android:textColor="#6a7682"
+                android:layout_marginBottom="10dp"/>
+
+            <!-- 操作名称 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="操作名称"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="例如: 点击确认按钮"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 分割线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="10dp"/>
+
+            <!-- 扫描界面按钮 -->
+            <TextView
+                android:id="@+id/btn_scan_nodes"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:gravity="center"
+                android:text="📡  扫描界面节点树"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#00838F"
+                android:background="@drawable/item_operation_compact_bg"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_scanned_node_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="尚未从界面分析器选择节点"
+                android:textColor="#6a7682"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:maxLines="3"
+                android:ellipsize="end"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="查找配置"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#00838F"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- 查找方式 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="查找方式"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <Spinner
+                android:id="@+id/spinner_find_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 查找值 -->
+            <TextView
+                android:id="@+id/tv_find_value_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="查找值（支持 ${变量名}）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_find_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="例如: 确认  /  com.pkg:id/btn_ok"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 包名过滤（可选） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="包名过滤（可选，如: com.example.app）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_package_filter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="留空表示不限制应用"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 匹配序号 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="匹配第几个节点（0=第一个）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_match_index"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="0"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 等待超时 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="等待节点出现超时（毫秒，0=不等待）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_timeout_ms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="0"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 轮询间隔 -->
+            <TextView
+                android:id="@+id/tv_poll_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="等待轮询间隔（毫秒，默认 200）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"
+                android:visibility="gone"/>
+
+            <EditText
+                android:id="@+id/edt_poll_interval_ms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="200"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone"/>
+
+            <!-- 滚动到可见 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <CheckBox
+                    android:id="@+id/chk_scroll_into_view"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="false"/>
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="执行动作前先将节点滚动至可见"
+                    android:textSize="13sp"
+                    android:layout_marginStart="6dp"/>
+            </LinearLayout>
+
+            <!-- 分割线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="动作配置"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#00838F"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- 动作类型 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="执行动作"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <Spinner
+                android:id="@+id/spinner_action"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- setText 时的文字（条件显示） -->
+            <TextView
+                android:id="@+id/tv_action_text_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="输入文字内容（支持 ${变量名}）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"
+                android:visibility="gone"/>
+
+            <EditText
+                android:id="@+id/edt_action_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="例如: Hello ${username}"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone"/>
+
+            <!-- 结果存入变量（getText / getDesc / exists 时显示） -->
+            <TextView
+                android:id="@+id/tv_result_var_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="结果存入变量（如: nodeText）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"
+                android:visibility="gone"/>
+
+            <EditText
+                android:id="@+id/edt_result_var"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="nodeText"
+                android:singleLine="true"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone"/>
+
+            <!-- 分割线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="路由配置"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#00838F"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- 成功后节点 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="成功后节点（可选）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_next_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如: op_002"/>
+
+                <TextView
+                    android:id="@+id/btn_pick_next"
+                    android:layout_width="58dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf"
+                    android:background="@drawable/item_operation_compact_bg"/>
+            </LinearLayout>
+
+            <!-- 失败后节点 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="失败 / 节点未找到后节点（可选）"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="16dp">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_fallback_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如: op_error_handler"/>
+
+                <TextView
+                    android:id="@+id/btn_pick_fallback"
+                    android:layout_width="58dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf"
+                    android:background="@drawable/item_operation_compact_bg"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 底部按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="确认添加"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/btn_edit_selector"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
+
+</LinearLayout>

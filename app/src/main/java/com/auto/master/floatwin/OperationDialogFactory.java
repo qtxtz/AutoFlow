@@ -5359,6 +5359,326 @@ public class OperationDialogFactory {
         }
     }
 
+    // ==================== 无障碍节点操作 ====================
+
+    private static final String[] A11Y_FIND_MODE_LABELS = {
+            "文字精确匹配", "文字包含", "文字开头匹配",
+            "资源 ID (viewId)", "内容描述精确", "内容描述包含", "类名 (className)"
+    };
+    private static final String[] A11Y_FIND_MODE_VALUES = {
+            "text", "textContains", "textStartsWith",
+            "viewId", "contentDesc", "contentDescContains", "className"
+    };
+
+    private static final String[] A11Y_ACTION_LABELS = {
+            "点击", "长按", "读取文字", "读取内容描述", "输入文字",
+            "向上滚动", "向下滚动", "请求焦点", "仅检测是否存在"
+    };
+    private static final String[] A11Y_ACTION_VALUES = {
+            "click", "longClick", "getText", "getDesc", "setText",
+            "scrollUp", "scrollDown", "focus", "exists"
+    };
+
+    public void showAddAccessibilityNodeDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_accessibility_node, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        bindAccessibilityNodeDialog(dialogView, null, null);
+    }
+
+    public void showEditAccessibilityNodeDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_accessibility_node, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+
+        bindAccessibilityNodeDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindAccessibilityNodeDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName              = dialogView.findViewById(R.id.edt_name);
+        android.widget.Spinner spinnerFindMode = dialogView.findViewById(R.id.spinner_find_mode);
+        EditText edtFindValue         = dialogView.findViewById(R.id.edt_find_value);
+        EditText edtPackageFilter     = dialogView.findViewById(R.id.edt_package_filter);
+        EditText edtMatchIndex        = dialogView.findViewById(R.id.edt_match_index);
+        TextView tvScannedNodeSummary = dialogView.findViewById(R.id.tv_scanned_node_summary);
+        EditText edtTimeoutMs         = dialogView.findViewById(R.id.edt_timeout_ms);
+        View tvPollLabel              = dialogView.findViewById(R.id.tv_poll_label);
+        EditText edtPollIntervalMs    = dialogView.findViewById(R.id.edt_poll_interval_ms);
+        android.widget.CheckBox chkScrollIntoView = dialogView.findViewById(R.id.chk_scroll_into_view);
+        android.widget.Spinner spinnerAction      = dialogView.findViewById(R.id.spinner_action);
+        View tvActionTextLabel        = dialogView.findViewById(R.id.tv_action_text_label);
+        EditText edtActionText        = dialogView.findViewById(R.id.edt_action_text);
+        View tvResultVarLabel         = dialogView.findViewById(R.id.tv_result_var_label);
+        EditText edtResultVar         = dialogView.findViewById(R.id.edt_result_var);
+        AutoCompleteTextView edtNextOperation     = dialogView.findViewById(R.id.edt_next_operation);
+        AutoCompleteTextView edtFallbackOperation = dialogView.findViewById(R.id.edt_fallback_operation);
+
+        // 绑定查找方式 Spinner
+        android.widget.ArrayAdapter<String> findModeAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, A11Y_FIND_MODE_LABELS);
+        findModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerFindMode.setAdapter(findModeAdapter);
+
+        // 绑定动作 Spinner
+        android.widget.ArrayAdapter<String> actionAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, A11Y_ACTION_LABELS);
+        actionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerAction.setAdapter(actionAdapter);
+
+        // 根据动作显示/隐藏条件字段
+        Runnable updateActionFields = () -> {
+            int pos = spinnerAction.getSelectedItemPosition();
+            if (pos < 0 || pos >= A11Y_ACTION_VALUES.length) return;
+            String act = A11Y_ACTION_VALUES[pos];
+            boolean isSetText = "setText".equals(act);
+            boolean isReadResult = "getText".equals(act) || "getDesc".equals(act) || "exists".equals(act);
+            if (tvActionTextLabel != null) tvActionTextLabel.setVisibility(isSetText ? View.VISIBLE : View.GONE);
+            if (edtActionText != null)     edtActionText.setVisibility(isSetText ? View.VISIBLE : View.GONE);
+            if (tvResultVarLabel != null)  tvResultVarLabel.setVisibility(isReadResult ? View.VISIBLE : View.GONE);
+            if (edtResultVar != null)      edtResultVar.setVisibility(isReadResult ? View.VISIBLE : View.GONE);
+        };
+        spinnerAction.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
+                updateActionFields.run();
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> p) {}
+        });
+
+        // 超时 > 0 时才显示轮询间隔
+        if (edtTimeoutMs != null) {
+            edtTimeoutMs.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    long v = 0;
+                    try { v = Long.parseLong(s.toString().trim()); } catch (Exception ignored) {}
+                    int vis = v > 0 ? View.VISIBLE : View.GONE;
+                    if (tvPollLabel != null) tvPollLabel.setVisibility(vis);
+                    if (edtPollIntervalMs != null) edtPollIntervalMs.setVisibility(vis);
+                }
+            });
+        }
+
+        // 扫描界面节点树按钮
+        View btnScan = dialogView.findViewById(R.id.btn_scan_nodes);
+        if (btnScan != null) {
+            final android.widget.Spinner finalSpinnerFindMode = spinnerFindMode;
+            final EditText finalEdtFindValue = edtFindValue;
+            final EditText finalEdtPackageFilter = edtPackageFilter;
+            final EditText finalEdtMatchIndex = edtMatchIndex;
+            final TextView finalScannedNodeSummary = tvScannedNodeSummary;
+            btnScan.setOnClickListener(v -> {
+                AccessibilityNodeScannerOverlay scanner = new AccessibilityNodeScannerOverlay(
+                        host.getContext(), wm,
+                        (findMode, findValue, matchIndex, node) -> {
+                            // 回填查找方式
+                            for (int i = 0; i < A11Y_FIND_MODE_VALUES.length; i++) {
+                                if (A11Y_FIND_MODE_VALUES[i].equals(findMode)) {
+                                    finalSpinnerFindMode.setSelection(i);
+                                    break;
+                                }
+                            }
+                            // 回填查找值
+                            finalEdtFindValue.setText(findValue);
+                            // 同一个选择器命中多个节点时，自动填入当前节点序号
+                            finalEdtMatchIndex.setText(String.valueOf(Math.max(0, matchIndex)));
+                            // 回填包名（如有）
+                            if (!TextUtils.isEmpty(node.packageName)
+                                    && !node.packageName.equals(host.getContext().getPackageName())) {
+                                finalEdtPackageFilter.setText(node.packageName);
+                            }
+                            if (finalScannedNodeSummary != null) {
+                                finalScannedNodeSummary.setText(
+                                        "已选择: " + node.shortClassName
+                                                + " | " + node.displayName()
+                                                + "\n" + "selector = { mode: \"" + findMode
+                                                + "\", value: \"" + findValue
+                                                + "\", index: " + Math.max(0, matchIndex) + " }"
+                                                + "\n" + "bounds = " + node.boundsScreen.toShortString());
+                            }
+                        });
+                scanner.show(dialogView, host.getProjectPanelView());
+            });
+        }
+
+        // 预填充（编辑模式）
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    String savedFindMode = im.optString(MetaOperation.A11Y_FIND_MODE, "text");
+                    for (int i = 0; i < A11Y_FIND_MODE_VALUES.length; i++) {
+                        if (A11Y_FIND_MODE_VALUES[i].equals(savedFindMode)) {
+                            spinnerFindMode.setSelection(i); break;
+                        }
+                    }
+                    edtFindValue.setText(im.optString(MetaOperation.A11Y_FIND_VALUE, ""));
+                    edtPackageFilter.setText(im.optString(MetaOperation.A11Y_PACKAGE_FILTER, ""));
+                    long matchIndex = im.optLong(MetaOperation.A11Y_MATCH_INDEX, 0);
+                    edtMatchIndex.setText(String.valueOf(matchIndex));
+                    long timeout = im.optLong(MetaOperation.A11Y_TIMEOUT_MS, 0);
+                    edtTimeoutMs.setText(String.valueOf(timeout));
+                    long poll = im.optLong(MetaOperation.A11Y_POLL_INTERVAL_MS, 200);
+                    edtPollIntervalMs.setText(String.valueOf(poll));
+                    chkScrollIntoView.setChecked(im.optBoolean(MetaOperation.A11Y_SCROLL_INTO_VIEW, false));
+
+                    String savedAction = im.optString(MetaOperation.A11Y_ACTION, "click");
+                    for (int i = 0; i < A11Y_ACTION_VALUES.length; i++) {
+                        if (A11Y_ACTION_VALUES[i].equals(savedAction)) {
+                            spinnerAction.setSelection(i); break;
+                        }
+                    }
+                    edtActionText.setText(im.optString(MetaOperation.A11Y_ACTION_TEXT, ""));
+                    edtResultVar.setText(im.optString(MetaOperation.A11Y_RESULT_VAR, ""));
+                    setOperationReferenceText(edtNextOperation,     im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                    setOperationReferenceText(edtFallbackOperation, im.optString(MetaOperation.FALLBACKOPERATIONID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载操作数据失败: " + e.getMessage());
+            }
+        }
+        updateActionFields.run();
+
+        // 绑定下一节点自动补全
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择成功后节点", null, edtNextOperation);
+        });
+        dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择失败后节点", null, edtFallbackOperation);
+        });
+
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> saveAccessibilityNodeOperation(
+                    dialogView, operationId, operationObject,
+                    edtName, spinnerFindMode, edtFindValue, edtPackageFilter,
+                    edtMatchIndex, edtTimeoutMs, edtPollIntervalMs,
+                    chkScrollIntoView, spinnerAction, edtActionText, edtResultVar,
+                    edtNextOperation, edtFallbackOperation));
+        }
+    }
+
+    private void saveAccessibilityNodeOperation(
+            View dialogView,
+            String operationId,
+            JSONObject existingObject,
+            EditText edtName,
+            android.widget.Spinner spinnerFindMode,
+            EditText edtFindValue,
+            EditText edtPackageFilter,
+            EditText edtMatchIndex,
+            EditText edtTimeoutMs,
+            EditText edtPollIntervalMs,
+            android.widget.CheckBox chkScrollIntoView,
+            android.widget.Spinner spinnerAction,
+            EditText edtActionText,
+            EditText edtResultVar,
+            AutoCompleteTextView edtNextOperation,
+            AutoCompleteTextView edtFallbackOperation) {
+
+        String name          = edtName.getText().toString().trim();
+        int    findModePos   = spinnerFindMode.getSelectedItemPosition();
+        String findMode      = (findModePos >= 0 && findModePos < A11Y_FIND_MODE_VALUES.length)
+                               ? A11Y_FIND_MODE_VALUES[findModePos] : "text";
+        String findValue     = edtFindValue.getText().toString().trim();
+        String pkgFilter     = edtPackageFilter.getText().toString().trim();
+        String matchIndexStr = edtMatchIndex.getText().toString().trim();
+        String timeoutStr    = edtTimeoutMs.getText().toString().trim();
+        String pollStr       = edtPollIntervalMs.getText().toString().trim();
+        boolean scrollIntoView = chkScrollIntoView.isChecked();
+        int    actionPos     = spinnerAction.getSelectedItemPosition();
+        String action        = (actionPos >= 0 && actionPos < A11Y_ACTION_VALUES.length)
+                               ? A11Y_ACTION_VALUES[actionPos] : "click";
+        String actionText    = edtActionText.isShown() ? edtActionText.getText().toString() : "";
+        String resultVar     = edtResultVar.isShown() ? edtResultVar.getText().toString().trim() : "";
+        String nextOp        = safeText(edtNextOperation);
+        String fallbackOp    = safeText(edtFallbackOperation);
+
+        if (TextUtils.isEmpty(name))      { edtName.setError("请填写操作名称"); return; }
+        if (TextUtils.isEmpty(findValue) && !"className".equals(findMode)) {
+            edtFindValue.setError("请填写查找值"); return;
+        }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.A11Y_FIND_MODE,  findMode);
+            inputMap.put(MetaOperation.A11Y_FIND_VALUE, findValue);
+            inputMap.put(MetaOperation.A11Y_ACTION,     action);
+
+            if (!TextUtils.isEmpty(pkgFilter))  inputMap.put(MetaOperation.A11Y_PACKAGE_FILTER, pkgFilter);
+            if (scrollIntoView)                 inputMap.put(MetaOperation.A11Y_SCROLL_INTO_VIEW, true);
+            if (!TextUtils.isEmpty(actionText)) inputMap.put(MetaOperation.A11Y_ACTION_TEXT, actionText);
+            if (!TextUtils.isEmpty(resultVar))  inputMap.put(MetaOperation.A11Y_RESULT_VAR, resultVar);
+
+            if (!TextUtils.isEmpty(matchIndexStr)) {
+                try { inputMap.put(MetaOperation.A11Y_MATCH_INDEX, Long.parseLong(matchIndexStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+            if (!TextUtils.isEmpty(timeoutStr)) {
+                try { inputMap.put(MetaOperation.A11Y_TIMEOUT_MS, Long.parseLong(timeoutStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+            if (!TextUtils.isEmpty(pollStr)) {
+                try { inputMap.put(MetaOperation.A11Y_POLL_INTERVAL_MS, Long.parseLong(pollStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+
+            if (!TextUtils.isEmpty(nextOp))     inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+            if (!TextUtils.isEmpty(fallbackOp)) inputMap.put(MetaOperation.FALLBACKOPERATIONID, fallbackOp);
+
+            boolean isEdit = operationId != null;
+            if (isEdit) {
+                JSONObject updated = new JSONObject();
+                updated.put("id",           operationId);
+                updated.put("name",         name);
+                updated.put("type",         24);
+                updated.put("responseType", 1);
+                updated.put("inputMap",     inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) updateListener.onOperationUpdated();
+                }
+            } else {
+                JSONObject operationObject = new JSONObject();
+                if (idGenerator != null) operationObject.put("id", idGenerator.generateId());
+                operationObject.put("name",         name);
+                operationObject.put("type",         24);
+                operationObject.put("responseType", 1);
+                operationObject.put("inputMap",     inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加无障碍节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存失败: " + e.getMessage());
+        }
+    }
+
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {
         org.json.JSONArray arr = new org.json.JSONArray();
         for (int i = 0; i < container.getChildCount(); i++) {
