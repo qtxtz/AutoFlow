@@ -1,5 +1,7 @@
 package com.auto.master.floatwin;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -17,7 +19,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
+import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
+import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
+import com.auto.master.Task.Operation.MatchMapTemplateOperation;
+import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
+import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
 import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
 import com.auto.master.utils.AdaptivePollingController;
@@ -35,6 +42,7 @@ public class OperationDialogFactory {
     private final DialogHelpers dialogHelpers;
     private final OperationCrudHelper crudHelper;
     private final WindowManager wm;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // Callbacks for dialog actions
     public interface OnOperationAddedListener {
@@ -1924,6 +1932,15 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_preview_bbox).setOnClickListener(v ->
             host.showTemplateBboxPreview(edtTemplateFile.getText().toString().trim()));
 
+        TextView btnTestMatch = dialogView.findViewById(R.id.btn_test_match);
+        btnTestMatch.setOnClickListener(v -> {
+            MetaOperation testOperation = buildMatchTemplateTestOperation(
+                    edtName, edtTemplateFile, edtSimilarity, edtTimeout, dialogView);
+            if (testOperation != null) {
+                runSingleMatchTest(dialogView, btnTestMatch, testOperation);
+            }
+        });
+
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
@@ -2116,6 +2133,15 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_preview_bbox).setOnClickListener(v ->
             host.showTemplateBboxPreview(edtTemplateFile.getText().toString().trim()));
 
+        TextView btnTestMatch = dialogView.findViewById(R.id.btn_test_match);
+        btnTestMatch.setOnClickListener(v -> {
+            MetaOperation testOperation = buildMatchTemplateTestOperation(
+                    edtName, edtTemplateFile, edtSimilarity, edtTimeout, dialogView);
+            if (testOperation != null) {
+                runSingleMatchTest(dialogView, btnTestMatch, testOperation);
+            }
+        });
+
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
@@ -2189,6 +2215,239 @@ public class OperationDialogFactory {
         });
     }
 
+    private MetaOperation buildMatchTemplateTestOperation(EditText edtName,
+                                                          AutoCompleteTextView edtTemplateFile,
+                                                          EditText edtSimilarity,
+                                                          EditText edtTimeout,
+                                                          View dialogView) {
+        String templateFile = edtTemplateFile.getText().toString().trim();
+        String similarityText = edtSimilarity.getText().toString().trim();
+        String timeoutText = edtTimeout.getText().toString().trim();
+
+        if (TextUtils.isEmpty(templateFile)) {
+            edtTemplateFile.setError("请填写模板文件名");
+            return null;
+        }
+
+        double similarity;
+        long timeout;
+        try {
+            similarity = TextUtils.isEmpty(similarityText) ? 0.85d : Double.parseDouble(similarityText);
+        } catch (Exception e) {
+            edtSimilarity.setError("请输入 0~1 之间的数值");
+            return null;
+        }
+        try {
+            timeout = TextUtils.isEmpty(timeoutText)
+                    ? Long.parseLong(defaultMatchTimeoutText())
+                    : Long.parseLong(timeoutText);
+        } catch (Exception e) {
+            edtTimeout.setError("请输入超时时间(毫秒)");
+            return null;
+        }
+        if (similarity <= 0 || similarity > 1.0d) {
+            edtSimilarity.setError("建议范围 0.6 ~ 0.99");
+            return null;
+        }
+        if (timeout <= 0) {
+            edtTimeout.setError("超时必须大于 0");
+            return null;
+        }
+
+        MatchTemplateOperation operation = new MatchTemplateOperation();
+        operation.setId("single_test_match_" + System.currentTimeMillis());
+        operation.setName(!TextUtils.isEmpty(safeText(edtName)) ? safeText(edtName) : "模板匹配单步测试");
+        operation.setResponseType(1);
+
+        java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
+        java.io.File currentProjectDir = host.getCurrentProjectDir();
+        java.io.File currentTaskDir = host.getCurrentTaskDir();
+        inputMap.put(MetaOperation.PROJECT, currentProjectDir != null ? currentProjectDir.getName() : "");
+        inputMap.put(MetaOperation.TASK, currentTaskDir != null ? currentTaskDir.getName() : "");
+        inputMap.put(MetaOperation.SAVEFILENAME, templateFile.endsWith(".png") ? templateFile : templateFile + ".png");
+        inputMap.put(MetaOperation.MATCHSIMILARITY, similarity);
+        inputMap.put(MetaOperation.MATCHTIMEOUT, (double) timeout);
+
+        if (templateHelper != null) {
+            JSONObject advanced = new JSONObject();
+            templateHelper.fillAdvancedMatchInputMap(dialogView, advanced);
+            inputMap.putAll(jsonObjectToJavaMap(advanced));
+        }
+        inputMap.remove(MetaOperation.NEXT_OPERATION_ID);
+        inputMap.remove(MetaOperation.FALLBACKOPERATIONID);
+
+        operation.setInputMap(inputMap);
+        return operation;
+    }
+
+    private MetaOperation buildMatchMapTestOperation(EditText edtName,
+                                                     EditText edtTimeout,
+                                                     LinearLayout lyEntries,
+                                                     CheckBox chkSuccessClick,
+                                                     CheckBox chkUseGray,
+                                                     CheckBox chkUseMask,
+                                                     EditText edtPreDelay,
+                                                     View dialogView) {
+        String timeoutText = edtTimeout.getText().toString().trim();
+        long timeout;
+        try {
+            timeout = TextUtils.isEmpty(timeoutText)
+                    ? Long.parseLong(defaultMatchTimeoutText())
+                    : Long.parseLong(timeoutText);
+        } catch (Exception e) {
+            edtTimeout.setError("请输入超时时间(毫秒)");
+            return null;
+        }
+        if (timeout <= 0) {
+            edtTimeout.setError("超时必须大于 0");
+            return null;
+        }
+
+        try {
+            JSONObject matchMapJson = collectMatchMapEntries(lyEntries);
+            if (matchMapJson.length() == 0) {
+                host.showToast("请至少添加一条匹配规则");
+                return null;
+            }
+
+            MatchMapTemplateOperation operation = new MatchMapTemplateOperation();
+            operation.setId("single_test_match_map_" + System.currentTimeMillis());
+            operation.setName(!TextUtils.isEmpty(safeText(edtName)) ? safeText(edtName) : "图集匹配单步测试");
+            operation.setResponseType(1);
+
+            java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
+            java.io.File currentProjectDir = host.getCurrentProjectDir();
+            java.io.File currentTaskDir = host.getCurrentTaskDir();
+            inputMap.put(MetaOperation.PROJECT, currentProjectDir != null ? currentProjectDir.getName() : "");
+            inputMap.put(MetaOperation.TASK, currentTaskDir != null ? currentTaskDir.getName() : "");
+            inputMap.put(MetaOperation.MATCHTIMEOUT, (double) timeout);
+            inputMap.put(MetaOperation.MATCHMAP, matchMapJson.toString());
+            inputMap.put(MetaOperation.SUCCEESCLICK, chkSuccessClick == null || chkSuccessClick.isChecked());
+            inputMap.put(MetaOperation.MATCHUSEGRAY, chkUseGray != null && chkUseGray.isChecked());
+            inputMap.put(MetaOperation.MATCHUSEMASK, chkUseMask == null || chkUseMask.isChecked());
+
+            JSONObject optional = new JSONObject();
+            putOptionalMatchPreDelay(optional, edtPreDelay);
+            fillPollingIntervalInputMap(dialogView, optional);
+            inputMap.putAll(jsonObjectToJavaMap(optional));
+
+            operation.setInputMap(inputMap);
+            return operation;
+        } catch (Exception e) {
+            host.showToast("构建单步测试失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void runSingleMatchTest(View dialogView, TextView button, MetaOperation operation) {
+        OperationHandler handler = OperationHandlerManager.getOperationHandler(operation.getType());
+        if (handler == null) {
+            host.showToast("单步测试不可用: 未找到匹配处理器");
+            return;
+        }
+
+        String originalText = button.getText().toString();
+        View projectPanel = host.getProjectPanelView();
+        int dialogVisibility = dialogView.getVisibility();
+        int panelVisibility = projectPanel != null ? projectPanel.getVisibility() : View.VISIBLE;
+
+        button.setEnabled(false);
+        button.setText("测试中...");
+        dialogView.setVisibility(View.INVISIBLE);
+        if (projectPanel != null) {
+            projectPanel.setVisibility(View.INVISIBLE);
+        }
+
+        new Thread(() -> {
+            boolean handled = false;
+            boolean matched = false;
+            Object bbox = null;
+            String error = null;
+            try {
+                Thread.sleep(120L);
+                OperationContext ctx = new OperationContext();
+                ctx.suppressVisualFeedback = false;
+                handled = handler.handle(operation, ctx);
+                if (ctx.currentResponse != null) {
+                    matched = Boolean.TRUE.equals(ctx.currentResponse.get(MetaOperation.MATCHED));
+                    bbox = ctx.currentResponse.get(MetaOperation.BBOX);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                error = "测试被中断";
+            } catch (Throwable t) {
+                error = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
+            }
+
+            final boolean finalHandled = handled;
+            final boolean finalMatched = matched;
+            final Object finalBbox = bbox;
+            final String finalError = error;
+            long restoreDelayMs = finalMatched ? 700L : 0L;
+            mainHandler.postDelayed(() -> {
+                dialogView.setVisibility(dialogVisibility);
+                if (projectPanel != null) {
+                    projectPanel.setVisibility(panelVisibility);
+                }
+                button.setEnabled(true);
+                button.setText(originalText);
+
+                if (!TextUtils.isEmpty(finalError)) {
+                    host.showToast("单步测试失败: " + finalError);
+                } else if (!finalHandled) {
+                    host.showToast("单步测试未执行，请确认无障碍和录屏服务可用");
+                } else if (finalMatched) {
+                    host.showToast(finalBbox != null ? "单步测试命中: " + finalBbox : "单步测试命中");
+                } else {
+                    host.showToast("单步测试未命中");
+                }
+            }, restoreDelayMs);
+        }, "operation-single-match-test").start();
+    }
+
+    private java.util.Map<String, Object> jsonObjectToJavaMap(JSONObject object) {
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        if (object == null) {
+            return map;
+        }
+        java.util.Iterator<String> keys = object.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            Object value = object.opt(key);
+            if (value == null || value == JSONObject.NULL) {
+                continue;
+            }
+            if (value instanceof JSONObject) {
+                map.put(key, jsonObjectToJavaMap((JSONObject) value));
+            } else if (value instanceof JSONArray) {
+                map.put(key, jsonArrayToJavaList((JSONArray) value));
+            } else {
+                map.put(key, value);
+            }
+        }
+        return map;
+    }
+
+    private java.util.List<Object> jsonArrayToJavaList(JSONArray array) {
+        java.util.List<Object> list = new java.util.ArrayList<>();
+        if (array == null) {
+            return list;
+        }
+        for (int i = 0; i < array.length(); i++) {
+            Object value = array.opt(i);
+            if (value == null || value == JSONObject.NULL) {
+                list.add(null);
+            } else if (value instanceof JSONObject) {
+                list.add(jsonObjectToJavaMap((JSONObject) value));
+            } else if (value instanceof JSONArray) {
+                list.add(jsonArrayToJavaList((JSONArray) value));
+            } else {
+                list.add(value);
+            }
+        }
+        return list;
+    }
+
     // ==================== MatchMapTemplate Operation ====================
 
     public void showAddMatchMapTemplateDialog() {
@@ -2246,6 +2505,15 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
                 showOperationPickerForField("选择失败跳转节点", null, edtFallback);
+            }
+        });
+
+        TextView btnTestMatch = dialogView.findViewById(R.id.btn_test_match);
+        btnTestMatch.setOnClickListener(v -> {
+            MetaOperation testOperation = buildMatchMapTestOperation(
+                    edtName, edtTimeout, lyEntries, chkSuccessClick, chkUseGray, chkUseMask, edtPreDelay, dialogView);
+            if (testOperation != null) {
+                runSingleMatchTest(dialogView, btnTestMatch, testOperation);
             }
         });
 
@@ -2425,6 +2693,15 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
             if (operationPickerLauncher != null) {
                 showOperationPickerForField("选择失败跳转节点", null, edtFallback);
+            }
+        });
+
+        TextView btnTestMatch = dialogView.findViewById(R.id.btn_test_match);
+        btnTestMatch.setOnClickListener(v -> {
+            MetaOperation testOperation = buildMatchMapTestOperation(
+                    edtName, edtTimeout, lyEntries, chkSuccessClick, chkUseGray, chkUseMask, edtPreDelay, dialogView);
+            if (testOperation != null) {
+                runSingleMatchTest(dialogView, btnTestMatch, testOperation);
             }
         });
 
