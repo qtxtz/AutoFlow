@@ -148,6 +148,9 @@ import org.json.JSONObject;
 public class FloatWindowService extends Service implements ScriptRunner.ScriptExecutionListener, FloatWindowHost {
 
     private static final String TAG = "FloatWindowService";
+    // 脚本运行期间持有的 CPU WakeLock，防止系统在脚本执行中途休眠进程
+    private android.os.PowerManager.WakeLock scriptWakeLock;
+
     private static final int PROJECT_PANEL_VIEW_TYPE_PROJECT = 1001;
     private static final int PROJECT_PANEL_VIEW_TYPE_TASK = 1002;
     private static final int PROJECT_PANEL_VIEW_TYPE_OPERATION = 1003;
@@ -517,6 +520,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
                 @Override
                 public void finishRunSession(String reason) {
+                    releaseScriptWakeLock();
                     CrashLogger.finishRunSession(FloatWindowService.this, reason);
                 }
 
@@ -8140,8 +8144,39 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
+    private void acquireScriptWakeLock() {
+        try {
+            if (scriptWakeLock == null) {
+                android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null) {
+                    scriptWakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "AutoFlow:ScriptRun");
+                    scriptWakeLock.setReferenceCounted(false);
+                }
+            }
+            if (scriptWakeLock != null && !scriptWakeLock.isHeld()) {
+                // 最多持锁 2 小时，防止永久持锁
+                scriptWakeLock.acquire(2 * 60 * 60 * 1000L);
+                Log.d(TAG, "ScriptWakeLock acquired");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "acquireScriptWakeLock failed", e);
+        }
+    }
+
+    private void releaseScriptWakeLock() {
+        try {
+            if (scriptWakeLock != null && scriptWakeLock.isHeld()) {
+                scriptWakeLock.release();
+                Log.d(TAG, "ScriptWakeLock released");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "releaseScriptWakeLock failed", e);
+        }
+    }
+
     private void beginRunLog(String projectName, String taskName, MetaOperation startOperation, boolean enableLogging) {
         currentRunStartMs = System.currentTimeMillis();
+        acquireScriptWakeLock();
         currentRunLogs.clear();
         opStartTimeMs.clear();
         opDurationsMs.clear();

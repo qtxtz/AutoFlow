@@ -141,9 +141,14 @@ public final class BatteryHardeningHelper {
             addFlattenedComponent(intents, "com.oplus.battery/com.oplus.powermanager.fuelgaue.PowerConsumptionActivity");
             addFlattenedComponent(intents, "com.oppo.safe/.permission.startup.StartupAppListActivity");
         } else if (containsAny(brand, manufacturer, "huawei", "honor")) {
+            // Honor MagicOS 7+ (Android 13+) 使用 com.hihonor.systemmanager 包名
+            addFlattenedComponent(intents, "com.hihonor.systemmanager/.optimize.process.ProtectActivity");
+            // MagicOS 8/9 (Android 14/15) 新路径：应用启动管理
+            addFlattenedComponent(intents, "com.hihonor.systemmanager/.startupmgr.ui.StartupNormalAppListActivity");
+            addFlattenedComponent(intents, "com.hihonor.systemmanager/.appmanage.ui.AppManageMainActivity");
+            // 旧版 Huawei 路径兜底
             addFlattenedComponent(intents, "com.huawei.systemmanager/.optimize.process.ProtectActivity");
             addFlattenedComponent(intents, "com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity");
-            addFlattenedComponent(intents, "com.hihonor.systemmanager/.optimize.process.ProtectActivity");
         } else if (containsAny(brand, manufacturer, "samsung")) {
             addFlattenedComponent(intents, "com.samsung.android.lool/com.samsung.android.sm.ui.battery.BatteryActivity");
             addFlattenedComponent(intents, "com.samsung.android.sm_cn/com.samsung.android.sm.ui.appmanagement.AppManagementActivity");
@@ -171,8 +176,11 @@ public final class BatteryHardeningHelper {
             addFlattenedComponent(intents, "com.oppo.safe/.permission.startup.StartupAppListActivity");
             addFlattenedComponent(intents, "com.coloros.safecenter/.permission.startup.StartupAppListActivity");
         } else if (containsAny(brand, manufacturer, "huawei", "honor")) {
-            addFlattenedComponent(intents, "com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity");
+            // Honor MagicOS 7+ 路径
             addFlattenedComponent(intents, "com.hihonor.systemmanager/.startupmgr.ui.StartupNormalAppListActivity");
+            // MagicOS 8/9 (Android 14/15) 应用启动管理新入口
+            addFlattenedComponent(intents, "com.hihonor.systemmanager/.appmanage.ui.AppManageMainActivity");
+            addFlattenedComponent(intents, "com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity");
         } else if (containsAny(brand, manufacturer, "meizu")) {
             addFlattenedComponent(intents, "com.meizu.safe/.permission.PermissionMainActivity");
         } else if (containsAny(brand, manufacturer, "samsung")) {
