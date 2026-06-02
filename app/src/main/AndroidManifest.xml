@@ -69,7 +69,9 @@
             android:name=".capture.ScreenCapturePermissionActivity"
             android:exported="false"
             android:theme="@style/Theme.Crop.Transparent"
-            android:excludeFromRecents="true" />
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:taskAffinity="${applicationId}.projection_permission" />
 
         <!-- 新页面：网格视图页 -->
         <activity

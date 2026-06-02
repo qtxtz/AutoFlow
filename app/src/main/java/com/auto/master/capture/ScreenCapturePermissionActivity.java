@@ -3,11 +3,14 @@ package com.auto.master.capture;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Window;
 
 import androidx.annotation.Nullable;
+
+import com.auto.master.auto.ActivityHolder;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -47,12 +50,16 @@ public class ScreenCapturePermissionActivity extends Activity {
         if (!REQUEST_IN_FLIGHT.compareAndSet(false, true)) {
             return;
         }
-        Intent intent = new Intent(context, ScreenCapturePermissionActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                | Intent.FLAG_ACTIVITY_NO_ANIMATION
+        Activity resumedActivity = ActivityHolder.getResumedActivity();
+        Context launchContext = canLaunchFrom(resumedActivity) ? resumedActivity : context;
+        Intent intent = new Intent(launchContext, ScreenCapturePermissionActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION
                 | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+        if (!(launchContext instanceof Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        }
         try {
-            context.startActivity(intent);
+            launchContext.startActivity(intent);
         } catch (Exception e) {
             Log.e(TAG, "start permission activity failed", e);
             REQUEST_IN_FLIGHT.set(false);
@@ -69,6 +76,7 @@ public class ScreenCapturePermissionActivity extends Activity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        overridePendingTransition(0, 0);
         try {
             startActivityForResult(ScreenCapture.createProjectionIntent(this), REQ_MEDIA_PROJECTION);
         } catch (Exception e) {
@@ -116,5 +124,12 @@ public class ScreenCapturePermissionActivity extends Activity {
     private void finishWithoutAnimation() {
         finish();
         overridePendingTransition(0, 0);
+    }
+
+    private static boolean canLaunchFrom(@Nullable Activity activity) {
+        if (activity == null || activity.isFinishing()) {
+            return false;
+        }
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1 || !activity.isDestroyed();
     }
 }
