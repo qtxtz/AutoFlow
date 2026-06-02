@@ -11,14 +11,11 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
 import com.auto.master.R;
-
-import java.util.Locale;
 
 /**
  * 执行步骤指示器 & 延迟进度悬浮层的生命周期管理。
@@ -31,7 +28,6 @@ import java.util.Locale;
 public class StepAndDelayOverlayManager {
 
     private static final String TAG = "StepDelayOverlay";
-    private static final long DELAY_TICK_MS = 220L;
 
     private final FloatWindowHost host;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -41,19 +37,13 @@ public class StepAndDelayOverlayManager {
     private WindowManager.LayoutParams stepOverlayLp;
 
     // ── Delay progress overlay ─────────────────────────────────────────────
-    private View delayOverlayView;
+    private DelayCountdownOverlayView delayOverlayView;
     private WindowManager.LayoutParams delayOverlayLp;
-    private ProgressBar delayOverlayProgressBar;
-    private TextView delayOverlayValueText;
 
     // ── Delay state ────────────────────────────────────────────────────────
     private String activeDelayOperationId;
     private long activeDelayDurationMs = 0L;
     private long activeDelayStartMs = 0L;
-    private int lastDelayOverlayProgress = -1;
-    private String lastDelayOverlayText = "";
-
-    private final Runnable delayProgressRunnable = this::tickDelayProgress;
 
     public StepAndDelayOverlayManager(FloatWindowHost host) {
         this.host = host;
@@ -134,7 +124,6 @@ public class StepAndDelayOverlayManager {
             activeDelayDurationMs = durationMs;
             activeDelayStartMs = SystemClock.uptimeMillis();
             renderDelayProgress(true, 0L, activeDelayDurationMs);
-            uiHandler.postDelayed(delayProgressRunnable, DELAY_TICK_MS);
         });
     }
 
@@ -160,6 +149,11 @@ public class StepAndDelayOverlayManager {
 
     /** 如果 opItem 是带倒计时的延迟操作，则启动延迟进度显示。 */
     public void maybeStartDelay(@Nullable OperationItem opItem) {
+        maybeStartDelay(opItem, null);
+    }
+
+    /** 如果 opItem 是带倒计时的延迟操作，则启动延迟进度显示。 */
+    public void maybeStartDelay(@Nullable OperationItem opItem, @Nullable Runnable onFirstFrameReady) {
         stopDelay();
         if (opItem == null) return;
         long durationMs = opItem.nodePreDelayRandom
@@ -170,8 +164,7 @@ public class StepAndDelayOverlayManager {
         activeDelayOperationId = opItem.id;
         activeDelayDurationMs = durationMs;
         activeDelayStartMs = SystemClock.uptimeMillis();
-        renderDelayProgress(true, 0L, activeDelayDurationMs);
-        uiHandler.postDelayed(delayProgressRunnable, DELAY_TICK_MS);
+        renderDelayProgress(true, 0L, activeDelayDurationMs, onFirstFrameReady);
     }
 
     /** 如果 operationId 正是当前延迟操作，则停止延迟进度显示。 */
@@ -183,7 +176,6 @@ public class StepAndDelayOverlayManager {
 
     /** 停止延迟进度显示并隐藏悬浮层。 */
     public void stopDelay() {
-        uiHandler.removeCallbacks(delayProgressRunnable);
         activeDelayOperationId = null;
         activeDelayDurationMs = 0L;
         activeDelayStartMs = 0L;
@@ -206,7 +198,6 @@ public class StepAndDelayOverlayManager {
 
     /** 销毁所有悬浮层（在 Service.onDestroy() 中调用）。 */
     public void destroy() {
-        uiHandler.removeCallbacks(delayProgressRunnable);
         // hideStep() 通过 post() 异步执行，onDestroy 不等待；直接同步移除。
         if (stepOverlayView != null) {
             safeRemove(stepOverlayView);
@@ -218,70 +209,47 @@ public class StepAndDelayOverlayManager {
 
     // ── Internal helpers ───────────────────────────────────────────────────
 
-    private void tickDelayProgress() {
-        if (TextUtils.isEmpty(activeDelayOperationId) || activeDelayDurationMs <= 0L) {
-            renderDelayProgress(false, 0L, 0L);
-            return;
-        }
-        long elapsed = Math.min(activeDelayDurationMs,
-                Math.max(0L, SystemClock.uptimeMillis() - activeDelayStartMs));
-        renderDelayProgress(true, elapsed, activeDelayDurationMs);
-        if (elapsed < activeDelayDurationMs) {
-            uiHandler.postDelayed(delayProgressRunnable, DELAY_TICK_MS);
-        }
+    private void renderDelayProgress(boolean visible, long elapsedMs, long durationMs) {
+        renderDelayProgress(visible, elapsedMs, durationMs, null);
     }
 
-    private void renderDelayProgress(boolean visible, long elapsedMs, long durationMs) {
+    private void renderDelayProgress(boolean visible,
+                                     long elapsedMs,
+                                     long durationMs,
+                                     @Nullable Runnable onFirstFrameReady) {
         if (!visible || durationMs <= 0L) {
-            lastDelayOverlayProgress = -1;
-            lastDelayOverlayText = "";
-            if (delayOverlayView != null) delayOverlayView.setVisibility(View.GONE);
+            if (delayOverlayView != null) delayOverlayView.stop();
+            if (onFirstFrameReady != null) onFirstFrameReady.run();
             return;
         }
         ensureDelayOverlay();
-        if (delayOverlayProgressBar == null || delayOverlayValueText == null) return;
-        if (delayOverlayView.getVisibility() != View.VISIBLE) {
-            delayOverlayView.setVisibility(View.VISIBLE);
+        if (delayOverlayView == null) {
+            if (onFirstFrameReady != null) onFirstFrameReady.run();
+            return;
         }
         long safeElapsed = Math.max(0L, Math.min(elapsedMs, durationMs));
-        int progress = (int) Math.min(1000L, (safeElapsed * 1000L) / durationMs);
-        String text = "延迟 " + fmtDuration(safeElapsed) + " / " + fmtDuration(durationMs);
-        if (progress != lastDelayOverlayProgress) {
-            delayOverlayProgressBar.setProgress(progress);
-            lastDelayOverlayProgress = progress;
-        }
-        if (!text.equals(lastDelayOverlayText)) {
-            delayOverlayValueText.setText(text);
-            lastDelayOverlayText = text;
-        }
+        delayOverlayView.start(durationMs, safeElapsed, onFirstFrameReady);
     }
 
     private void ensureDelayOverlay() {
         if (delayOverlayView != null && delayOverlayView.getParent() != null) return;
         try {
             if (delayOverlayView == null) {
-                delayOverlayView = LayoutInflater.from(host.getContext())
-                        .inflate(R.layout.overlay_delay_progress, null);
-                delayOverlayProgressBar =
-                        delayOverlayView.findViewById(R.id.progress_delay_overlay);
-                delayOverlayValueText =
-                        delayOverlayView.findViewById(R.id.tv_delay_overlay_value);
+                delayOverlayView = new DelayCountdownOverlayView(host.getContext());
             }
             delayOverlayLp = buildOverlayLp(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    host.dp(200),
+                    host.dp(25),
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                             | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                             | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
             delayOverlayLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
             delayOverlayLp.x = 0;
-            delayOverlayLp.y = getStatusBarHeightPx() + host.dp(38);
+            delayOverlayLp.y = host.dp(100);
             host.getWindowManager().addView(delayOverlayView, delayOverlayLp);
         } catch (Exception e) {
             Log.e(TAG, "addView delayOverlay failed", e);
             delayOverlayLp = null;
-            delayOverlayProgressBar = null;
-            delayOverlayValueText = null;
             if (delayOverlayView != null && delayOverlayView.getParent() == null) {
                 delayOverlayView = null;
             }
@@ -292,10 +260,6 @@ public class StepAndDelayOverlayManager {
         if (delayOverlayView != null) safeRemove(delayOverlayView);
         delayOverlayView = null;
         delayOverlayLp = null;
-        delayOverlayProgressBar = null;
-        delayOverlayValueText = null;
-        lastDelayOverlayProgress = -1;
-        lastDelayOverlayText = "";
     }
 
     private WindowManager.LayoutParams buildOverlayLp(int w, int h, int flags) {
@@ -324,10 +288,4 @@ public class StepAndDelayOverlayManager {
         return 0;
     }
 
-    private String fmtDuration(long ms) {
-        if (ms <= 0L)           return "0s";
-        if (ms < 1000L)         return ms + "ms";
-        if (ms % 1000L == 0L)  return (ms / 1000L) + "s";
-        return String.format(Locale.getDefault(), "%.1fs", ms / 1000f);
-    }
 }

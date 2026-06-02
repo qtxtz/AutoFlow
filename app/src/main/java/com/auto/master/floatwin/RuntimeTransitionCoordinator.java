@@ -117,7 +117,7 @@ final class RuntimeTransitionCoordinator {
         View panel = host.getProjectPanelView();
         if (panel == null) {
             if (endAction != null) {
-                endAction.run();
+//                endAction.run();
             }
             return;
         }

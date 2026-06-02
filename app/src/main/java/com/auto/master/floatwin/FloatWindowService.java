@@ -76,6 +76,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -5453,7 +5454,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             scrollRunningOperationIntoView(operationId);
         });
         syncProjectPanelRuntimeUi();
-        if (opItem == null || opItem.nodePreDelayMs <= 0L) {
+        if (opItem == null || (opItem.nodePreDelayMs <= 0L && opItem.delayDurationMs <= 0L)) {
             maybeStartDelayProgress(opItem);
         }
 
@@ -5479,6 +5480,58 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }
         return null;
+    }
+
+    @Override
+    public void onDelayOperationCountdownStart(String operationId, long durationMs) {
+        onDelayOperationCountdownStart(operationId, durationMs, null);
+    }
+
+    @Override
+    public void onDelayOperationCountdownStart(String operationId,
+                                               long durationMs,
+                                               @Nullable CountDownLatch readySignal) {
+        if (focusRunMode) {
+            if (readySignal != null) readySignal.countDown();
+            return;
+        }
+        OperationItem opItem = findRunningItem(operationId);
+        if (opItem == null || durationMs <= 0L) {
+            if (readySignal != null) readySignal.countDown();
+            return;
+        }
+        OperationItem runtimeItem = new OperationItem(
+                opItem.name,
+                opItem.id,
+                opItem.type,
+                opItem.index,
+                durationMs,
+                true,
+                0L,
+                0L,
+                0L,
+                false);
+        uiHandler.postAtFrontOfQueue(() -> {
+            markDelayOperationRunningLight(opItem);
+            maybeStartDelayProgress(runtimeItem, () -> {
+                if (readySignal != null) readySignal.countDown();
+            });
+        });
+    }
+
+    private void markDelayOperationRunningLight(OperationItem opItem) {
+        if (opItem == null) return;
+        stopAppLaunchPolling();
+        opStartTimeMs.put(opItem.id, System.currentTimeMillis());
+        appendRunLog("[start] " + opItem.id + " | " + opItem.name);
+        currentRunningOperationId = opItem.id;
+        currentRunningOperationName = opItem.name;
+        currentOperationIndex = opItem.index + 1;
+        CrashLogger.updateRunContext(currentRunningProject, currentRunningTask, opItem.id, opItem.name);
+        updateRunningPanelStatus("运行中", 0xFF4CAF50);
+        if (currentOperationAdapter != null) {
+            currentOperationAdapter.setRunningPosition(opItem.id);
+        }
     }
 
     @Override
@@ -5682,6 +5735,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void maybeStartDelayProgress(@Nullable OperationItem opItem) {
         stepDelayOverlayManager.maybeStartDelay(opItem);
+    }
+
+    private void maybeStartDelayProgress(@Nullable OperationItem opItem, @Nullable Runnable onFirstFrameReady) {
+        stepDelayOverlayManager.maybeStartDelay(opItem, onFirstFrameReady);
     }
 
     private void stopDelayProgress() {

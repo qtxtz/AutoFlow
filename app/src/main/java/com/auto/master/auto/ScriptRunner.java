@@ -43,8 +43,10 @@ import java.io.FileOutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.auto.master.Task.Handler.OperationHandler.LoadImgToMatOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
@@ -78,6 +80,7 @@ public final class ScriptRunner {
     // 这里只保留完成事件的轻量节流，避免极短逻辑循环时频繁刷 UI。
     private static volatile long lastCompleteListenerNotifyMs = 0;
     private static final long COMPLETE_LISTENER_THROTTLE_MS = 50;
+    private static final long COUNTDOWN_READY_WAIT_MS = 120;
 
     /**
      * 脚本执行监听器接口
@@ -92,6 +95,20 @@ public final class ScriptRunner {
         void onOperationStart(String operationId, String operationName);
 
         default void onNodePreDelayStart(String operationId, long durationMs) {
+        }
+
+        /** 普通延时节点开始等待，优先通知倒计时 UI。 */
+        default void onDelayOperationCountdownStart(String operationId, long durationMs) {
+        }
+
+        /** 普通延时节点即将 sleep；readySignal 在倒计时 UI 已启动后释放。 */
+        default void onDelayOperationCountdownStart(String operationId,
+                                                    long durationMs,
+                                                    CountDownLatch readySignal) {
+            onDelayOperationCountdownStart(operationId, durationMs);
+            if (readySignal != null) {
+                readySignal.countDown();
+            }
         }
 
         /** MTry 开始第 current 次尝试（current=0 表示清除徽章）。 */
@@ -498,7 +515,12 @@ public final class ScriptRunner {
 
                                 final String opId = operation.getId();
                                 final String opName = operation.getName();
-                                if (currentListener != null) {
+                                final long delayDurationMs =
+                                        com.auto.master.floatwin.FloatWindowService.extractDelayDurationMs(operation);
+                                final boolean delayCountdownOperation = delayDurationMs > 0L
+                                        && com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(operation);
+                                // 非延时倒计时节点：正常通知 operationStart
+                                if (!delayCountdownOperation && currentListener != null) {
                                     final ScriptExecutionListener listener = currentListener;
                                     MAIN.post(() -> listener.onOperationStart(opId, opName));
                                 }
@@ -515,11 +537,16 @@ public final class ScriptRunner {
                                     break;
                                 }
 
+                                // nodePreDelay 先于主延时倒计时执行，避免 stopDelay() 把主倒计时 UI 杀掉
                                 long nodePreDelayMs = OperationHandler.resolveNodePreDelayMs(operation);
                                 if (nodePreDelayMs > 0L) {
                                     if (currentListener != null) {
                                         final ScriptExecutionListener listener = currentListener;
                                         final long delayForUi = nodePreDelayMs;
+                                        // 延时倒计时节点：nodePreDelay 阶段用 onOperationStart 通知 UI
+                                        if (delayCountdownOperation) {
+                                            MAIN.post(() -> listener.onOperationStart(opId, opName));
+                                        }
                                         MAIN.post(() -> listener.onNodePreDelayStart(opId, delayForUi));
                                     }
                                     if (!sleepNodePreDelay(scriptExecuteContext, nodePreDelayMs)) {
@@ -528,11 +555,25 @@ public final class ScriptRunner {
                                     }
                                 }
 
+                                // 延时倒计时：nodePreDelay 结束后才启动主倒计时 UI（此时不会被 nodePreDelay 覆盖）
+                                if (delayCountdownOperation && currentListener != null) {
+                                    final ScriptExecutionListener listener = currentListener;
+                                    CountDownLatch countdownReady = new CountDownLatch(1);
+                                    listener.onDelayOperationCountdownStart(opId, delayDurationMs, countdownReady);
+                                    try {
+                                        countdownReady.await(COUNTDOWN_READY_WAIT_MS, TimeUnit.MILLISECONDS);
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        throw e;
+                                    }
+                                }
+
                                 boolean ok = operationHandler.handle(operation, scriptExecuteContext.sharedContext);
 
                                 long nowMs = System.currentTimeMillis();
                                 boolean shouldNotifyComplete = currentListener != null
-                                        && (nowMs - lastCompleteListenerNotifyMs >= COMPLETE_LISTENER_THROTTLE_MS);
+                                        && (delayCountdownOperation
+                                        || nowMs - lastCompleteListenerNotifyMs >= COMPLETE_LISTENER_THROTTLE_MS);
                                 if (shouldNotifyComplete && currentListener != null) {
                                     lastCompleteListenerNotifyMs = nowMs;
                                     final ScriptExecutionListener listener = currentListener;
