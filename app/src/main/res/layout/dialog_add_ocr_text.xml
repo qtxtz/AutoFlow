@@ -1,0 +1,667 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="OCR 文字识别"
+            android:textColor="#00695C"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="放大"
+            android:textColor="#00695C"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="✕"
+            android:textColor="#5f6f84"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="操作名称"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/edt_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="例如: 识别订单金额" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="识别区域 (x,y,w,h)"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/edt_bbox"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="200,700,800,180"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:id="@+id/btn_pick_bbox"
+                    android:layout_width="64dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="框选"
+                    android:textColor="#00695C" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="识别模型"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <AutoCompleteTextView
+                android:id="@+id/edt_ocr_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="chi_sim.traineddata"
+                android:singleLine="true" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="结果变量名"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/edt_ocr_text_var"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="例如: ocrText，不填也会写入 currentResponse" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="最低置信度(0-100)"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/edt_ocr_min_confidence"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="0"
+                android:inputType="number" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="超时(毫秒)"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/edt_timeout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="使用默认值"
+                android:inputType="number" />
+
+            <TextView
+                android:id="@+id/btn_test_ocr"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/btn_edit_selector"
+                android:gravity="center"
+                android:text="测试识别"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/iv_ocr_processed_preview"
+                android:layout_width="match_parent"
+                android:layout_height="130dp"
+                android:layout_marginBottom="8dp"
+                android:adjustViewBounds="true"
+                android:background="#111111"
+                android:contentDescription="OCR 处理预览"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/tv_ocr_test_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:minHeight="52dp"
+                android:padding="10dp"
+                android:text="测试结果会显示在这里"
+                android:textColor="#D66A6A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="需要 tessdata/chi_sim.traineddata、eng.traineddata 等训练数据。建议只识别小区域，OCR 开销明显高于颜色和模板匹配。"
+                android:textColor="#7a8a9a"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:id="@+id/ly_advanced_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp">
+
+                <TextView
+                    android:id="@+id/tv_advanced_toggle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="展开高级参数"
+                    android:textColor="#00695C"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_advanced_arrow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="▼"
+                    android:textColor="#00695C"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/ly_advanced_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:orientation="vertical"
+                android:padding="10dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="节点前延迟(ms)"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_match_pre_delay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="0"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="识别语言名"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_ocr_language"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="chi_sim+eng"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="训练库文件名"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_ocr_traineddata"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="例如 xxx.traineddata"
+                    android:singleLine="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="预处理 Pipeline"
+                        android:textColor="#4e5f74"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/btn_add_ocr_pipeline_step"
+                        android:layout_width="40dp"
+                        android:layout_height="34dp"
+                        android:background="@drawable/item_operation_compact_bg"
+                        android:gravity="center"
+                        android:text="+"
+                        android:textColor="#00695C"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/ly_ocr_pipeline_steps"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:id="@+id/ly_ocr_legacy_preprocess"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_use_mask"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:buttonTint="#00695C"
+                    android:text="使用 Mask（画出的区域会被忽略）"
+                    android:textColor="#4e5f74" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_ocr_mask_status"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Mask: 未绘制"
+                        android:textColor="#7a8a9a"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/btn_edit_ocr_mask"
+                        android:layout_width="72dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/item_operation_compact_bg"
+                        android:gravity="center"
+                        android:text="编辑"
+                        android:textColor="#00695C"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="预处理流水线(JSON，按顺序执行)"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_ocr_pipeline"
+                    android:layout_width="match_parent"
+                    android:layout_height="120dp"
+                    android:layout_marginBottom="8dp"
+                    android:gravity="top|start"
+                    android:hint="例如: [{&quot;type&quot;:&quot;resize&quot;,&quot;factor&quot;:2},{&quot;type&quot;:&quot;grayscale&quot;},{&quot;type&quot;:&quot;invert&quot;},{&quot;type&quot;:&quot;threshold&quot;,&quot;value&quot;:127}]"
+                    android:inputType="textMultiLine|textNoSuggestions"
+                    android:padding="8dp"
+                    android:textSize="12sp" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_grayscale"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:buttonTint="#00695C"
+                    android:text="灰度化"
+                    android:textColor="#4e5f74" />
+
+                <TextView
+                    android:id="@+id/tv_ocr_threshold_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:text="二值化阈值: 127"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/sk_ocr_threshold"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:max="255" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_compress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:buttonTint="#00695C"
+                    android:text="压缩识别"
+                    android:textColor="#4e5f74" />
+
+                <TextView
+                    android:id="@+id/tv_ocr_compress_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:text="原图的100%"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/sk_ocr_compress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:max="100" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="图像放大倍率"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_ocr_scale_factor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="2.0"
+                    android:inputType="numberDecimal" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_gaussian"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:buttonTint="#00695C"
+                    android:text="高斯模糊"
+                    android:textColor="#4e5f74" />
+
+                <TextView
+                    android:id="@+id/tv_ocr_gaussian_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:text="模糊半径: 0"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/sk_ocr_gaussian"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:max="10" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_invert"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:buttonTint="#00695C"
+                    android:text="反色识别"
+                    android:textColor="#4e5f74" />
+
+                <TextView
+                    android:id="@+id/tv_ocr_contrast_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:text="对比度: 100%"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/sk_ocr_contrast"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:max="300" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_median"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:buttonTint="#00695C"
+                    android:text="中值去噪"
+                    android:textColor="#4e5f74" />
+
+                <CheckBox
+                    android:id="@+id/chk_ocr_sharpen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:buttonTint="#00695C"
+                    android:text="锐化笔画"
+                    android:textColor="#4e5f74" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="形态处理"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_ocr_morph_mode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:hint="none / dilate / erode / open / close"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:id="@+id/tv_ocr_morph_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:text="形态次数: 0"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <SeekBar
+                    android:id="@+id/sk_ocr_morph"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:max="3" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="页面分割模式"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_ocr_psm"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="auto / block / line / sparse"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="置信度变量名"
+                    android:textColor="#4e5f74"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/edt_ocr_confidence_var"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="例如: ocrConfidence" />
+
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="下一节点"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_next_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="成功后跳转的节点 ID" />
+
+                <TextView
+                    android:id="@+id/btn_pick_next"
+                    android:layout_width="58dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#00695C" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/btn_cancel_bg"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:background="@drawable/btn_edit_selector"
+            android:gravity="center"
+            android:text="确认添加"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

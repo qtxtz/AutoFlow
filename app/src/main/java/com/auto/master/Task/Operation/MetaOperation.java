@@ -176,6 +176,41 @@ public abstract class MetaOperation {
     public static String HTTP_STATUS_VAR = "HTTP_STATUS_VAR";
     public static String HTTP_TIMEOUT_MS = "HTTP_TIMEOUT_MS";
 
+    // OCR 参数
+    public static String OCR_LANGUAGE = "OCR_LANGUAGE";
+    public static String OCR_MODEL = "OCR_MODEL";
+    public static String OCR_TRAINED_DATA = "OCR_TRAINED_DATA";
+    public static String OCR_TARGET_TEXT = "OCR_TARGET_TEXT";
+    public static String OCR_MATCH_MODE = "OCR_MATCH_MODE";
+    public static String OCR_TEXT_VAR = "OCR_TEXT_VAR";
+    public static String OCR_CONFIDENCE_VAR = "OCR_CONFIDENCE_VAR";
+    public static String OCR_MIN_CONFIDENCE = "OCR_MIN_CONFIDENCE";
+    public static String OCR_SCALE_FACTOR = "OCR_SCALE_FACTOR";
+    public static String OCR_GRAYSCALE = "OCR_GRAYSCALE";
+    public static String OCR_THRESHOLD = "OCR_THRESHOLD";
+    public static String OCR_COMPRESS_PERCENT = "OCR_COMPRESS_PERCENT";
+    public static String OCR_GAUSSIAN_BLUR = "OCR_GAUSSIAN_BLUR";
+    public static String OCR_GAUSSIAN_RADIUS = "OCR_GAUSSIAN_RADIUS";
+    public static String OCR_USE_MASK = "OCR_USE_MASK";
+    public static String OCR_MASK_PNG = "OCR_MASK_PNG";
+    public static String OCR_MASK_WIDTH = "OCR_MASK_WIDTH";
+    public static String OCR_MASK_HEIGHT = "OCR_MASK_HEIGHT";
+    public static String OCR_INVERT = "OCR_INVERT";
+    public static String OCR_CONTRAST_PERCENT = "OCR_CONTRAST_PERCENT";
+    public static String OCR_MEDIAN_DENOISE = "OCR_MEDIAN_DENOISE";
+    public static String OCR_SHARPEN = "OCR_SHARPEN";
+    public static String OCR_MORPH_MODE = "OCR_MORPH_MODE";
+    public static String OCR_MORPH_ITERATIONS = "OCR_MORPH_ITERATIONS";
+    public static String OCR_PREPROCESS_PIPELINE = "OCR_PREPROCESS_PIPELINE";
+    public static String OCR_DIGITS_ONLY = "OCR_DIGITS_ONLY";
+    public static String OCR_PAGE_SEG_MODE = "OCR_PAGE_SEG_MODE";
+    public static String OCR_TEXT = "OCR_TEXT";
+    public static String OCR_CONFIDENCE = "OCR_CONFIDENCE";
+    public static final String OCR_MATCH_CONTAINS = "contains";
+    public static final String OCR_MATCH_EQUALS = "equals";
+    public static final String OCR_MATCH_REGEX = "regex";
+    public static final String OCR_MATCH_ANY = "any";
+
     // 截图区域 → 变量 参数（responseType=4）
     // base64 结果存入的变量名
     public static String CROP_RESULT_VAR = "CROP_RESULT_VAR";

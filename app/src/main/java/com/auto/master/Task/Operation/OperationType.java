@@ -28,7 +28,8 @@ public enum OperationType {
     SET_CAPTURE_SCALE(22, "采集倍率", "set_scale"),
     APP_CLOSE(23, "关闭应用", "app_close"),
     ACCESSIBILITY_NODE(24, "无障碍节点", "a11y_node"),
-    MTRY(25, "多次尝试节点", "mtry");
+    MTRY(25, "多次尝试节点", "mtry"),
+    OCR_TEXT(26, "OCR识别", "ocr");
 
     private final int code;
     private final String displayName;

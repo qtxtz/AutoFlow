@@ -1,9 +1,15 @@
 package com.auto.master.floatwin;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,23 +17,29 @@ import android.view.WindowManager;
 import android.widget.AutoCompleteTextView;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
+import com.auto.master.Task.Handler.OperationHandler.OcrTextOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
 import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.capture.ScreenCapture;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
 import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
 import com.auto.master.utils.AdaptivePollingController;
+
+import java.io.ByteArrayOutputStream;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -5514,6 +5526,1529 @@ public class OperationDialogFactory {
                 host.showToast("保存区域找色失败: " + e.getMessage());
             }
         });
+    }
+
+    // ==================== OCR Text Operation ====================
+
+    public void showAddOcrTextDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr_text, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        bindOcrTextDialog(dialogView, null, null);
+    }
+
+    public void showEditOcrTextDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr_text, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setText("保存");
+        }
+        bindOcrTextDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindOcrTextDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
+        AutoCompleteTextView edtModel = dialogView.findViewById(R.id.edt_ocr_model);
+        EditText edtLanguage = dialogView.findViewById(R.id.edt_ocr_language);
+        EditText edtTrainedData = dialogView.findViewById(R.id.edt_ocr_traineddata);
+        EditText edtTextVar = dialogView.findViewById(R.id.edt_ocr_text_var);
+        EditText edtMinConfidence = dialogView.findViewById(R.id.edt_ocr_min_confidence);
+        EditText edtTimeout = dialogView.findViewById(R.id.edt_timeout);
+        TextView btnTestOcr = dialogView.findViewById(R.id.btn_test_ocr);
+        TextView tvTestResult = dialogView.findViewById(R.id.tv_ocr_test_result);
+        ImageView ivProcessedPreview = dialogView.findViewById(R.id.iv_ocr_processed_preview);
+        EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
+        EditText edtScaleFactor = dialogView.findViewById(R.id.edt_ocr_scale_factor);
+        AutoCompleteTextView edtPsm = dialogView.findViewById(R.id.edt_ocr_psm);
+        EditText edtConfidenceVar = dialogView.findViewById(R.id.edt_ocr_confidence_var);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+        CheckBox chkGrayscale = dialogView.findViewById(R.id.chk_ocr_grayscale);
+        CheckBox chkCompress = dialogView.findViewById(R.id.chk_ocr_compress);
+        CheckBox chkGaussian = dialogView.findViewById(R.id.chk_ocr_gaussian);
+        SeekBar skThreshold = dialogView.findViewById(R.id.sk_ocr_threshold);
+        SeekBar skCompress = dialogView.findViewById(R.id.sk_ocr_compress);
+        SeekBar skGaussian = dialogView.findViewById(R.id.sk_ocr_gaussian);
+        TextView tvThresholdValue = dialogView.findViewById(R.id.tv_ocr_threshold_value);
+        TextView tvCompressValue = dialogView.findViewById(R.id.tv_ocr_compress_value);
+        TextView tvGaussianValue = dialogView.findViewById(R.id.tv_ocr_gaussian_value);
+        CheckBox chkUseMask = dialogView.findViewById(R.id.chk_ocr_use_mask);
+        TextView btnEditMask = dialogView.findViewById(R.id.btn_edit_ocr_mask);
+        TextView tvMaskStatus = dialogView.findViewById(R.id.tv_ocr_mask_status);
+        EditText edtPipeline = dialogView.findViewById(R.id.edt_ocr_pipeline);
+        LinearLayout lyPipelineSteps = dialogView.findViewById(R.id.ly_ocr_pipeline_steps);
+        TextView btnAddPipelineStep = dialogView.findViewById(R.id.btn_add_ocr_pipeline_step);
+        CheckBox chkInvert = dialogView.findViewById(R.id.chk_ocr_invert);
+        SeekBar skContrast = dialogView.findViewById(R.id.sk_ocr_contrast);
+        TextView tvContrastValue = dialogView.findViewById(R.id.tv_ocr_contrast_value);
+        CheckBox chkMedian = dialogView.findViewById(R.id.chk_ocr_median);
+        CheckBox chkSharpen = dialogView.findViewById(R.id.chk_ocr_sharpen);
+        AutoCompleteTextView edtMorphMode = dialogView.findViewById(R.id.edt_ocr_morph_mode);
+        SeekBar skMorph = dialogView.findViewById(R.id.sk_ocr_morph);
+        TextView tvMorphValue = dialogView.findViewById(R.id.tv_ocr_morph_value);
+
+        edtName.setText("OCR 识别");
+        edtModel.setText("chi_sim.traineddata + eng.traineddata", false);
+        edtLanguage.setText("chi_sim+eng");
+        edtTrainedData.setText("");
+        edtMinConfidence.setText("0");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
+        edtScaleFactor.setText("1.0");
+        chkGrayscale.setChecked(false);
+        chkCompress.setChecked(false);
+        chkGaussian.setChecked(false);
+        chkUseMask.setChecked(false);
+        chkInvert.setChecked(false);
+        chkMedian.setChecked(false);
+        chkSharpen.setChecked(false);
+        skThreshold.setProgress(0);
+        skCompress.setProgress(100);
+        skGaussian.setProgress(0);
+        skContrast.setProgress(100);
+        edtMorphMode.setText("none", false);
+        skMorph.setProgress(0);
+        edtPsm.setText("auto", false);
+        setupAdvancedToggle(dialogView);
+        dialogHelpers.bindAutoComplete(edtModel, java.util.Arrays.asList(
+                "chi_sim.traineddata + eng.traineddata",
+                "chi_sim.traineddata",
+                "eng.traineddata",
+                "number.traineddata",
+                "custom.traineddata"
+        ));
+        edtModel.setOnItemClickListener((parent, view, position, id) ->
+                applyOcrModelPreset(safeText(edtModel), edtLanguage, edtTrainedData));
+        dialogHelpers.bindAutoComplete(edtPsm, java.util.Arrays.asList(
+                "auto", "block", "line", "word", "sparse"
+        ));
+        dialogHelpers.bindAutoComplete(edtMorphMode, java.util.Arrays.asList(
+                "none", "dilate", "erode", "open", "close"
+        ));
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        }
+
+        final String[] ocrMaskBase64 = {""};
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject inputMap = operationObject.optJSONObject("inputMap");
+                if (inputMap != null) {
+                    JSONArray bboxArr = inputMap.optJSONArray(MetaOperation.BBOX);
+                    if (bboxArr != null && bboxArr.length() >= 4) {
+                        edtBbox.setText(bboxArr.optInt(0) + "," + bboxArr.optInt(1) + ","
+                                + bboxArr.optInt(2) + "," + bboxArr.optInt(3));
+                    }
+                    edtModel.setText(ocrModelLabel(inputMap.optString(MetaOperation.OCR_MODEL, "chi_eng")), false);
+                    edtLanguage.setText(inputMap.optString(MetaOperation.OCR_LANGUAGE, "chi_sim+eng"));
+                    edtTrainedData.setText(inputMap.optString(MetaOperation.OCR_TRAINED_DATA, ""));
+                    edtTextVar.setText(inputMap.optString(MetaOperation.OCR_TEXT_VAR, ""));
+                    setOptionalLongText(edtMinConfidence, inputMap.opt(MetaOperation.OCR_MIN_CONFIDENCE));
+                    Object timeoutObj = inputMap.opt(MetaOperation.MATCHTIMEOUT);
+                    edtTimeout.setText(timeoutObj == null ? defaultMatchTimeoutText() : String.valueOf(timeoutObj).replace(".0", ""));
+                    setNodePreDelayText(edtPreDelay, inputMap);
+                    Object scaleObj = inputMap.opt(MetaOperation.OCR_SCALE_FACTOR);
+                    edtScaleFactor.setText(scaleObj == null ? "1.0" : String.valueOf(scaleObj).replace(".0", ""));
+                    int threshold = inputMap.optInt(MetaOperation.OCR_THRESHOLD, 0);
+                    skThreshold.setProgress(Math.max(0, Math.min(255, threshold)));
+                    chkGrayscale.setChecked(inputMap.optBoolean(MetaOperation.OCR_GRAYSCALE, false));
+                    int compress = inputMap.optInt(MetaOperation.OCR_COMPRESS_PERCENT, 100);
+                    chkCompress.setChecked(compress < 100);
+                    skCompress.setProgress(Math.max(10, Math.min(100, compress)));
+                    boolean gaussian = inputMap.optBoolean(MetaOperation.OCR_GAUSSIAN_BLUR, false);
+                    int gaussianRadius = inputMap.optInt(MetaOperation.OCR_GAUSSIAN_RADIUS, 0);
+                    chkGaussian.setChecked(gaussian);
+                    skGaussian.setProgress(Math.max(0, Math.min(10, gaussianRadius)));
+                    ocrMaskBase64[0] = inputMap.optString(MetaOperation.OCR_MASK_PNG, "");
+                    chkUseMask.setChecked(inputMap.optBoolean(MetaOperation.OCR_USE_MASK, !TextUtils.isEmpty(ocrMaskBase64[0])));
+                    JSONArray pipeline = inputMap.optJSONArray(MetaOperation.OCR_PREPROCESS_PIPELINE);
+                    if (pipeline == null) {
+                        pipeline = buildLegacyOcrPipeline(inputMap, !TextUtils.isEmpty(ocrMaskBase64[0]));
+                    }
+                    edtPipeline.setText(pipeline == null || pipeline.length() == 0 ? "" : pipeline.toString(2));
+                    chkInvert.setChecked(inputMap.optBoolean(MetaOperation.OCR_INVERT, false));
+                    skContrast.setProgress(Math.max(50, Math.min(300, inputMap.optInt(MetaOperation.OCR_CONTRAST_PERCENT, 100))));
+                    chkMedian.setChecked(inputMap.optBoolean(MetaOperation.OCR_MEDIAN_DENOISE, false));
+                    chkSharpen.setChecked(inputMap.optBoolean(MetaOperation.OCR_SHARPEN, false));
+                    edtMorphMode.setText(inputMap.optString(MetaOperation.OCR_MORPH_MODE, "none"), false);
+                    skMorph.setProgress(Math.max(0, Math.min(3, inputMap.optInt(MetaOperation.OCR_MORPH_ITERATIONS, 0))));
+                    edtPsm.setText(inputMap.optString(MetaOperation.OCR_PAGE_SEG_MODE, "auto"), false);
+                    edtConfidenceVar.setText(inputMap.optString(MetaOperation.OCR_CONFIDENCE_VAR, ""));
+                    setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载 OCR 节点数据失败: " + e.getMessage());
+            }
+        }
+        updateOcrMaskStatus(tvMaskStatus, ocrMaskBase64[0]);
+
+        final int[] previewSeq = {0};
+        final Runnable[] pendingPreviewRefresh = {null};
+        Runnable schedulePreviewRefresh = () -> {
+            if (pendingPreviewRefresh[0] != null) {
+                mainHandler.removeCallbacks(pendingPreviewRefresh[0]);
+            }
+            pendingPreviewRefresh[0] = () -> {
+                int seq = ++previewSeq[0];
+                updateOcrProcessedPreview(
+                        dialogView, edtBbox, edtModel, edtLanguage, edtTrainedData,
+                        edtScaleFactor, chkGrayscale, chkCompress, chkGaussian,
+                        skThreshold, skCompress, skGaussian, chkUseMask, ocrMaskBase64,
+                        edtPipeline, chkInvert, skContrast, chkMedian, chkSharpen, edtMorphMode, skMorph,
+                        ivProcessedPreview, seq, previewSeq);
+            };
+            mainHandler.postDelayed(pendingPreviewRefresh[0], 180L);
+        };
+        Runnable renderPipeline = () -> renderOcrPipelineSteps(
+                lyPipelineSteps, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask,
+                dialogView, edtBbox, schedulePreviewRefresh);
+
+        bindOcrSeekBarLabels(skThreshold, tvThresholdValue, "二值化阈值: ", "", schedulePreviewRefresh);
+        bindOcrSeekBarLabels(skCompress, tvCompressValue, "原图的", "%", schedulePreviewRefresh);
+        bindOcrSeekBarLabels(skGaussian, tvGaussianValue, "模糊半径: ", "", schedulePreviewRefresh);
+        bindOcrContrastSeekBar(skContrast, tvContrastValue, schedulePreviewRefresh);
+        bindOcrSeekBarLabels(skMorph, tvMorphValue, "形态次数: ", "", schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtBbox, schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtLanguage, schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtTrainedData, schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtScaleFactor, schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtPipeline, schedulePreviewRefresh);
+        addOcrPreviewTextWatcher(edtMorphMode, schedulePreviewRefresh);
+        edtModel.setOnItemClickListener((parent, view, position, id) -> {
+            applyOcrModelPreset(safeText(edtModel), edtLanguage, edtTrainedData);
+            schedulePreviewRefresh.run();
+        });
+        chkGrayscale.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkCompress.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkGaussian.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkUseMask.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkInvert.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkMedian.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        chkSharpen.setOnCheckedChangeListener((buttonView, isChecked) -> schedulePreviewRefresh.run());
+        btnAddPipelineStep.setOnClickListener(v -> showOcrPipelinePool(
+                lyPipelineSteps, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask,
+                dialogView, edtBbox, schedulePreviewRefresh));
+        renderPipeline.run();
+        schedulePreviewRefresh.run();
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
+            if (regionPickHelper != null) {
+                regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, null);
+            }
+        });
+        btnEditMask.setOnClickListener(v -> showOcrMaskEditor(
+                dialogView, edtBbox, ocrMaskBase64, tvMaskStatus, chkUseMask, schedulePreviewRefresh));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+            }
+        });
+        btnTestOcr.setOnClickListener(v -> runOcrDialogTest(
+                dialogView, edtBbox, edtModel, edtLanguage, edtTrainedData,
+                edtScaleFactor, chkGrayscale, chkCompress, chkGaussian,
+                skThreshold, skCompress, skGaussian, chkUseMask, ocrMaskBase64,
+                edtPipeline, chkInvert, skContrast, chkMedian, chkSharpen, edtMorphMode, skMorph,
+                edtPsm, tvTestResult, ivProcessedPreview));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        btnConfirm.setOnClickListener(v -> saveOcrTextOperation(
+                dialogView, operationId, edtName, edtBbox, edtModel, edtLanguage, edtTrainedData,
+                edtTextVar, edtMinConfidence, edtTimeout, edtPreDelay,
+                edtScaleFactor, chkGrayscale, chkCompress, chkGaussian,
+                skThreshold, skCompress, skGaussian, chkUseMask, ocrMaskBase64,
+                edtPipeline, chkInvert, skContrast, chkMedian, chkSharpen, edtMorphMode, skMorph,
+                edtPsm, edtConfidenceVar, edtNextOperation));
+    }
+
+    private void saveOcrTextOperation(
+            View dialogView,
+            String operationId,
+            EditText edtName,
+            EditText edtBbox,
+            AutoCompleteTextView edtModel,
+            EditText edtLanguage,
+            EditText edtTrainedData,
+            EditText edtTextVar,
+            EditText edtMinConfidence,
+            EditText edtTimeout,
+            EditText edtPreDelay,
+            EditText edtScaleFactor,
+            CheckBox chkGrayscale,
+            CheckBox chkCompress,
+            CheckBox chkGaussian,
+            SeekBar skThreshold,
+            SeekBar skCompress,
+            SeekBar skGaussian,
+            CheckBox chkUseMask,
+            String[] ocrMaskBase64,
+            EditText edtPipeline,
+            CheckBox chkInvert,
+            SeekBar skContrast,
+            CheckBox chkMedian,
+            CheckBox chkSharpen,
+            AutoCompleteTextView edtMorphMode,
+            SeekBar skMorph,
+            AutoCompleteTextView edtPsm,
+            EditText edtConfidenceVar,
+            AutoCompleteTextView edtNextOperation) {
+
+        String name = safeText(edtName);
+        if (TextUtils.isEmpty(name)) {
+            edtName.setError("请填写操作名称");
+            return;
+        }
+        String bboxText = safeText(edtBbox);
+        if (TextUtils.isEmpty(bboxText)) {
+            edtBbox.setError("请填写识别区域");
+            return;
+        }
+        java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : parseOcrBboxText(bboxText);
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("区域格式应为 x,y,w,h");
+            return;
+        }
+
+        Long timeout = parsePositiveLong(safeText(edtTimeout));
+        if (timeout == null) {
+            edtTimeout.setError("请输入有效超时(毫秒)");
+            return;
+        }
+        Integer minConfidence = parseBoundedInt(safeText(edtMinConfidence), 0, 0, 100);
+        if (minConfidence == null) {
+            edtMinConfidence.setError("请输入 0~100 的整数");
+            return;
+        }
+        Float scaleFactor = parseBoundedFloat(safeText(edtScaleFactor), 2.0f, 1.0f, 4.0f);
+        if (scaleFactor == null) {
+            edtScaleFactor.setError("请输入 1.0~4.0 的数值");
+            return;
+        }
+        int threshold = Math.max(0, Math.min(255, skThreshold.getProgress()));
+        String pageSegMode = normalizeOcrPageSegMode(safeText(edtPsm));
+        if (pageSegMode == null) {
+            edtPsm.setError("仅支持 auto、block、line、word、sparse 或数字模式");
+            return;
+        }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.BBOX, new JSONArray(bbox));
+            String modelCode = ocrModelCode(safeText(edtModel));
+            inputMap.put(MetaOperation.OCR_MODEL, modelCode);
+            inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
+            if (!TextUtils.isEmpty(safeText(edtTrainedData))) {
+                inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+            }
+            if (!TextUtils.isEmpty(safeText(edtTextVar))) {
+                inputMap.put(MetaOperation.OCR_TEXT_VAR, safeText(edtTextVar));
+            }
+            inputMap.put(MetaOperation.OCR_MIN_CONFIDENCE, minConfidence);
+            inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
+            putOptionalMatchPreDelay(inputMap, edtPreDelay);
+            inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
+            inputMap.put(MetaOperation.OCR_GRAYSCALE, chkGrayscale.isChecked());
+            inputMap.put(MetaOperation.OCR_THRESHOLD, threshold);
+            inputMap.put(MetaOperation.OCR_COMPRESS_PERCENT, chkCompress.isChecked() ? Math.max(10, skCompress.getProgress()) : 100);
+            inputMap.put(MetaOperation.OCR_GAUSSIAN_BLUR, chkGaussian.isChecked());
+            inputMap.put(MetaOperation.OCR_GAUSSIAN_RADIUS, chkGaussian.isChecked() ? skGaussian.getProgress() : 0);
+            boolean useMask = chkUseMask != null && chkUseMask.isChecked()
+                    && ocrMaskBase64 != null && !TextUtils.isEmpty(ocrMaskBase64[0]);
+            inputMap.put(MetaOperation.OCR_USE_MASK, useMask);
+            if (useMask) {
+                inputMap.put(MetaOperation.OCR_MASK_PNG, ocrMaskBase64[0]);
+                int[] maskSize = decodeOcrMaskSize(ocrMaskBase64[0]);
+                if (maskSize != null) {
+                    inputMap.put(MetaOperation.OCR_MASK_WIDTH, maskSize[0]);
+                    inputMap.put(MetaOperation.OCR_MASK_HEIGHT, maskSize[1]);
+                }
+            }
+            JSONArray preprocessPipeline = parseOcrPipelineInput(edtPipeline, true);
+            if (preprocessPipeline == null) {
+                return;
+            }
+            if (preprocessPipeline.length() > 0) {
+                inputMap.put(MetaOperation.OCR_PREPROCESS_PIPELINE, preprocessPipeline);
+            }
+            inputMap.put(MetaOperation.OCR_INVERT, chkInvert != null && chkInvert.isChecked());
+            inputMap.put(MetaOperation.OCR_CONTRAST_PERCENT, skContrast == null ? 100 : Math.max(50, Math.min(300, skContrast.getProgress())));
+            inputMap.put(MetaOperation.OCR_MEDIAN_DENOISE, chkMedian != null && chkMedian.isChecked());
+            inputMap.put(MetaOperation.OCR_SHARPEN, chkSharpen != null && chkSharpen.isChecked());
+            inputMap.put(MetaOperation.OCR_MORPH_MODE, normalizeOcrMorphMode(safeText(edtMorphMode)));
+            inputMap.put(MetaOperation.OCR_MORPH_ITERATIONS, skMorph == null ? 0 : Math.max(0, Math.min(3, skMorph.getProgress())));
+            inputMap.put(MetaOperation.OCR_DIGITS_ONLY, "number".equals(modelCode));
+            inputMap.put(MetaOperation.OCR_PAGE_SEG_MODE, pageSegMode);
+            if (!TextUtils.isEmpty(safeText(edtConfidenceVar))) {
+                inputMap.put(MetaOperation.OCR_CONFIDENCE_VAR, safeText(edtConfidenceVar));
+            }
+            if (!TextUtils.isEmpty(safeText(edtNextOperation))) {
+                inputMap.put(MetaOperation.NEXT_OPERATION_ID, safeText(edtNextOperation));
+            }
+
+            if (operationId != null) {
+                JSONObject updatedOperation = new JSONObject();
+                updatedOperation.put("id", operationId);
+                updatedOperation.put("name", name);
+                updatedOperation.put("type", 26);
+                updatedOperation.put("responseType", 1);
+                updatedOperation.put("inputMap", inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) {
+                        updateListener.onOperationUpdated();
+                    }
+                }
+            } else {
+                JSONObject operationObject = new JSONObject();
+                operationObject.put("id", idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis());
+                operationObject.put("name", name);
+                operationObject.put("type", 26);
+                operationObject.put("responseType", 1);
+                operationObject.put("inputMap", inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加 OCR 识别节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) {
+                        addListener.onOperationAdded();
+                    }
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存 OCR 节点失败: " + e.getMessage());
+        }
+    }
+
+    private java.util.List<Integer> parseOcrBboxText(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return null;
+        }
+        String[] parts = raw.split("[,，\\s]+");
+        if (parts.length < 4) {
+            return null;
+        }
+        try {
+            int x = Integer.parseInt(parts[0].trim());
+            int y = Integer.parseInt(parts[1].trim());
+            int w = Integer.parseInt(parts[2].trim());
+            int h = Integer.parseInt(parts[3].trim());
+            if (w <= 0 || h <= 0) {
+                return null;
+            }
+            return java.util.Arrays.asList(x, y, w, h);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JSONArray parseOcrPipelineInput(EditText edtPipeline, boolean showError) {
+        if (edtPipeline == null) {
+            return new JSONArray();
+        }
+        String raw = safeText(edtPipeline);
+        if (TextUtils.isEmpty(raw)) {
+            edtPipeline.setError(null);
+            return new JSONArray();
+        }
+        try {
+            JSONArray array = new JSONArray(raw);
+            edtPipeline.setError(null);
+            return array;
+        } catch (Exception e) {
+            if (showError) {
+                edtPipeline.setError("流水线必须是 JSON 数组");
+                host.showToast("OCR 预处理流水线 JSON 格式错误");
+            }
+            return null;
+        }
+    }
+
+    private JSONArray buildLegacyOcrPipeline(JSONObject inputMap, boolean hasMask) {
+        JSONArray pipeline = new JSONArray();
+        if (inputMap == null) {
+            return pipeline;
+        }
+        try {
+            if (hasMask && inputMap.optBoolean(MetaOperation.OCR_USE_MASK, true)) {
+                pipeline.put(new JSONObject().put("type", "mask"));
+            }
+            double scale = inputMap.optDouble(MetaOperation.OCR_SCALE_FACTOR, 1.0d);
+            int compress = inputMap.optInt(MetaOperation.OCR_COMPRESS_PERCENT, 100);
+            if (Math.abs(scale - 1.0d) > 0.01d || compress != 100) {
+                pipeline.put(new JSONObject()
+                        .put("type", "resize")
+                        .put("factor", scale)
+                        .put("percent", compress));
+            }
+            if (inputMap.optBoolean(MetaOperation.OCR_GRAYSCALE, false)) {
+                pipeline.put(new JSONObject().put("type", "grayscale"));
+            }
+            int contrast = inputMap.optInt(MetaOperation.OCR_CONTRAST_PERCENT, 100);
+            if (contrast != 100) {
+                pipeline.put(new JSONObject().put("type", "contrast").put("percent", contrast));
+            }
+            if (inputMap.optBoolean(MetaOperation.OCR_MEDIAN_DENOISE, false)) {
+                pipeline.put(new JSONObject().put("type", "median"));
+            }
+            if (inputMap.optBoolean(MetaOperation.OCR_GAUSSIAN_BLUR, false)) {
+                pipeline.put(new JSONObject()
+                        .put("type", "gaussian")
+                        .put("radius", Math.max(1, inputMap.optInt(MetaOperation.OCR_GAUSSIAN_RADIUS, 1))));
+            }
+            if (inputMap.optBoolean(MetaOperation.OCR_SHARPEN, false)) {
+                pipeline.put(new JSONObject().put("type", "sharpen"));
+            }
+            int threshold = inputMap.optInt(MetaOperation.OCR_THRESHOLD, 0);
+            if (threshold > 0) {
+                pipeline.put(new JSONObject().put("type", "threshold").put("value", threshold));
+            }
+            if (inputMap.optBoolean(MetaOperation.OCR_INVERT, false)) {
+                pipeline.put(new JSONObject().put("type", "invert"));
+            }
+            String morph = inputMap.optString(MetaOperation.OCR_MORPH_MODE, "none");
+            int morphIterations = inputMap.optInt(MetaOperation.OCR_MORPH_ITERATIONS, 0);
+            if (!"none".equals(normalizeOcrMorphMode(morph)) && morphIterations > 0) {
+                pipeline.put(new JSONObject()
+                        .put("type", "morph")
+                        .put("mode", normalizeOcrMorphMode(morph))
+                        .put("iterations", morphIterations));
+            }
+        } catch (Exception ignored) {
+        }
+        return pipeline;
+    }
+
+    private void showOcrPipelinePool(LinearLayout container,
+                                     EditText edtPipeline,
+                                     String[] ocrMaskBase64,
+                                     TextView tvMaskStatus,
+                                     CheckBox chkUseMask,
+                                     View dialogView,
+                                     EditText edtBbox,
+                                     Runnable onChanged) {
+        final String[] labels = {
+                "Mask（忽略画出的区域）",
+                "缩放",
+                "灰度化",
+                "反色",
+                "二值化",
+                "对比度",
+                "中值去噪",
+                "高斯模糊",
+                "锐化",
+                "形态处理"
+        };
+        final String[] types = {
+                "mask", "resize", "grayscale", "invert", "threshold",
+                "contrast", "median", "gaussian", "sharpen", "morph"
+        };
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(host.getContext())
+                .setTitle("添加预处理")
+                .setItems(labels, (d, which) -> {
+                    appendOcrPipelineStep(edtPipeline, defaultOcrPipelineStep(types[which]));
+                    renderOcrPipelineSteps(container, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask,
+                            dialogView, edtBbox, onChanged);
+                    if (onChanged != null) onChanged.run();
+                })
+                .create();
+        showOverlayAlertDialog(dialog);
+    }
+
+    private JSONObject defaultOcrPipelineStep(String type) {
+        JSONObject step = new JSONObject();
+        try {
+            step.put("type", type);
+            if ("resize".equals(type)) {
+                step.put("factor", 2.0);
+                step.put("percent", 100);
+            } else if ("threshold".equals(type)) {
+                step.put("value", 127);
+            } else if ("contrast".equals(type)) {
+                step.put("percent", 140);
+            } else if ("gaussian".equals(type)) {
+                step.put("radius", 1);
+            } else if ("morph".equals(type)) {
+                step.put("mode", "dilate");
+                step.put("iterations", 1);
+            }
+        } catch (Exception ignored) {
+        }
+        return step;
+    }
+
+    private void appendOcrPipelineStep(EditText edtPipeline, JSONObject step) {
+        JSONArray pipeline = parseOcrPipelineInput(edtPipeline, false);
+        if (pipeline == null) pipeline = new JSONArray();
+        pipeline.put(step);
+        setOcrPipelineText(edtPipeline, pipeline);
+    }
+
+    private void setOcrPipelineText(EditText edtPipeline, JSONArray pipeline) {
+        if (edtPipeline == null) return;
+        try {
+            edtPipeline.setText(pipeline == null || pipeline.length() == 0 ? "" : pipeline.toString(2));
+        } catch (Exception e) {
+            edtPipeline.setText(pipeline == null ? "" : pipeline.toString());
+        }
+    }
+
+    private void renderOcrPipelineSteps(LinearLayout container,
+                                        EditText edtPipeline,
+                                        String[] ocrMaskBase64,
+                                        TextView tvMaskStatus,
+                                        CheckBox chkUseMask,
+                                        View dialogView,
+                                        EditText edtBbox,
+                                        Runnable onChanged) {
+        if (container == null) return;
+        container.removeAllViews();
+        JSONArray pipeline = parseOcrPipelineInput(edtPipeline, false);
+        if (pipeline == null || pipeline.length() == 0) {
+            TextView empty = new TextView(host.getContext());
+            empty.setText("未添加预处理步骤");
+            empty.setTextColor(0xFF7A8A9A);
+            empty.setTextSize(12);
+            empty.setPadding(8, 6, 8, 8);
+            container.addView(empty);
+            return;
+        }
+        for (int i = 0; i < pipeline.length(); i++) {
+            JSONObject step = pipeline.optJSONObject(i);
+            if (step == null) continue;
+            container.addView(createOcrPipelineStepRow(
+                    container, edtPipeline, pipeline, i, step,
+                    ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged));
+        }
+    }
+
+    private View createOcrPipelineStepRow(LinearLayout container,
+                                          EditText edtPipeline,
+                                          JSONArray pipeline,
+                                          int index,
+                                          JSONObject step,
+                                          String[] ocrMaskBase64,
+                                          TextView tvMaskStatus,
+                                          CheckBox chkUseMask,
+                                          View dialogView,
+                                          EditText edtBbox,
+                                          Runnable onChanged) {
+        LinearLayout row = new LinearLayout(host.getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(8, 6, 8, 6);
+        row.setBackgroundResource(R.drawable.item_operation_compact_bg);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, 0, 0, host.dp(6));
+        row.setLayoutParams(rowLp);
+
+        TextView title = new TextView(host.getContext());
+        title.setText((index + 1) + ". " + ocrPipelineStepLabel(step) + "  " + ocrPipelineStepSummary(step));
+        title.setTextColor(0xFF4E5F74);
+        title.setTextSize(12);
+        title.setSingleLine(false);
+        row.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        row.addView(makeOcrPipelineButton("参", v -> {
+            if ("mask".equals(step.optString("type"))) {
+                showOcrMaskEditor(dialogView, edtBbox, ocrMaskBase64, tvMaskStatus, chkUseMask, onChanged);
+            } else {
+                editOcrPipelineStep(container, edtPipeline, pipeline, index,
+                        ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged);
+            }
+        }));
+        row.addView(makeOcrPipelineButton("↑", v -> moveOcrPipelineStep(container, edtPipeline, pipeline, index, -1,
+                ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged)));
+        row.addView(makeOcrPipelineButton("↓", v -> moveOcrPipelineStep(container, edtPipeline, pipeline, index, 1,
+                ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged)));
+        row.addView(makeOcrPipelineButton("×", v -> removeOcrPipelineStep(container, edtPipeline, pipeline, index,
+                ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged)));
+        return row;
+    }
+
+    private TextView makeOcrPipelineButton(String text, View.OnClickListener listener) {
+        TextView button = new TextView(host.getContext());
+        button.setText(text);
+        button.setTextSize(12);
+        button.setTextColor("×".equals(text) ? 0xFFB23B3B : 0xFF00695C);
+        button.setGravity(android.view.Gravity.CENTER);
+        button.setBackgroundResource(R.drawable.item_operation_compact_bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(host.dp(28), host.dp(30));
+        lp.setMargins(host.dp(4), 0, 0, 0);
+        button.setLayoutParams(lp);
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private void editOcrPipelineStep(LinearLayout container,
+                                     EditText edtPipeline,
+                                     JSONArray pipeline,
+                                     int index,
+                                     String[] ocrMaskBase64,
+                                     TextView tvMaskStatus,
+                                     CheckBox chkUseMask,
+                                     View dialogView,
+                                     EditText edtBbox,
+                                     Runnable onChanged) {
+        JSONObject step = pipeline.optJSONObject(index);
+        if (step == null) {
+            return;
+        }
+        String type = step.optString("type", "");
+        if (!isKnownOcrPipelineStep(type)) {
+            editOcrPipelineStepAsJson(container, edtPipeline, pipeline, index,
+                    ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged);
+            return;
+        }
+
+        LinearLayout form = new LinearLayout(host.getContext());
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad = host.dp(12);
+        form.setPadding(pad, host.dp(8), pad, 0);
+
+        CheckBox enabled = new CheckBox(host.getContext());
+        enabled.setText("启用此步骤");
+        enabled.setTextColor(0xFF4E5F74);
+        enabled.setChecked(step.optBoolean("enabled", true));
+        form.addView(enabled);
+
+        EditText factorInput = null;
+        EditText percentInput = null;
+        EditText thresholdInput = null;
+        EditText contrastInput = null;
+        EditText radiusInput = null;
+        AutoCompleteTextView morphModeInput = null;
+        EditText morphIterationsInput = null;
+
+        if ("resize".equals(type) || "scale".equals(type)) {
+            factorInput = addOcrDialogNumberInput(form, "倍率", String.valueOf(step.optDouble("factor", 2.0)), true);
+            percentInput = addOcrDialogNumberInput(form, "百分比", String.valueOf(step.optInt("percent", 100)), false);
+        } else if ("threshold".equals(type) || "binary".equals(type)) {
+            thresholdInput = addOcrDialogNumberInput(form, "阈值(0-255)", String.valueOf(step.optInt("value", 127)), false);
+        } else if ("contrast".equals(type)) {
+            contrastInput = addOcrDialogNumberInput(form, "对比度百分比(50-300)", String.valueOf(step.optInt("percent", 140)), false);
+        } else if ("gaussian".equals(type) || "blur".equals(type) || "gaussian_blur".equals(type)) {
+            radiusInput = addOcrDialogNumberInput(form, "模糊半径(0-10)", String.valueOf(step.optInt("radius", 1)), false);
+        } else if ("morph".equals(type) || "morphology".equals(type)) {
+            morphModeInput = addOcrDialogChoiceInput(form, "模式", step.optString("mode", "dilate"),
+                    java.util.Arrays.asList("dilate", "erode", "open", "close"));
+            morphIterationsInput = addOcrDialogNumberInput(form, "次数(0-3)", String.valueOf(step.optInt("iterations", 1)), false);
+        } else {
+            TextView note = new TextView(host.getContext());
+            note.setText("这个步骤没有额外参数。");
+            note.setTextColor(0xFF7A8A9A);
+            note.setTextSize(12);
+            note.setPadding(0, host.dp(8), 0, 0);
+            form.addView(note);
+        }
+
+        final EditText finalFactorInput = factorInput;
+        final EditText finalPercentInput = percentInput;
+        final EditText finalThresholdInput = thresholdInput;
+        final EditText finalContrastInput = contrastInput;
+        final EditText finalRadiusInput = radiusInput;
+        final AutoCompleteTextView finalMorphModeInput = morphModeInput;
+        final EditText finalMorphIterationsInput = morphIterationsInput;
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(host.getContext())
+                .setTitle("参数: " + ocrPipelineStepLabel(step))
+                .setView(form)
+                .setPositiveButton("保存", (d, which) -> {
+                    try {
+                        JSONObject updated = new JSONObject();
+                        updated.put("type", type);
+                        if (!enabled.isChecked()) {
+                            updated.put("enabled", false);
+                        }
+                        if (finalFactorInput != null) {
+                            updated.put("factor", parseDialogFloat(finalFactorInput, 1.0f, 0.1f, 8.0f));
+                            updated.put("percent", parseDialogInt(finalPercentInput, 100, 1, 400));
+                        } else if (finalThresholdInput != null) {
+                            updated.put("value", parseDialogInt(finalThresholdInput, 127, 0, 255));
+                        } else if (finalContrastInput != null) {
+                            updated.put("percent", parseDialogInt(finalContrastInput, 140, 50, 300));
+                        } else if (finalRadiusInput != null) {
+                            updated.put("radius", parseDialogInt(finalRadiusInput, 1, 0, 10));
+                        } else if (finalMorphModeInput != null) {
+                            updated.put("mode", normalizeOcrMorphMode(safeText(finalMorphModeInput)));
+                            updated.put("iterations", parseDialogInt(finalMorphIterationsInput, 1, 0, 3));
+                        }
+                        pipeline.put(index, updated);
+                        setOcrPipelineText(edtPipeline, pipeline);
+                        renderOcrPipelineSteps(container, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask,
+                                dialogView, edtBbox, onChanged);
+                        if (onChanged != null) onChanged.run();
+                    } catch (Exception e) {
+                        host.showToast("参数保存失败: " + e.getMessage());
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .create();
+        showOverlayAlertDialog(dialog);
+    }
+
+    private void editOcrPipelineStepAsJson(LinearLayout container,
+                                           EditText edtPipeline,
+                                           JSONArray pipeline,
+                                           int index,
+                                           String[] ocrMaskBase64,
+                                           TextView tvMaskStatus,
+                                           CheckBox chkUseMask,
+                                           View dialogView,
+                                           EditText edtBbox,
+                                           Runnable onChanged) {
+        EditText editor = new EditText(host.getContext());
+        editor.setSingleLine(false);
+        editor.setMinLines(4);
+        editor.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        JSONObject step = pipeline.optJSONObject(index);
+        editor.setText(step == null ? "{}" : step.toString());
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(host.getContext())
+                .setTitle("编辑步骤 JSON")
+                .setView(editor)
+                .setPositiveButton("保存", (d, which) -> {
+                    try {
+                        pipeline.put(index, new JSONObject(editor.getText().toString()));
+                        setOcrPipelineText(edtPipeline, pipeline);
+                        renderOcrPipelineSteps(container, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask,
+                                dialogView, edtBbox, onChanged);
+                        if (onChanged != null) onChanged.run();
+                    } catch (Exception e) {
+                        host.showToast("步骤 JSON 格式错误");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .create();
+        showOverlayAlertDialog(dialog);
+    }
+
+    private boolean isKnownOcrPipelineStep(String type) {
+        if (TextUtils.isEmpty(type)) return false;
+        return "resize".equals(type) || "scale".equals(type)
+                || "grayscale".equals(type) || "gray".equals(type)
+                || "invert".equals(type)
+                || "threshold".equals(type) || "binary".equals(type)
+                || "contrast".equals(type)
+                || "median".equals(type) || "denoise".equals(type) || "median_denoise".equals(type)
+                || "gaussian".equals(type) || "blur".equals(type) || "gaussian_blur".equals(type)
+                || "sharpen".equals(type)
+                || "morph".equals(type) || "morphology".equals(type);
+    }
+
+    private EditText addOcrDialogNumberInput(LinearLayout form, String label, String value, boolean decimal) {
+        TextView title = new TextView(host.getContext());
+        title.setText(label);
+        title.setTextColor(0xFF4E5F74);
+        title.setTextSize(12);
+        title.setPadding(0, host.dp(8), 0, host.dp(2));
+        form.addView(title);
+
+        EditText input = new EditText(host.getContext());
+        input.setSingleLine(true);
+        input.setText(value);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
+                | (decimal ? android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL : 0));
+        form.addView(input, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return input;
+    }
+
+    private AutoCompleteTextView addOcrDialogChoiceInput(LinearLayout form,
+                                                         String label,
+                                                         String value,
+                                                         java.util.List<String> options) {
+        TextView title = new TextView(host.getContext());
+        title.setText(label);
+        title.setTextColor(0xFF4E5F74);
+        title.setTextSize(12);
+        title.setPadding(0, host.dp(8), 0, host.dp(2));
+        form.addView(title);
+
+        AutoCompleteTextView input = new AutoCompleteTextView(host.getContext());
+        input.setSingleLine(true);
+        input.setText(value, false);
+        dialogHelpers.bindAutoComplete(input, options);
+        form.addView(input, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        return input;
+    }
+
+    private int parseDialogInt(EditText input, int def, int min, int max) {
+        Integer value = parseBoundedInt(safeText(input), def, min, max);
+        return value == null ? def : value;
+    }
+
+    private float parseDialogFloat(EditText input, float def, float min, float max) {
+        Float value = parseBoundedFloat(safeText(input), def, min, max);
+        return value == null ? def : value;
+    }
+
+    private void showOverlayAlertDialog(android.app.AlertDialog dialog) {
+        android.view.Window preWindow = dialog.getWindow();
+        if (preWindow != null) {
+            preWindow.setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
+        android.view.Window window = dialog.getWindow();
+        if (window != null) {
+            window.setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+    }
+
+    private void moveOcrPipelineStep(LinearLayout container,
+                                     EditText edtPipeline,
+                                     JSONArray pipeline,
+                                     int index,
+                                     int direction,
+                                     String[] ocrMaskBase64,
+                                     TextView tvMaskStatus,
+                                     CheckBox chkUseMask,
+                                     View dialogView,
+                                     EditText edtBbox,
+                                     Runnable onChanged) {
+        int target = index + direction;
+        if (target < 0 || target >= pipeline.length()) return;
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < pipeline.length(); i++) {
+            if (i == index) {
+                next.put(pipeline.opt(target));
+            } else if (i == target) {
+                next.put(pipeline.opt(index));
+            } else {
+                next.put(pipeline.opt(i));
+            }
+        }
+        setOcrPipelineText(edtPipeline, next);
+        renderOcrPipelineSteps(container, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged);
+        if (onChanged != null) onChanged.run();
+    }
+
+    private void removeOcrPipelineStep(LinearLayout container,
+                                       EditText edtPipeline,
+                                       JSONArray pipeline,
+                                       int index,
+                                       String[] ocrMaskBase64,
+                                       TextView tvMaskStatus,
+                                       CheckBox chkUseMask,
+                                       View dialogView,
+                                       EditText edtBbox,
+                                       Runnable onChanged) {
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < pipeline.length(); i++) {
+            if (i != index) next.put(pipeline.opt(i));
+        }
+        setOcrPipelineText(edtPipeline, next);
+        renderOcrPipelineSteps(container, edtPipeline, ocrMaskBase64, tvMaskStatus, chkUseMask, dialogView, edtBbox, onChanged);
+        if (onChanged != null) onChanged.run();
+    }
+
+    private String ocrPipelineStepLabel(JSONObject step) {
+        String type = step == null ? "" : step.optString("type", "");
+        if ("mask".equals(type)) return "Mask";
+        if ("resize".equals(type) || "scale".equals(type)) return "缩放";
+        if ("grayscale".equals(type) || "gray".equals(type)) return "灰度";
+        if ("invert".equals(type)) return "反色";
+        if ("threshold".equals(type) || "binary".equals(type)) return "二值化";
+        if ("contrast".equals(type)) return "对比度";
+        if ("median".equals(type) || "denoise".equals(type)) return "中值去噪";
+        if ("gaussian".equals(type) || "blur".equals(type)) return "高斯模糊";
+        if ("sharpen".equals(type)) return "锐化";
+        if ("morph".equals(type) || "morphology".equals(type)) return "形态";
+        return TextUtils.isEmpty(type) ? "未知" : type;
+    }
+
+    private String ocrPipelineStepSummary(JSONObject step) {
+        if (step == null) return "";
+        String type = step.optString("type", "");
+        if ("resize".equals(type) || "scale".equals(type)) {
+            return "x" + step.optDouble("factor", 1.0) + " / " + step.optInt("percent", 100) + "%";
+        }
+        if ("threshold".equals(type) || "binary".equals(type)) {
+            return "阈值 " + step.optInt("value", 127);
+        }
+        if ("contrast".equals(type)) {
+            return step.optInt("percent", 140) + "%";
+        }
+        if ("gaussian".equals(type) || "blur".equals(type)) {
+            return "半径 " + step.optInt("radius", 1);
+        }
+        if ("morph".equals(type) || "morphology".equals(type)) {
+            return step.optString("mode", "dilate") + " x" + step.optInt("iterations", 1);
+        }
+        return "";
+    }
+
+    private void bindOcrSeekBarLabels(SeekBar seekBar, TextView label, String prefix) {
+        bindOcrSeekBarLabels(seekBar, label, prefix, "");
+    }
+
+    private void bindOcrSeekBarLabels(SeekBar seekBar, TextView label, String prefix, String suffix) {
+        bindOcrSeekBarLabels(seekBar, label, prefix, suffix, null);
+    }
+
+    private void bindOcrSeekBarLabels(SeekBar seekBar, TextView label, String prefix, String suffix, Runnable onChanged) {
+        if (seekBar == null || label == null) {
+            return;
+        }
+        label.setText(prefix + seekBar.getProgress() + suffix);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                label.setText(prefix + progress + suffix);
+                if (fromUser && onChanged != null) {
+                    onChanged.run();
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {
+                if (onChanged != null) {
+                    onChanged.run();
+                }
+            }
+        });
+    }
+
+    private void bindOcrContrastSeekBar(SeekBar seekBar, TextView label, Runnable onChanged) {
+        if (seekBar == null || label == null) {
+            return;
+        }
+        if (seekBar.getProgress() < 50) {
+            seekBar.setProgress(50);
+        }
+        label.setText("对比度: " + seekBar.getProgress() + "%");
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (progress < 50) {
+                    seekBar.setProgress(50);
+                    return;
+                }
+                label.setText("对比度: " + progress + "%");
+                if (fromUser && onChanged != null) {
+                    onChanged.run();
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {
+                if (seekBar.getProgress() < 50) {
+                    seekBar.setProgress(50);
+                }
+                if (onChanged != null) {
+                    onChanged.run();
+                }
+            }
+        });
+    }
+
+    private void addOcrPreviewTextWatcher(EditText input, Runnable onChanged) {
+        if (input == null || onChanged == null) {
+            return;
+        }
+        input.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                onChanged.run();
+            }
+        });
+    }
+
+    private void showOcrMaskEditor(View dialogView,
+                                   EditText edtBbox,
+                                   String[] ocrMaskBase64,
+                                   TextView tvMaskStatus,
+                                   CheckBox chkUseMask,
+                                   Runnable onChanged) {
+        java.util.List<Integer> bbox = regionPickHelper != null
+                ? regionPickHelper.parseBboxInput(safeText(edtBbox))
+                : parseOcrBboxText(safeText(edtBbox));
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("请先填写有效识别区域");
+            return;
+        }
+        Runnable restoreViews = host.hideViewsForCapture(dialogView, host.getProjectPanelView());
+        mainHandler.postDelayed(() -> new Thread(() -> {
+            Bitmap source = null;
+            try {
+                Rect roi = new Rect(bbox.get(0), bbox.get(1), bbox.get(0) + bbox.get(2), bbox.get(1) + bbox.get(3));
+                source = ScreenCapture.captureLatestBitmap(roi, 800L, 40L);
+                Bitmap finalSource = source;
+                source = null;
+                mainHandler.post(() -> {
+                    restoreViews.run();
+                    if (finalSource == null || finalSource.isRecycled()) {
+                        host.showToast("截图失败，无法编辑 OCR Mask");
+                        return;
+                    }
+                    openOcrMaskEditorOverlay(finalSource, ocrMaskBase64, tvMaskStatus, chkUseMask, onChanged);
+                });
+            } catch (Exception e) {
+                Bitmap failedSource = source;
+                mainHandler.post(() -> {
+                    restoreViews.run();
+                    host.showToast("打开 OCR Mask 失败: " + e.getMessage());
+                    if (failedSource != null && !failedSource.isRecycled()) {
+                        failedSource.recycle();
+                    }
+                });
+            }
+        }, "ocr-mask-capture").start(), 180L);
+    }
+
+    private void openOcrMaskEditorOverlay(Bitmap source,
+                                          String[] ocrMaskBase64,
+                                          TextView tvMaskStatus,
+                                          CheckBox chkUseMask,
+                                          Runnable onChanged) {
+        Bitmap initialMask = decodeOcrMask(ocrMaskBase64 == null ? "" : ocrMaskBase64[0]);
+        View overlay = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_template_mask_editor, null);
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+        );
+
+        TemplateMaskEditorView editor = overlay.findViewById(R.id.template_mask_editor_view);
+        TextView tvTitle = overlay.findViewById(R.id.tv_mask_editor_title);
+        TextView btnDraw = overlay.findViewById(R.id.btn_mask_draw);
+        TextView btnErase = overlay.findViewById(R.id.btn_mask_erase);
+        TextView btnClear = overlay.findViewById(R.id.btn_mask_clear);
+        TextView btnSave = overlay.findViewById(R.id.btn_mask_save);
+        SeekBar sbBrush = overlay.findViewById(R.id.sb_mask_brush);
+        TextView tvBrush = overlay.findViewById(R.id.tv_mask_brush_size);
+
+        if (tvTitle != null) {
+            tvTitle.setText("OCR Mask：画出的区域会被忽略");
+        }
+        editor.setTemplateBitmap(source, initialMask);
+        if (source != null && !source.isRecycled()) source.recycle();
+        if (initialMask != null && !initialMask.isRecycled()) initialMask.recycle();
+
+        Runnable updateModeUi = () -> {
+            boolean erase = editor.isEraseMode();
+            btnDraw.setBackgroundResource(erase ? R.drawable.item_operation_compact_bg : R.drawable.panel_btn_primary_selector);
+            btnDraw.setTextColor(erase ? android.graphics.Color.rgb(49, 93, 191) : android.graphics.Color.WHITE);
+            btnErase.setBackgroundResource(erase ? R.drawable.panel_btn_primary_selector : R.drawable.item_operation_compact_bg);
+            btnErase.setTextColor(erase ? android.graphics.Color.WHITE : android.graphics.Color.rgb(49, 93, 191));
+        };
+        Runnable updateBrushUi = () -> tvBrush.setText(editor.getBrushSize() + " px");
+
+        btnDraw.setOnClickListener(v -> {
+            editor.setEraseMode(false);
+            updateModeUi.run();
+        });
+        btnErase.setOnClickListener(v -> {
+            editor.setEraseMode(true);
+            updateModeUi.run();
+        });
+        btnClear.setOnClickListener(v -> editor.clearMask());
+        sbBrush.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                editor.setBrushSize(progress + 1);
+                updateBrushUi.run();
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        overlay.findViewById(R.id.btn_mask_zoom_in).setOnClickListener(v -> editor.zoomIn());
+        overlay.findViewById(R.id.btn_mask_zoom_out).setOnClickListener(v -> editor.zoomOut());
+        overlay.findViewById(R.id.btn_mask_editor_close).setOnClickListener(v -> {
+            editor.release();
+            dialogHelpers.safeRemoveView(overlay);
+        });
+        btnSave.setOnClickListener(v -> {
+            Bitmap out = editor.hasMaskPixels() ? editor.exportMaskBitmap() : null;
+            try {
+                if (ocrMaskBase64 != null) {
+                    ocrMaskBase64[0] = out == null ? "" : encodeBitmapToBase64(out);
+                }
+                if (chkUseMask != null) {
+                    chkUseMask.setChecked(out != null);
+                }
+                updateOcrMaskStatus(tvMaskStatus, ocrMaskBase64 == null ? "" : ocrMaskBase64[0]);
+                if (onChanged != null) {
+                    onChanged.run();
+                }
+                host.showToast(out == null ? "OCR Mask 已清空" : "OCR Mask 已保存到当前节点");
+            } catch (Exception e) {
+                host.showToast("保存 OCR Mask 失败: " + e.getMessage());
+            } finally {
+                if (out != null && !out.isRecycled()) out.recycle();
+                editor.release();
+                dialogHelpers.safeRemoveView(overlay);
+            }
+        });
+
+        updateModeUi.run();
+        updateBrushUi.run();
+        wm.addView(overlay, lp);
+    }
+
+    private Bitmap decodeOcrMask(String rawBase64) {
+        if (TextUtils.isEmpty(rawBase64)) {
+            return null;
+        }
+        try {
+            String data = stripDataUriPrefix(rawBase64);
+            byte[] bytes = Base64.decode(data, Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String encodeBitmapToBase64(Bitmap bitmap) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return "";
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+    }
+
+    private int[] decodeOcrMaskSize(String rawBase64) {
+        Bitmap mask = decodeOcrMask(rawBase64);
+        if (mask == null || mask.isRecycled()) {
+            return null;
+        }
+        int[] size = new int[]{mask.getWidth(), mask.getHeight()};
+        mask.recycle();
+        return size;
+    }
+
+    private void updateOcrMaskStatus(TextView statusView, String rawBase64) {
+        if (statusView == null) return;
+        int[] size = decodeOcrMaskSize(rawBase64);
+        statusView.setText(size == null ? "Mask: 未绘制" : "Mask: 已绘制 " + size[0] + "×" + size[1]);
+    }
+
+    private String stripDataUriPrefix(String raw) {
+        if (raw == null) return "";
+        int comma = raw.indexOf(',');
+        if (raw.startsWith("data:") && comma >= 0 && comma < raw.length() - 1) {
+            return raw.substring(comma + 1);
+        }
+        return raw;
+    }
+
+    private void updateOcrProcessedPreview(View dialogView,
+                                           EditText edtBbox,
+                                           AutoCompleteTextView edtModel,
+                                           EditText edtLanguage,
+                                           EditText edtTrainedData,
+                                           EditText edtScaleFactor,
+                                           CheckBox chkGrayscale,
+                                           CheckBox chkCompress,
+                                           CheckBox chkGaussian,
+                                           SeekBar skThreshold,
+                                           SeekBar skCompress,
+                                           SeekBar skGaussian,
+                                           CheckBox chkUseMask,
+                                           String[] ocrMaskBase64,
+                                           EditText edtPipeline,
+                                           CheckBox chkInvert,
+                                           SeekBar skContrast,
+                                           CheckBox chkMedian,
+                                           CheckBox chkSharpen,
+                                           AutoCompleteTextView edtMorphMode,
+                                           SeekBar skMorph,
+                                           ImageView ivProcessedPreview,
+                                           int seq,
+                                           int[] latestSeq) {
+        if (dialogView == null || ivProcessedPreview == null) {
+            return;
+        }
+        java.util.List<Integer> bbox = regionPickHelper != null
+                ? regionPickHelper.parseBboxInput(safeText(edtBbox))
+                : parseOcrBboxText(safeText(edtBbox));
+        if (bbox == null || bbox.size() < 4) {
+            ivProcessedPreview.setImageDrawable(null);
+            return;
+        }
+        Float scaleFactor = parseBoundedFloat(safeText(edtScaleFactor), 2.0f, 1.0f, 4.0f);
+        if (scaleFactor == null) {
+            ivProcessedPreview.setImageDrawable(null);
+            return;
+        }
+
+        java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
+        String modelCode = ocrModelCode(safeText(edtModel));
+        inputMap.put(MetaOperation.OCR_MODEL, modelCode);
+        inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
+        inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+        inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
+        inputMap.put(MetaOperation.OCR_GRAYSCALE, chkGrayscale != null && chkGrayscale.isChecked());
+        inputMap.put(MetaOperation.OCR_THRESHOLD, skThreshold == null ? 0 : Math.max(0, Math.min(255, skThreshold.getProgress())));
+        inputMap.put(MetaOperation.OCR_COMPRESS_PERCENT,
+                chkCompress != null && chkCompress.isChecked() && skCompress != null ? Math.max(10, skCompress.getProgress()) : 100);
+        inputMap.put(MetaOperation.OCR_GAUSSIAN_BLUR, chkGaussian != null && chkGaussian.isChecked());
+        inputMap.put(MetaOperation.OCR_GAUSSIAN_RADIUS,
+                chkGaussian != null && chkGaussian.isChecked() && skGaussian != null ? skGaussian.getProgress() : 0);
+        inputMap.put(MetaOperation.OCR_USE_MASK,
+                chkUseMask != null && chkUseMask.isChecked() && ocrMaskBase64 != null && !TextUtils.isEmpty(ocrMaskBase64[0]));
+        inputMap.put(MetaOperation.OCR_MASK_PNG, ocrMaskBase64 == null ? "" : ocrMaskBase64[0]);
+        JSONArray preprocessPipeline = parseOcrPipelineInput(edtPipeline, false);
+        if (preprocessPipeline != null && preprocessPipeline.length() > 0) {
+            inputMap.put(MetaOperation.OCR_PREPROCESS_PIPELINE, jsonArrayToJavaList(preprocessPipeline));
+        }
+        inputMap.put(MetaOperation.OCR_INVERT, chkInvert != null && chkInvert.isChecked());
+        inputMap.put(MetaOperation.OCR_CONTRAST_PERCENT, skContrast == null ? 100 : Math.max(50, Math.min(300, skContrast.getProgress())));
+        inputMap.put(MetaOperation.OCR_MEDIAN_DENOISE, chkMedian != null && chkMedian.isChecked());
+        inputMap.put(MetaOperation.OCR_SHARPEN, chkSharpen != null && chkSharpen.isChecked());
+        inputMap.put(MetaOperation.OCR_MORPH_MODE, normalizeOcrMorphMode(safeText(edtMorphMode)));
+        inputMap.put(MetaOperation.OCR_MORPH_ITERATIONS, skMorph == null ? 0 : Math.max(0, Math.min(3, skMorph.getProgress())));
+        inputMap.put(MetaOperation.OCR_DIGITS_ONLY, "number".equals(modelCode));
+        OcrTextOperationHandler.OcrOptions options = OcrTextOperationHandler.OcrOptions.fromInput(inputMap);
+
+        new Thread(() -> {
+            android.graphics.Bitmap preview = OcrTextOperationHandler.renderProcessedPreview(
+                    host.getContext().getApplicationContext(),
+                    bbox,
+                    options);
+            dialogView.post(() -> {
+                if (latestSeq != null && seq != latestSeq[0]) {
+                    if (preview != null && !preview.isRecycled()) {
+                        preview.recycle();
+                    }
+                    return;
+                }
+                if (preview == null || preview.isRecycled()) {
+                    ivProcessedPreview.setImageDrawable(null);
+                } else {
+                    ivProcessedPreview.setImageBitmap(preview);
+                }
+            });
+        }, "ocr-preview-render").start();
+    }
+
+    private void applyOcrModelPreset(String label, EditText edtLanguage, EditText edtTrainedData) {
+        String code = ocrModelCode(label);
+        if ("chinese".equals(code)) {
+            edtLanguage.setText("chi_sim");
+            edtTrainedData.setText("chi_sim.traineddata");
+            return;
+        }
+        if ("english".equals(code)) {
+            edtLanguage.setText("eng");
+            edtTrainedData.setText("eng.traineddata");
+            return;
+        }
+        if ("number".equals(code)) {
+            edtLanguage.setText("eng");
+            edtTrainedData.setText("eng.traineddata");
+            return;
+        }
+        if ("custom".equals(code)) {
+            edtLanguage.setText("");
+            edtTrainedData.setText("");
+            return;
+        }
+        if ("chi_eng".equals(code)) {
+            edtLanguage.setText("chi_sim+eng");
+            edtTrainedData.setText("");
+        }
+    }
+
+    private String ocrModelCode(String label) {
+        if ("chi_sim.traineddata".equals(label) || "识别中文".equals(label) || "中文".equals(label)) {
+            return "chinese";
+        }
+        if ("eng.traineddata".equals(label) || "识别英文".equals(label) || "英文".equals(label)) {
+            return "english";
+        }
+        if ("number.traineddata".equals(label) || "识别数字".equals(label) || "数字".equals(label)) {
+            return "number";
+        }
+        if ("custom.traineddata".equals(label) || "自定义模型".equals(label) || "自定义".equals(label)) {
+            return "custom";
+        }
+        return "chi_eng";
+    }
+
+    private String ocrModelLabel(String code) {
+        if ("chinese".equals(code)) {
+            return "chi_sim.traineddata";
+        }
+        if ("english".equals(code)) {
+            return "eng.traineddata";
+        }
+        if ("number".equals(code)) {
+            return "number.traineddata";
+        }
+        if ("custom".equals(code)) {
+            return "custom.traineddata";
+        }
+        return "chi_sim.traineddata + eng.traineddata";
+    }
+
+    private void runOcrDialogTest(View dialogView,
+                                  EditText edtBbox,
+                                  AutoCompleteTextView edtModel,
+                                  EditText edtLanguage,
+                                  EditText edtTrainedData,
+                                  EditText edtScaleFactor,
+                                  CheckBox chkGrayscale,
+                                  CheckBox chkCompress,
+                                  CheckBox chkGaussian,
+                                  SeekBar skThreshold,
+                                  SeekBar skCompress,
+                                  SeekBar skGaussian,
+                                  CheckBox chkUseMask,
+                                  String[] ocrMaskBase64,
+                                  EditText edtPipeline,
+                                  CheckBox chkInvert,
+                                  SeekBar skContrast,
+                                  CheckBox chkMedian,
+                                  CheckBox chkSharpen,
+                                  AutoCompleteTextView edtMorphMode,
+                                  SeekBar skMorph,
+                                  AutoCompleteTextView edtPsm,
+                                  TextView tvTestResult,
+                                  ImageView ivProcessedPreview) {
+        String bboxText = safeText(edtBbox);
+        java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : parseOcrBboxText(bboxText);
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("区域格式应为 x,y,w,h");
+            return;
+        }
+        Float scaleFactor = parseBoundedFloat(safeText(edtScaleFactor), 2.0f, 1.0f, 4.0f);
+        if (scaleFactor == null) {
+            edtScaleFactor.setError("请输入 1.0~4.0 的数值");
+            return;
+        }
+        int threshold = Math.max(0, Math.min(255, skThreshold.getProgress()));
+        String pageSegMode = normalizeOcrPageSegMode(safeText(edtPsm));
+        if (pageSegMode == null) {
+            edtPsm.setError("仅支持 auto、block、line、word、sparse 或数字模式");
+            return;
+        }
+
+        tvTestResult.setText("正在识别...");
+        java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
+        String modelCode = ocrModelCode(safeText(edtModel));
+        inputMap.put(MetaOperation.OCR_MODEL, modelCode);
+        inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
+        inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+        inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
+        inputMap.put(MetaOperation.OCR_GRAYSCALE, chkGrayscale.isChecked());
+        inputMap.put(MetaOperation.OCR_THRESHOLD, threshold);
+        inputMap.put(MetaOperation.OCR_COMPRESS_PERCENT, chkCompress.isChecked() ? Math.max(10, skCompress.getProgress()) : 100);
+        inputMap.put(MetaOperation.OCR_GAUSSIAN_BLUR, chkGaussian.isChecked());
+        inputMap.put(MetaOperation.OCR_GAUSSIAN_RADIUS, chkGaussian.isChecked() ? skGaussian.getProgress() : 0);
+        inputMap.put(MetaOperation.OCR_USE_MASK,
+                chkUseMask != null && chkUseMask.isChecked() && ocrMaskBase64 != null && !TextUtils.isEmpty(ocrMaskBase64[0]));
+        inputMap.put(MetaOperation.OCR_MASK_PNG, ocrMaskBase64 == null ? "" : ocrMaskBase64[0]);
+        JSONArray preprocessPipeline = parseOcrPipelineInput(edtPipeline, true);
+        if (preprocessPipeline == null) {
+            return;
+        }
+        if (preprocessPipeline.length() > 0) {
+            inputMap.put(MetaOperation.OCR_PREPROCESS_PIPELINE, jsonArrayToJavaList(preprocessPipeline));
+        }
+        inputMap.put(MetaOperation.OCR_INVERT, chkInvert != null && chkInvert.isChecked());
+        inputMap.put(MetaOperation.OCR_CONTRAST_PERCENT, skContrast == null ? 100 : Math.max(50, Math.min(300, skContrast.getProgress())));
+        inputMap.put(MetaOperation.OCR_MEDIAN_DENOISE, chkMedian != null && chkMedian.isChecked());
+        inputMap.put(MetaOperation.OCR_SHARPEN, chkSharpen != null && chkSharpen.isChecked());
+        inputMap.put(MetaOperation.OCR_MORPH_MODE, normalizeOcrMorphMode(safeText(edtMorphMode)));
+        inputMap.put(MetaOperation.OCR_MORPH_ITERATIONS, skMorph == null ? 0 : Math.max(0, Math.min(3, skMorph.getProgress())));
+        inputMap.put(MetaOperation.OCR_DIGITS_ONLY, "number".equals(modelCode));
+        OcrTextOperationHandler.OcrOptions options = OcrTextOperationHandler.OcrOptions.fromInput(inputMap);
+        new Thread(() -> {
+            OcrTextOperationHandler.OcrPreviewResult result =
+                    OcrTextOperationHandler.recognizeOnce(
+                            host.getContext().getApplicationContext(),
+                            bbox,
+                            options,
+                            pageSegMode);
+            dialogView.post(() -> {
+                StringBuilder builder = new StringBuilder();
+                builder.append(result.success ? "识别完成" : "识别失败");
+                builder.append("  置信度: ").append(result.confidence);
+                if (!TextUtils.isEmpty(result.reason)) {
+                    builder.append("\n状态: ").append(result.reason);
+                }
+                if (!TextUtils.isEmpty(result.message)) {
+                    builder.append("\n提示: ").append(result.message);
+                }
+                builder.append("\n\n").append(TextUtils.isEmpty(result.text) ? "(空结果)" : result.text);
+                tvTestResult.setText(builder.toString());
+                if (ivProcessedPreview != null && result.previewBitmap != null && !result.previewBitmap.isRecycled()) {
+                    ivProcessedPreview.setImageBitmap(result.previewBitmap);
+                }
+            });
+        }, "ocr-dialog-test").start();
+    }
+
+    private Integer parseBoundedInt(String raw, int def, int min, int max) {
+        int value = def;
+        if (!TextUtils.isEmpty(raw)) {
+            try {
+                value = Integer.parseInt(raw.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private Float parseBoundedFloat(String raw, float def, float min, float max) {
+        float value = def;
+        if (!TextUtils.isEmpty(raw)) {
+            try {
+                value = Float.parseFloat(raw.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private String normalizeOcrPageSegMode(String raw) {
+        String value = TextUtils.isEmpty(raw) ? "auto" : raw.trim().toLowerCase();
+        if ("auto".equals(value) || "block".equals(value) || "line".equals(value)
+                || "word".equals(value) || "sparse".equals(value)
+                || "single_block".equals(value) || "single_line".equals(value)
+                || "single_word".equals(value) || "sparse_text".equals(value)) {
+            return value;
+        }
+        try {
+            Integer.parseInt(value);
+            return value;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String normalizeOcrMorphMode(String raw) {
+        String value = TextUtils.isEmpty(raw) ? "none" : raw.trim().toLowerCase();
+        if ("加粗".equals(raw) || "膨胀".equals(raw) || "dilate".equals(value)) return "dilate";
+        if ("腐蚀".equals(raw) || "细化".equals(raw) || "erode".equals(value)) return "erode";
+        if ("开运算".equals(raw) || "open".equals(value)) return "open";
+        if ("闭运算".equals(raw) || "close".equals(value)) return "close";
+        return "none";
+    }
+
+    private String defaultIfEmpty(String raw, String def) {
+        return TextUtils.isEmpty(raw) ? def : raw;
     }
 
     // ==================== Back Key Operation ====================

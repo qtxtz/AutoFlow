@@ -25,6 +25,7 @@ import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.MtryOperation;
+import com.auto.master.Task.Operation.OcrTextOperation;
 import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.Task.Operation.SetCaptureScaleOperation;
 import com.auto.master.Task.Operation.SwitchBranchOperation;
@@ -72,6 +73,7 @@ public class OperationHandlerManager {
         register(OperationType.APP_CLOSE, AppCloseOperation.class, AppCloseOperation::new, AppCloseOperationHandler::new, "close_app", "app_close", "kill_app");
         register(OperationType.ACCESSIBILITY_NODE, AccessibilityNodeOperation.class, AccessibilityNodeOperation::new, AccessibilityNodeOperationHandler::new, "a11y_node", "accessibility", "accessibility_node");
         register(OperationType.MTRY, MtryOperation.class, MtryOperation::new, MtryOperationHandler::new, "mtry", "try", "retry");
+        register(OperationType.OCR_TEXT, OcrTextOperation.class, OcrTextOperation::new, OcrTextOperationHandler::new, "ocr", "ocr_text", "text_ocr");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -100,6 +102,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.APP_CLOSE.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.ACCESSIBILITY_NODE.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.MTRY.getCode(), 1, ColorMatchResponseHandler::new);
+        registerResponse(OperationType.OCR_TEXT.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**
