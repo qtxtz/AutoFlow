@@ -14,7 +14,7 @@ public enum OperationType {
     MATCH_TEMPLATE(6, "模板匹配", "match"),
     MATCH_MAP_TEMPLATE(7, "图集匹配", "matchmap"),
     JUMP_TASK(8, "跳转任务", "jump"),
-    VARIABLE_SCRIPT(11, "脚本变量", "script"),
+    VARIABLE_SCRIPT(11, "JS脚本", "script"),
     VARIABLE_MATH(12, "数学运算", "math"),
     VARIABLE_TEMPLATE(13, "模板变量", "template"),
     APP_LAUNCH(14, "启动应用", "app"),

@@ -514,7 +514,7 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             case "sleep":
                 return new OperationVisualSpec(R.drawable.ic_op_clock, null,
                         0xFFFFF4DF, 0x33D9891F, 0xFFB85C00);
-            case "脚本变量":
+            case "JS脚本":
             case "数学运算":
             case "模板变量":
                 return new OperationVisualSpec(0, "var",
