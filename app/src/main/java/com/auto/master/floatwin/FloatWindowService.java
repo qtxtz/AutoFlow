@@ -2691,8 +2691,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 "变量节点",
                 null,
                 Arrays.asList(
-                        new AddOperationMenuAdapter.MenuItem("variable_set", "变量设置", "写入固定值或运行时值", "设", R.color.op_var_template, true),
-                        new AddOperationMenuAdapter.MenuItem("variable_script", "变量脚本", "用脚本生成变量结果", "本", R.color.op_var_script, true),
+                        new AddOperationMenuAdapter.MenuItem("variable_script", "JS变量脚本", "用js脚本进行变量操作", "JS", R.color.op_var_script, true),
                         new AddOperationMenuAdapter.MenuItem("variable_math", "变量运算", "做数值计算与表达式处理", "算", R.color.op_var_math, true),
                         new AddOperationMenuAdapter.MenuItem("variable_template", "模板变量", "从模板结果中提取变量", "模", R.color.op_var_template, true)
                 )));
@@ -2766,9 +2765,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "loop":
                 dialogFactory.showAddLoopDialog();
-                return;
-            case "variable_set":
-                dialogFactory.showAddVariableSetDialog();
                 return;
             case "variable_script":
                 dialogFactory.showAddVariableScriptDialog();
