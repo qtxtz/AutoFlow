@@ -6,6 +6,8 @@
 
     <!-- Android 14+ MediaProjection 前台服务类型权限 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Android 14+ 悬浮窗常驻控制面板使用 specialUse 前台服务类型 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
 <!--    <uses-permission android:name="android.permission.CAMERA" />-->
 <!--    //OPENCV 的存储权限-->
@@ -135,7 +137,11 @@
             android:name=".floatwin.FloatWindowService"
             android:exported="false"
             android:stopWithTask="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="persistent floating automation controls" />
+        </service>
 
 
         <!-- MediaProjection 截图前台服务 -->

@@ -243,6 +243,7 @@ public class ScreenCaptureManager {
             Log.e(TAG, "not init(Activity)");
             return false;
         }
+        ensureMediaProjectionForegroundService();
 
         try {
             mediaProjection = projectionManager.getMediaProjection(resultCode, data);
@@ -287,6 +288,19 @@ public class ScreenCaptureManager {
             Log.e(TAG, "startCapture failed", t);
             cleanup();
             return false;
+        }
+    }
+
+    private void ensureMediaProjectionForegroundService() {
+        if (appContext == null) {
+            return;
+        }
+        MediaProjectionCaptureService.ensureStarted(appContext);
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return;
+        }
+        if (!MediaProjectionCaptureService.awaitForegroundStarted(1500L)) {
+            Log.w(TAG, "media projection foreground service not ready yet");
         }
     }
 

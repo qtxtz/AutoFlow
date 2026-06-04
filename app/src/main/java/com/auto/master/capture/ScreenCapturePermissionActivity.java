@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Window;
 
@@ -94,9 +96,15 @@ public class ScreenCapturePermissionActivity extends Activity {
                 && resultCode == RESULT_OK
                 && data != null) {
             ScreenCapture.saveProjectionPermission(resultCode, data);
+            MediaProjectionCaptureService.ensureStarted(this);
             ScreenCaptureManager manager = ScreenCaptureManager.getInstance();
             manager.init(this);
-            granted = manager.startCapture(resultCode, data);
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                boolean started = manager.startCapture(resultCode, data);
+                notifyCallbacks(started);
+                finishWithoutAnimation();
+            }, 250L);
+            return;
         }
         notifyCallbacks(granted);
         finishWithoutAnimation();

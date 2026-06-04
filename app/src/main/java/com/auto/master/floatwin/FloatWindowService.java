@@ -1223,7 +1223,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         appLaunchTriggerManager = new AppLaunchTriggerManager(this);
         nodeFloatButtonUiHelper.restoreNodeFloatButtons();
         
-        startMyForeground();
+        if (!startMyForeground()) {
+            stopSelf();
+            return;
+        }
         showBall();
         prepareProjectPanel();
         prewarmProjectStructure();
@@ -1233,7 +1236,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         appLaunchTriggerManager.initIfNeeded();
     }
 
-    private void startMyForeground() {
+    private boolean startMyForeground() {
         String channelId = "float_window_channel";
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1254,7 +1257,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         .setOngoing(true)
                         .build();
 
-        startForeground(1, notification);
+        try {
+            startForeground(1, notification);
+            return true;
+        } catch (RuntimeException e) {
+            Log.e(TAG, "启动悬浮窗前台服务失败", e);
+            return false;
+        }
     }
 
     @Override
