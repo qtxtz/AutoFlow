@@ -40,6 +40,7 @@ import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
 import com.auto.master.utils.AdaptivePollingController;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Locale;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -5558,8 +5559,8 @@ public class OperationDialogFactory {
         EditText edtName = dialogView.findViewById(R.id.edt_name);
         EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
         AutoCompleteTextView edtModel = dialogView.findViewById(R.id.edt_ocr_model);
-        EditText edtLanguage = dialogView.findViewById(R.id.edt_ocr_language);
-        EditText edtTrainedData = dialogView.findViewById(R.id.edt_ocr_traineddata);
+        EditText edtLanguage = null;
+        EditText edtTrainedData = null;
         EditText edtTextVar = dialogView.findViewById(R.id.edt_ocr_text_var);
         EditText edtMinConfidence = dialogView.findViewById(R.id.edt_ocr_min_confidence);
         EditText edtTimeout = dialogView.findViewById(R.id.edt_timeout);
@@ -5597,8 +5598,6 @@ public class OperationDialogFactory {
 
         edtName.setText("OCR 识别");
         edtModel.setText("chi_sim.traineddata + eng.traineddata", false);
-        edtLanguage.setText("chi_sim+eng");
-        edtTrainedData.setText("");
         edtMinConfidence.setText("0");
         edtTimeout.setText(defaultMatchTimeoutText());
         setupMatchDelayHint(edtPreDelay);
@@ -5621,9 +5620,7 @@ public class OperationDialogFactory {
         dialogHelpers.bindAutoComplete(edtModel, java.util.Arrays.asList(
                 "chi_sim.traineddata + eng.traineddata",
                 "chi_sim.traineddata",
-                "eng.traineddata",
-                "number.traineddata",
-                "custom.traineddata"
+                "eng.traineddata"
         ));
         edtModel.setOnItemClickListener((parent, view, position, id) ->
                 applyOcrModelPreset(safeText(edtModel), edtLanguage, edtTrainedData));
@@ -5649,9 +5646,7 @@ public class OperationDialogFactory {
                         edtBbox.setText(bboxArr.optInt(0) + "," + bboxArr.optInt(1) + ","
                                 + bboxArr.optInt(2) + "," + bboxArr.optInt(3));
                     }
-                    edtModel.setText(ocrModelLabel(inputMap.optString(MetaOperation.OCR_MODEL, "chi_eng")), false);
-                    edtLanguage.setText(inputMap.optString(MetaOperation.OCR_LANGUAGE, "chi_sim+eng"));
-                    edtTrainedData.setText(inputMap.optString(MetaOperation.OCR_TRAINED_DATA, ""));
+                    edtModel.setText(ocrTrainingFileLabel(inputMap), false);
                     edtTextVar.setText(inputMap.optString(MetaOperation.OCR_TEXT_VAR, ""));
                     setOptionalLongText(edtMinConfidence, inputMap.opt(MetaOperation.OCR_MIN_CONFIDENCE));
                     Object timeoutObj = inputMap.opt(MetaOperation.MATCHTIMEOUT);
@@ -5847,9 +5842,10 @@ public class OperationDialogFactory {
             inputMap.put(MetaOperation.BBOX, new JSONArray(bbox));
             String modelCode = ocrModelCode(safeText(edtModel));
             inputMap.put(MetaOperation.OCR_MODEL, modelCode);
-            inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
-            if (!TextUtils.isEmpty(safeText(edtTrainedData))) {
-                inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+            inputMap.put(MetaOperation.OCR_LANGUAGE, ocrLanguageFromTrainingFiles(safeText(edtModel)));
+            String trainedData = ocrSingleTrainingFileName(safeText(edtModel));
+            if (!TextUtils.isEmpty(trainedData)) {
+                inputMap.put(MetaOperation.OCR_TRAINED_DATA, trainedData);
             }
             if (!TextUtils.isEmpty(safeText(edtTextVar))) {
                 inputMap.put(MetaOperation.OCR_TEXT_VAR, safeText(edtTextVar));
@@ -6793,8 +6789,8 @@ public class OperationDialogFactory {
         java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
         String modelCode = ocrModelCode(safeText(edtModel));
         inputMap.put(MetaOperation.OCR_MODEL, modelCode);
-        inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
-        inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+        inputMap.put(MetaOperation.OCR_LANGUAGE, ocrLanguageFromTrainingFiles(safeText(edtModel)));
+        inputMap.put(MetaOperation.OCR_TRAINED_DATA, ocrSingleTrainingFileName(safeText(edtModel)));
         inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
         inputMap.put(MetaOperation.OCR_GRAYSCALE, chkGrayscale != null && chkGrayscale.isChecked());
         inputMap.put(MetaOperation.OCR_THRESHOLD, skThreshold == null ? 0 : Math.max(0, Math.min(255, skThreshold.getProgress())));
@@ -6841,44 +6837,31 @@ public class OperationDialogFactory {
     }
 
     private void applyOcrModelPreset(String label, EditText edtLanguage, EditText edtTrainedData) {
-        String code = ocrModelCode(label);
-        if ("chinese".equals(code)) {
-            edtLanguage.setText("chi_sim");
-            edtTrainedData.setText("chi_sim.traineddata");
-            return;
+        if (edtLanguage != null) {
+            edtLanguage.setText(ocrLanguageFromTrainingFiles(label));
         }
-        if ("english".equals(code)) {
-            edtLanguage.setText("eng");
-            edtTrainedData.setText("eng.traineddata");
-            return;
-        }
-        if ("number".equals(code)) {
-            edtLanguage.setText("eng");
-            edtTrainedData.setText("eng.traineddata");
-            return;
-        }
-        if ("custom".equals(code)) {
-            edtLanguage.setText("");
-            edtTrainedData.setText("");
-            return;
-        }
-        if ("chi_eng".equals(code)) {
-            edtLanguage.setText("chi_sim+eng");
-            edtTrainedData.setText("");
+        if (edtTrainedData != null) {
+            edtTrainedData.setText(ocrSingleTrainingFileName(label));
         }
     }
 
     private String ocrModelCode(String label) {
-        if ("chi_sim.traineddata".equals(label) || "识别中文".equals(label) || "中文".equals(label)) {
+        java.util.List<String> files = parseOcrTrainingFiles(label);
+        if (files.size() == 1 && "chi_sim.traineddata".equals(files.get(0))) {
             return "chinese";
         }
-        if ("eng.traineddata".equals(label) || "识别英文".equals(label) || "英文".equals(label)) {
+        if (files.size() == 1 && "eng.traineddata".equals(files.get(0))) {
             return "english";
         }
-        if ("number.traineddata".equals(label) || "识别数字".equals(label) || "数字".equals(label)) {
+        if (files.size() == 1 && "number.traineddata".equals(files.get(0))) {
             return "number";
         }
-        if ("custom.traineddata".equals(label) || "自定义模型".equals(label) || "自定义".equals(label)) {
+        if (files.size() == 2
+                && files.contains("chi_sim.traineddata")
+                && files.contains("eng.traineddata")) {
+            return "chi_eng";
+        }
+        if (!files.isEmpty()) {
             return "custom";
         }
         return "chi_eng";
@@ -6898,6 +6881,93 @@ public class OperationDialogFactory {
             return "custom.traineddata";
         }
         return "chi_sim.traineddata + eng.traineddata";
+    }
+
+    private String ocrTrainingFileLabel(JSONObject inputMap) {
+        if (inputMap == null) {
+            return "chi_sim.traineddata + eng.traineddata";
+        }
+        String model = inputMap.optString(MetaOperation.OCR_MODEL, "chi_eng");
+        if ("chinese".equals(model) || "english".equals(model) || "number".equals(model) || "chi_eng".equals(model)) {
+            return ocrModelLabel(model);
+        }
+        String language = inputMap.optString(MetaOperation.OCR_LANGUAGE, "");
+        if (!TextUtils.isEmpty(language)) {
+            return ocrTrainingFileLabelFromLanguage(language);
+        }
+        String trainedData = inputMap.optString(MetaOperation.OCR_TRAINED_DATA, "");
+        return TextUtils.isEmpty(trainedData) ? ocrModelLabel(model) : normalizeOcrTrainingFileToken(trainedData);
+    }
+
+    private String ocrTrainingFileLabelFromLanguage(String language) {
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        if (!TextUtils.isEmpty(language)) {
+            for (String part : language.split("\\+")) {
+                String token = normalizeOcrTrainingFileToken(part);
+                if (!TextUtils.isEmpty(token)) {
+                    labels.add(token);
+                }
+            }
+        }
+        return labels.isEmpty() ? "chi_sim.traineddata + eng.traineddata" : TextUtils.join(" + ", labels);
+    }
+
+    private String ocrLanguageFromTrainingFiles(String label) {
+        java.util.List<String> files = parseOcrTrainingFiles(label);
+        if (files.isEmpty()) {
+            files = parseOcrTrainingFiles("chi_sim.traineddata + eng.traineddata");
+        }
+        java.util.List<String> languages = new java.util.ArrayList<>();
+        for (String file : files) {
+            String language = file.endsWith(".traineddata")
+                    ? file.substring(0, file.length() - ".traineddata".length())
+                    : file;
+            if (!TextUtils.isEmpty(language)) {
+                languages.add(language);
+            }
+        }
+        return languages.isEmpty() ? "chi_sim+eng" : TextUtils.join("+", languages);
+    }
+
+    private String ocrSingleTrainingFileName(String label) {
+        java.util.List<String> files = parseOcrTrainingFiles(label);
+        return files.size() == 1 ? files.get(0) : "";
+    }
+
+    private java.util.List<String> parseOcrTrainingFiles(String label) {
+        java.util.List<String> files = new java.util.ArrayList<>();
+        if (TextUtils.isEmpty(label)) {
+            return files;
+        }
+        String normalized = label.replace('＋', '+');
+        for (String part : normalized.split("\\+")) {
+            String token = normalizeOcrTrainingFileToken(part);
+            if (!TextUtils.isEmpty(token) && !files.contains(token)) {
+                files.add(token);
+            }
+        }
+        return files;
+    }
+
+    private String normalizeOcrTrainingFileToken(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return "";
+        }
+        String token = raw.trim();
+        int slash = Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\'));
+        if (slash >= 0 && slash + 1 < token.length()) {
+            token = token.substring(slash + 1);
+        }
+        if ("中文".equals(token) || "识别中文".equals(token)) {
+            token = "chi_sim";
+        } else if ("英文".equals(token) || "识别英文".equals(token)) {
+            token = "eng";
+        }
+        String lower = token.toLowerCase(Locale.ROOT);
+        if (!lower.endsWith(".traineddata")) {
+            token = token + ".traineddata";
+        }
+        return token;
     }
 
     private void runOcrDialogTest(View dialogView,
@@ -6946,8 +7016,8 @@ public class OperationDialogFactory {
         java.util.Map<String, Object> inputMap = new java.util.HashMap<>();
         String modelCode = ocrModelCode(safeText(edtModel));
         inputMap.put(MetaOperation.OCR_MODEL, modelCode);
-        inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
-        inputMap.put(MetaOperation.OCR_TRAINED_DATA, safeText(edtTrainedData));
+        inputMap.put(MetaOperation.OCR_LANGUAGE, ocrLanguageFromTrainingFiles(safeText(edtModel)));
+        inputMap.put(MetaOperation.OCR_TRAINED_DATA, ocrSingleTrainingFileName(safeText(edtModel)));
         inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
         inputMap.put(MetaOperation.OCR_GRAYSCALE, chkGrayscale.isChecked());
         inputMap.put(MetaOperation.OCR_THRESHOLD, threshold);

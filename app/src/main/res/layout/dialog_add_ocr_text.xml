@@ -109,7 +109,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="4dp"
-                android:text="识别模型"
+                android:text="训练库文件"
                 android:textColor="#4e5f74"
                 android:textSize="13sp" />
 
@@ -118,7 +118,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
-                android:hint="chi_sim.traineddata"
+                android:hint="chi_sim.traineddata / eng.traineddata"
                 android:singleLine="true" />
 
             <TextView
@@ -135,6 +135,21 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:hint="例如: ocrText，不填也会写入 currentResponse" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="置信度变量名"
+                android:textColor="#4e5f74"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/edt_ocr_confidence_var"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:hint="例如: ocrConfidence" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -265,38 +280,6 @@
                     android:layout_marginBottom="8dp"
                     android:hint="0"
                     android:inputType="number" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp"
-                    android:text="识别语言名"
-                    android:textColor="#4e5f74"
-                    android:textSize="13sp" />
-
-                <EditText
-                    android:id="@+id/edt_ocr_language"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:hint="chi_sim+eng"
-                    android:singleLine="true" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp"
-                    android:text="训练库文件名"
-                    android:textColor="#4e5f74"
-                    android:textSize="13sp" />
-
-                <EditText
-                    android:id="@+id/edt_ocr_traineddata"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:hint="例如 xxx.traineddata"
-                    android:singleLine="true" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -580,21 +563,6 @@
                     android:layout_marginBottom="8dp"
                     android:hint="auto / block / line / sparse"
                     android:singleLine="true" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp"
-                    android:text="置信度变量名"
-                    android:textColor="#4e5f74"
-                    android:textSize="13sp" />
-
-                <EditText
-                    android:id="@+id/edt_ocr_confidence_var"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:hint="例如: ocrConfidence" />
 
             </LinearLayout>
 
