@@ -5927,6 +5927,244 @@ public class OperationDialogFactory {
         }
     }
 
+    // ==================== AI Object Detection Operation ====================
+
+    public void showAddAiDetectDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ai_detect, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        bindAiDetectDialog(dialogView, null, null);
+    }
+
+    public void showEditAiDetectDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ai_detect, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setText("保存");
+        }
+        bindAiDetectDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindAiDetectDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
+        EditText edtModelPath = dialogView.findViewById(R.id.edt_ai_model_path);
+        EditText edtLabelsPath = dialogView.findViewById(R.id.edt_ai_labels_path);
+        EditText edtTargetLabel = dialogView.findViewById(R.id.edt_ai_target_label);
+        EditText edtResultVar = dialogView.findViewById(R.id.edt_ai_result_var);
+        EditText edtBboxVar = dialogView.findViewById(R.id.edt_ai_bbox_var);
+        EditText edtInputSize = dialogView.findViewById(R.id.edt_ai_input_size);
+        EditText edtMinConfidence = dialogView.findViewById(R.id.edt_ai_min_confidence);
+        EditText edtIouThreshold = dialogView.findViewById(R.id.edt_ai_iou_threshold);
+        EditText edtMaxResults = dialogView.findViewById(R.id.edt_ai_max_results);
+        EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
+        EditText edtConfidenceVar = dialogView.findViewById(R.id.edt_ai_confidence_var);
+        EditText edtLabelVar = dialogView.findViewById(R.id.edt_ai_label_var);
+        EditText edtCenterVar = dialogView.findViewById(R.id.edt_ai_center_var);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+
+        edtName.setText("AI 目标检测");
+        edtInputSize.setText("640");
+        edtMinConfidence.setText("0.25");
+        edtIouThreshold.setText("0.45");
+        edtMaxResults.setText("10");
+        setupMatchDelayHint(edtPreDelay);
+        setupAdvancedToggle(dialogView);
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        }
+
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject inputMap = operationObject.optJSONObject("inputMap");
+                if (inputMap != null) {
+                    JSONArray bboxArr = inputMap.optJSONArray(MetaOperation.BBOX);
+                    if (bboxArr != null && bboxArr.length() >= 4) {
+                        edtBbox.setText(bboxArr.optInt(0) + "," + bboxArr.optInt(1) + ","
+                                + bboxArr.optInt(2) + "," + bboxArr.optInt(3));
+                    }
+                    edtModelPath.setText(inputMap.optString(MetaOperation.AI_MODEL_PATH, ""));
+                    edtLabelsPath.setText(inputMap.optString(MetaOperation.AI_LABELS_PATH, ""));
+                    edtTargetLabel.setText(inputMap.optString(MetaOperation.AI_TARGET_LABEL, ""));
+                    edtResultVar.setText(inputMap.optString(MetaOperation.AI_RESULT_VAR, ""));
+                    edtBboxVar.setText(inputMap.optString(MetaOperation.AI_BBOX_VAR, ""));
+                    setOptionalLongText(edtInputSize, inputMap.opt(MetaOperation.AI_INPUT_SIZE));
+                    setOptionalLongText(edtMaxResults, inputMap.opt(MetaOperation.AI_MAX_RESULTS));
+                    setOptionalFloatText(edtMinConfidence, inputMap.opt(MetaOperation.AI_MIN_CONFIDENCE));
+                    setOptionalFloatText(edtIouThreshold, inputMap.opt(MetaOperation.AI_IOU_THRESHOLD));
+                    setNodePreDelayText(edtPreDelay, inputMap);
+                    edtConfidenceVar.setText(inputMap.optString(MetaOperation.AI_CONFIDENCE_VAR, ""));
+                    edtLabelVar.setText(inputMap.optString(MetaOperation.AI_LABEL_VAR, ""));
+                    edtCenterVar.setText(inputMap.optString(MetaOperation.AI_CENTER_VAR, ""));
+                    setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载 AI 检测节点数据失败: " + e.getMessage());
+            }
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
+            if (regionPickHelper != null) {
+                regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, null);
+            }
+        });
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+            }
+        });
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> saveAiDetectOperation(
+                dialogView, operationId, edtName, edtBbox, edtModelPath, edtLabelsPath,
+                edtTargetLabel, edtResultVar, edtBboxVar, edtInputSize, edtMinConfidence,
+                edtIouThreshold, edtMaxResults, edtPreDelay, edtConfidenceVar, edtLabelVar,
+                edtCenterVar, edtNextOperation));
+    }
+
+    private void saveAiDetectOperation(View dialogView,
+                                       String operationId,
+                                       EditText edtName,
+                                       EditText edtBbox,
+                                       EditText edtModelPath,
+                                       EditText edtLabelsPath,
+                                       EditText edtTargetLabel,
+                                       EditText edtResultVar,
+                                       EditText edtBboxVar,
+                                       EditText edtInputSize,
+                                       EditText edtMinConfidence,
+                                       EditText edtIouThreshold,
+                                       EditText edtMaxResults,
+                                       EditText edtPreDelay,
+                                       EditText edtConfidenceVar,
+                                       EditText edtLabelVar,
+                                       EditText edtCenterVar,
+                                       AutoCompleteTextView edtNextOperation) {
+        String name = safeText(edtName);
+        if (TextUtils.isEmpty(name)) {
+            edtName.setError("请填写操作名称");
+            return;
+        }
+        String bboxText = safeText(edtBbox);
+        if (TextUtils.isEmpty(bboxText)) {
+            edtBbox.setError("请填写识别区域");
+            return;
+        }
+        java.util.List<Integer> bbox = regionPickHelper != null
+                ? regionPickHelper.parseBboxInput(bboxText)
+                : parseOcrBboxText(bboxText);
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("区域格式应为 x,y,w,h");
+            return;
+        }
+        if (TextUtils.isEmpty(safeText(edtModelPath))) {
+            edtModelPath.setError("请填写 .tflite 模型路径");
+            return;
+        }
+        Integer inputSize = parseBoundedInt(safeText(edtInputSize), 640, 32, 2048);
+        if (inputSize == null) {
+            edtInputSize.setError("请输入 32~2048 的整数");
+            return;
+        }
+        Float minConfidence = parseBoundedFloat(safeText(edtMinConfidence), 0.25f, 0.01f, 0.99f);
+        if (minConfidence == null) {
+            edtMinConfidence.setError("请输入 0.01~0.99 的数值");
+            return;
+        }
+        Float iouThreshold = parseBoundedFloat(safeText(edtIouThreshold), 0.45f, 0.01f, 0.99f);
+        if (iouThreshold == null) {
+            edtIouThreshold.setError("请输入 0.01~0.99 的数值");
+            return;
+        }
+        Integer maxResults = parseBoundedInt(safeText(edtMaxResults), 10, 1, 50);
+        if (maxResults == null) {
+            edtMaxResults.setError("请输入 1~50 的整数");
+            return;
+        }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.BBOX, new JSONArray(bbox));
+            inputMap.put(MetaOperation.AI_MODEL_PATH, safeText(edtModelPath));
+            putOptionalString(inputMap, MetaOperation.AI_LABELS_PATH, edtLabelsPath);
+            putOptionalString(inputMap, MetaOperation.AI_TARGET_LABEL, edtTargetLabel);
+            putOptionalString(inputMap, MetaOperation.AI_RESULT_VAR, edtResultVar);
+            putOptionalString(inputMap, MetaOperation.AI_BBOX_VAR, edtBboxVar);
+            inputMap.put(MetaOperation.AI_INPUT_SIZE, inputSize);
+            inputMap.put(MetaOperation.AI_MIN_CONFIDENCE, minConfidence);
+            inputMap.put(MetaOperation.AI_IOU_THRESHOLD, iouThreshold);
+            inputMap.put(MetaOperation.AI_MAX_RESULTS, maxResults);
+            putOptionalMatchPreDelay(inputMap, edtPreDelay);
+            putOptionalString(inputMap, MetaOperation.AI_CONFIDENCE_VAR, edtConfidenceVar);
+            putOptionalString(inputMap, MetaOperation.AI_LABEL_VAR, edtLabelVar);
+            putOptionalString(inputMap, MetaOperation.AI_CENTER_VAR, edtCenterVar);
+            if (!TextUtils.isEmpty(safeText(edtNextOperation))) {
+                inputMap.put(MetaOperation.NEXT_OPERATION_ID, safeText(edtNextOperation));
+            }
+
+            if (operationId != null) {
+                JSONObject updatedOperation = new JSONObject();
+                updatedOperation.put("id", operationId);
+                updatedOperation.put("name", name);
+                updatedOperation.put("type", 27);
+                updatedOperation.put("responseType", 1);
+                updatedOperation.put("inputMap", inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) {
+                        updateListener.onOperationUpdated();
+                    }
+                }
+            } else {
+                JSONObject operationObject = new JSONObject();
+                operationObject.put("id", idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis());
+                operationObject.put("name", name);
+                operationObject.put("type", 27);
+                operationObject.put("responseType", 1);
+                operationObject.put("inputMap", inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加 AI 目标检测节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) {
+                        addListener.onOperationAdded();
+                    }
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存 AI 检测节点失败: " + e.getMessage());
+        }
+    }
+
+    private void putOptionalString(JSONObject inputMap, String key, EditText editText) throws Exception {
+        String value = safeText(editText);
+        if (!TextUtils.isEmpty(value)) {
+            inputMap.put(key, value);
+        }
+    }
+
+    private void setOptionalFloatText(EditText editText, Object value) {
+        if (editText == null || value == null) {
+            return;
+        }
+        String text = String.valueOf(value);
+        if (text.endsWith(".0")) {
+            text = text.substring(0, text.length() - 2);
+        }
+        editText.setText(text);
+    }
+
     private java.util.List<Integer> parseOcrBboxText(String raw) {
         if (TextUtils.isEmpty(raw)) {
             return null;

@@ -7,6 +7,7 @@ import com.auto.master.Task.Handler.ResponseHandler.JumpTaskResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpToNextOperationResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResponseHandler;
 import com.auto.master.Task.Operation.AccessibilityNodeOperation;
+import com.auto.master.Task.Operation.AiDetectOperation;
 import com.auto.master.Task.Operation.AppCloseOperation;
 import com.auto.master.Task.Operation.AppLaunchOperation;
 import com.auto.master.Task.Operation.BackKeyOperation;
@@ -74,6 +75,8 @@ public class OperationHandlerManager {
         register(OperationType.ACCESSIBILITY_NODE, AccessibilityNodeOperation.class, AccessibilityNodeOperation::new, AccessibilityNodeOperationHandler::new, "a11y_node", "accessibility", "accessibility_node");
         register(OperationType.MTRY, MtryOperation.class, MtryOperation::new, MtryOperationHandler::new, "mtry", "try", "retry");
         register(OperationType.OCR_TEXT, OcrTextOperation.class, OcrTextOperation::new, OcrTextOperationHandler::new, "ocr", "ocr_text", "text_ocr");
+        register(OperationType.AI_DETECT, AiDetectOperation.class, AiDetectOperation::new, AiDetectOperationHandler::new,
+                "ai_detect", "yolo", "object_detect", "object_detection");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -103,6 +106,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.ACCESSIBILITY_NODE.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.MTRY.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.OCR_TEXT.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.AI_DETECT.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

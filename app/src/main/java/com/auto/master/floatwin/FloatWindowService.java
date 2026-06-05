@@ -1878,6 +1878,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditOcrTextDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 27) {
+                dialogFactory.showEditAiDetectDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2687,6 +2691,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         new AddOperationMenuAdapter.MenuItem("match_template", "模板匹配", "识别单张模板图片", "图", R.color.op_match_template, true),
                         new AddOperationMenuAdapter.MenuItem("match_map_template", "图集匹配", "在图集中查找可命中的模板", "集", R.color.op_match_map, true),
                         new AddOperationMenuAdapter.MenuItem("ocr_text", "OCR识别", "识别指定区域内的文字", "文", R.color.op_ocr_text, true),
+                        new AddOperationMenuAdapter.MenuItem("ai_detect", "AI目标检测", "TFLite/YOLO 识别目标坐标", "AI", R.color.op_ai_detect, true),
                         new AddOperationMenuAdapter.MenuItem("color_match", "颜色匹配", "按坐标组校验颜色", "色", R.color.op_color_match, true),
                         new AddOperationMenuAdapter.MenuItem("color_search", "找色", "在区域中搜索目标颜色", "找", R.color.op_color_search, true)
                 )));
@@ -2764,6 +2769,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "ocr_text":
                 dialogFactory.showAddOcrTextDialog();
+                return;
+            case "ai_detect":
+                dialogFactory.showAddAiDetectDialog();
                 return;
             case "color_match":
                 dialogFactory.showAddColorMatchDialog();

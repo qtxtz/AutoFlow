@@ -211,6 +211,24 @@ public abstract class MetaOperation {
     public static final String OCR_MATCH_REGEX = "regex";
     public static final String OCR_MATCH_ANY = "any";
 
+    // AI 目标检测参数
+    public static String AI_MODEL_PATH = "AI_MODEL_PATH";
+    public static String AI_LABELS_PATH = "AI_LABELS_PATH";
+    public static String AI_INPUT_SIZE = "AI_INPUT_SIZE";
+    public static String AI_MIN_CONFIDENCE = "AI_MIN_CONFIDENCE";
+    public static String AI_IOU_THRESHOLD = "AI_IOU_THRESHOLD";
+    public static String AI_MAX_RESULTS = "AI_MAX_RESULTS";
+    public static String AI_TARGET_LABEL = "AI_TARGET_LABEL";
+    public static String AI_RESULT_VAR = "AI_RESULT_VAR";
+    public static String AI_BBOX_VAR = "AI_BBOX_VAR";
+    public static String AI_CONFIDENCE_VAR = "AI_CONFIDENCE_VAR";
+    public static String AI_LABEL_VAR = "AI_LABEL_VAR";
+    public static String AI_CENTER_VAR = "AI_CENTER_VAR";
+    public static String AI_DETECTIONS = "AI_DETECTIONS";
+    public static String AI_LABEL = "AI_LABEL";
+    public static String AI_CONFIDENCE = "AI_CONFIDENCE";
+    public static String AI_CENTER = "AI_CENTER";
+
     // 截图区域 → 变量 参数（responseType=4）
     // base64 结果存入的变量名
     public static String CROP_RESULT_VAR = "CROP_RESULT_VAR";

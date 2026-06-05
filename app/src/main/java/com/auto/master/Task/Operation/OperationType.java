@@ -29,7 +29,8 @@ public enum OperationType {
     APP_CLOSE(23, "关闭应用", "app_close"),
     ACCESSIBILITY_NODE(24, "无障碍节点", "a11y_node"),
     MTRY(25, "多次尝试节点", "mtry"),
-    OCR_TEXT(26, "OCR识别", "ocr");
+    OCR_TEXT(26, "OCR识别", "ocr"),
+    AI_DETECT(27, "AI目标检测", "ai_detect");
 
     private final int code;
     private final String displayName;
