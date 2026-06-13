@@ -5783,7 +5783,7 @@ public class OperationDialogFactory {
         skMorph.setProgress(0);
         edtPsm.setText("auto", false);
         setupAdvancedToggle(dialogView);
-        dialogHelpers.bindAutoComplete(edtModel, java.util.Arrays.asList(
+        dialogHelpers.bindDropdownSelect(edtModel, java.util.Arrays.asList(
                 "chi_sim.traineddata + eng.traineddata",
                 "chi_sim.traineddata",
                 "eng.traineddata"
