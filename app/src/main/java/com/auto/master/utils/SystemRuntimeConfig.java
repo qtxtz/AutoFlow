@@ -10,6 +10,7 @@ public final class SystemRuntimeConfig {
     private static final String PREFS_NAME = "AutoFlowSystemRuntimeConfig";
     private static final String KEY_CAPTURE_SCALE = "capture_scale";
     private static final String KEY_IDLE_PAUSE_THRESHOLD_MS = "idle_pause_threshold_ms";
+    private static final String KEY_GESTURE_RECORD_IDLE_FINISH_MS = "gesture_record_idle_finish_ms";
     private static final String KEY_TEMPLATE_FAST_MS = "template_fast_ms";
     private static final String KEY_TEMPLATE_MEDIUM_MS = "template_medium_ms";
     private static final String KEY_TEMPLATE_SLOW_MS = "template_slow_ms";
@@ -22,9 +23,11 @@ public final class SystemRuntimeConfig {
 
     public static final float DEFAULT_CAPTURE_SCALE = 0.4f;
     public static final long DEFAULT_IDLE_PAUSE_THRESHOLD_MS = 5000L;
+    public static final long DEFAULT_GESTURE_RECORD_IDLE_FINISH_MS = 2200L;
 
     public float captureScale = DEFAULT_CAPTURE_SCALE;
     public long idlePauseThresholdMs = DEFAULT_IDLE_PAUSE_THRESHOLD_MS;
+    public long gestureRecordIdleFinishMs = DEFAULT_GESTURE_RECORD_IDLE_FINISH_MS;
     public long templateFastMs = 220L;
     public long templateMediumMs = 380L;
     public long templateSlowMs = 560L;
@@ -45,6 +48,9 @@ public final class SystemRuntimeConfig {
                 CaptureScaleHelper.loadScale(context)), 0.25f, 1.0f);
         cfg.idlePauseThresholdMs = clampLong(prefs.getLong(KEY_IDLE_PAUSE_THRESHOLD_MS,
                 DEFAULT_IDLE_PAUSE_THRESHOLD_MS), 500L, 120000L);
+        cfg.gestureRecordIdleFinishMs = clampGestureRecordIdleFinish(prefs.getLong(
+                KEY_GESTURE_RECORD_IDLE_FINISH_MS,
+                DEFAULT_GESTURE_RECORD_IDLE_FINISH_MS));
         cfg.templateFastMs = clampPolling(prefs.getLong(KEY_TEMPLATE_FAST_MS, cfg.templateFastMs));
         cfg.templateMediumMs = clampPolling(prefs.getLong(KEY_TEMPLATE_MEDIUM_MS, cfg.templateMediumMs));
         cfg.templateSlowMs = clampPolling(prefs.getLong(KEY_TEMPLATE_SLOW_MS, cfg.templateSlowMs));
@@ -66,6 +72,7 @@ public final class SystemRuntimeConfig {
                 .edit()
                 .putFloat(KEY_CAPTURE_SCALE, captureScale)
                 .putLong(KEY_IDLE_PAUSE_THRESHOLD_MS, idlePauseThresholdMs)
+                .putLong(KEY_GESTURE_RECORD_IDLE_FINISH_MS, gestureRecordIdleFinishMs)
                 .putLong(KEY_TEMPLATE_FAST_MS, templateFastMs)
                 .putLong(KEY_TEMPLATE_MEDIUM_MS, templateMediumMs)
                 .putLong(KEY_TEMPLATE_SLOW_MS, templateSlowMs)
@@ -97,6 +104,7 @@ public final class SystemRuntimeConfig {
     public void normalize() {
         captureScale = clampFloat(captureScale, 0.25f, 1.0f);
         idlePauseThresholdMs = clampLong(idlePauseThresholdMs, 500L, 120000L);
+        gestureRecordIdleFinishMs = clampGestureRecordIdleFinish(gestureRecordIdleFinishMs);
         templateFastMs = clampPolling(templateFastMs);
         templateMediumMs = clampPolling(templateMediumMs);
         templateSlowMs = clampPolling(templateSlowMs);
@@ -110,6 +118,10 @@ public final class SystemRuntimeConfig {
 
     private static long clampPolling(long value) {
         return clampLong(value, 10L, 5000L);
+    }
+
+    private static long clampGestureRecordIdleFinish(long value) {
+        return clampLong(value, 500L, 120000L);
     }
 
     private static long clampLong(long value, long min, long max) {

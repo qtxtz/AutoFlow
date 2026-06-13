@@ -88,7 +88,7 @@ public class GestureLibraryAdapter extends RecyclerView.Adapter<GestureLibraryAd
             holder.tvMeta.setText("手势文件损坏或为空");
             holder.tvMeta.setTextColor(0xFFB23B3B);
         } else {
-            holder.tvMeta.setText("轨迹: " + item.strokeCount + " | 时长: " + item.duration + "ms");
+            holder.tvMeta.setText("步骤: " + item.strokeCount + " | 时长: " + item.duration + "ms");
             holder.tvMeta.setTextColor(0xFF7A8794);
         }
         holder.previewView.setGestureNode(item.node);

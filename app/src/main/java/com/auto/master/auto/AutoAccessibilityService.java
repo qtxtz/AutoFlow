@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
+import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -27,11 +28,16 @@ import android.view.accessibility.AccessibilityEvent;
 import androidx.annotation.NonNull;
 import androidx.core.util.Consumer;
 
+import com.auto.master.utils.SystemRuntimeConfig;
+
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
 
 public class AutoAccessibilityService extends AccessibilityService {
     private static final long CLICK_GESTURE_DURATION_MS = 16L;
     private static final long CLICK_RETRY_DELAY_MS = 500L;
+    private static final long MIN_STROKE_DURATION_MS = 16L;
 
     private static final String TAG = "AutoAccService";
     private static volatile AutoAccessibilityService sInstance;
@@ -245,6 +251,11 @@ public class AutoAccessibilityService extends AccessibilityService {
     private GestureOverlayView gestureOverlay;
 
     public void startGestureRecording(GestureOverlayView.OnGestureRecordedListener listener) {
+        startGestureRecording(listener, SystemRuntimeConfig.load(this).gestureRecordIdleFinishMs);
+    }
+
+    public void startGestureRecording(GestureOverlayView.OnGestureRecordedListener listener,
+                                      long idleFinishDelayMs) {
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         if (wm == null) return;
 
@@ -257,6 +268,7 @@ public class AutoAccessibilityService extends AccessibilityService {
         if (gestureOverlay == null) {
             // 第一次创建
             gestureOverlay = new GestureOverlayView(this);
+            gestureOverlay.resetForRecording(idleFinishDelayMs);
             
             // 获取实际屏幕尺寸（使用 getRealMetrics，兼容横竖屏和修改分辨率）
             android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
@@ -283,7 +295,7 @@ public class AutoAccessibilityService extends AccessibilityService {
             wm.addView(gestureOverlay, params);
         } else {
             // 已有实例 → 重置状态 + 重新显示
-//            gestureOverlay.reset();  // ← 新增 reset 方法
+            gestureOverlay.resetForRecording(idleFinishDelayMs);
         }
 
         gestureOverlay.setOnGestureRecordedListener(listener);
@@ -310,7 +322,6 @@ public class AutoAccessibilityService extends AccessibilityService {
     private static final int GESTURE_TIMEOUT_MSG = 1002303; // 消息标识
 
     private final class GestureRetryController {
-        private final GestureDescription gestureDesc;
         private final GestureOverlayView.GestureNode gestureNode;
         private final Runnable onSuccess;
         private final Runnable onFail;
@@ -319,12 +330,10 @@ public class AutoAccessibilityService extends AccessibilityService {
         private boolean finished = false;
         private Runnable pendingRetry;
 
-        GestureRetryController(GestureDescription gestureDesc,
-                               GestureOverlayView.GestureNode gestureNode,
+        GestureRetryController(GestureOverlayView.GestureNode gestureNode,
                                Runnable onSuccess,
                                Runnable onFail,
                                int maxRetry) {
-            this.gestureDesc = gestureDesc;
             this.gestureNode = gestureNode;
             this.onSuccess = onSuccess;
             this.onFail = onFail;
@@ -348,22 +357,13 @@ public class AutoAccessibilityService extends AccessibilityService {
             }
             showGestureTrail(gestureNode);
             try {
-                boolean accepted = dispatchGesture(gestureDesc, new GestureResultCallback() {
-                    @Override
-                    public void onCompleted(GestureDescription gestureDescription) {
-                        super.onCompleted(gestureDescription);
+                dispatchGestureSequence(gestureNode, success -> {
+                    if (success) {
                         handleCompleted(attemptNumber);
-                    }
-
-                    @Override
-                    public void onCancelled(GestureDescription gestureDescription) {
-                        super.onCancelled(gestureDescription);
+                    } else {
                         handleCancelled(attemptNumber);
                     }
-                }, null);
-                if (!accepted) {
-                    handleCancelled(attemptNumber);
-                }
+                });
             } catch (Exception e) {
                 Log.w(TAG, "手势派发失败", e);
                 handleCancelled(attemptNumber);
@@ -540,23 +540,7 @@ public class AutoAccessibilityService extends AccessibilityService {
                                        Runnable onSuccess,
                                        Runnable onFail,
                                        int maxRetry) {
-        GestureDescription.Builder builder = new GestureDescription.Builder();
-
-        for (GestureOverlayView.GestureStroke stroke : node.strokes) {
-            Path path = new Path();
-            if (!stroke.points.isEmpty()) {
-                path.moveTo(stroke.points.get(0).x, stroke.points.get(0).y);
-                for (int i = 1; i < stroke.points.size(); i++) {
-                    path.lineTo(stroke.points.get(i).x, stroke.points.get(i).y);
-                }
-            }
-            GestureDescription.StrokeDescription desc = new GestureDescription.StrokeDescription(
-                    path, stroke.relativeStartTime, node.duration);
-            builder.addStroke(desc);
-        }
-
-        GestureDescription gestureDesc = builder.build();
-        new GestureRetryController(gestureDesc, node, onSuccess, onFail, maxRetry).start();
+        new GestureRetryController(node, onSuccess, onFail, maxRetry).start();
     }
 
     public boolean clickWithRetry(int x,
@@ -580,36 +564,175 @@ public class AutoAccessibilityService extends AccessibilityService {
      */
     public void replayGesture(GestureOverlayView.GestureNode node,
                               Consumer<Boolean> resultCallback) {
-        GestureDescription.Builder builder = new GestureDescription.Builder();
-        for (GestureOverlayView.GestureStroke stroke : node.strokes) {
-            Path path = new Path();
-            if (!stroke.points.isEmpty()) {
-                path.moveTo(stroke.points.get(0).x, stroke.points.get(0).y);
-                for (int i = 1; i < stroke.points.size(); i++) {
-                    path.lineTo(stroke.points.get(i).x, stroke.points.get(i).y);
-                }
+        dispatchGestureSequence(node, success -> {
+            Log.d(TAG, success ? "手势回放完成" : "手势回放取消");
+            if (resultCallback != null) {
+                resultCallback.accept(success);
             }
-            GestureDescription.StrokeDescription desc = new GestureDescription.StrokeDescription(
-                    path, stroke.relativeStartTime, node.duration);
-            builder.addStroke(desc);
-        }
-        dispatchGesture(builder.build(), new GestureResultCallback() {
-            @Override
-            public void onCompleted(GestureDescription gestureDescription) {
-                Log.d(TAG, "手势回放完成");
-                if (resultCallback != null) {
-                    resultCallback.accept(true);
-                }
-            }
+        });
+    }
 
-            @Override
-            public void onCancelled(GestureDescription gestureDescription) {
-                Log.w(TAG, "手势回放取消");
-                if (resultCallback != null) {
-                    resultCallback.accept(false);
+    private void dispatchGestureSequence(GestureOverlayView.GestureNode node,
+                                         Consumer<Boolean> resultCallback) {
+        List<PlaybackStroke> strokes = buildPlaybackStrokes(node);
+        if (strokes.isEmpty()) {
+            if (resultCallback != null) {
+                resultCallback.accept(false);
+            }
+            return;
+        }
+        dispatchGestureBatch(strokes, 0, resultCallback);
+    }
+
+    private void dispatchGestureBatch(List<PlaybackStroke> strokes,
+                                      int startIndex,
+                                      Consumer<Boolean> resultCallback) {
+        if (startIndex >= strokes.size()) {
+            if (resultCallback != null) {
+                resultCallback.accept(true);
+            }
+            return;
+        }
+
+        int maxStrokeCount = Math.max(1, Math.min(8, GestureDescription.getMaxStrokeCount()));
+        long maxGestureDuration = Math.max(MIN_STROKE_DURATION_MS, GestureDescription.getMaxGestureDuration());
+        long batchStart = strokes.get(startIndex).startTime;
+        int endIndex = startIndex;
+        while (endIndex < strokes.size() && endIndex - startIndex < maxStrokeCount) {
+            PlaybackStroke stroke = strokes.get(endIndex);
+            long relativeEnd = stroke.startTime - batchStart + stroke.duration;
+            if (endIndex > startIndex && relativeEnd > maxGestureDuration) {
+                break;
+            }
+            endIndex++;
+        }
+        if (endIndex == startIndex) {
+            endIndex = startIndex + 1;
+        }
+
+        try {
+            GestureDescription gestureDescription =
+                    buildGestureDescription(strokes, startIndex, endIndex, batchStart, maxGestureDuration);
+            final int nextIndex = endIndex;
+            boolean accepted = dispatchGesture(gestureDescription, new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    if (nextIndex >= strokes.size()) {
+                        if (resultCallback != null) {
+                            resultCallback.accept(true);
+                        }
+                        return;
+                    }
+                    long previousEnd = strokes.get(nextIndex - 1).endTime();
+                    long nextStart = strokes.get(nextIndex).startTime;
+                    long delay = Math.max(0L, nextStart - previousEnd);
+                    gestureHandler.postDelayed(() ->
+                            dispatchGestureBatch(strokes, nextIndex, resultCallback), delay);
+                }
+
+                @Override
+                public void onCancelled(GestureDescription gestureDescription) {
+                    super.onCancelled(gestureDescription);
+                    if (resultCallback != null) {
+                        resultCallback.accept(false);
+                    }
+                }
+            }, null);
+            if (!accepted && resultCallback != null) {
+                resultCallback.accept(false);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "构建或派发手势批次失败", e);
+            if (resultCallback != null) {
+                resultCallback.accept(false);
+            }
+        }
+    }
+
+    private GestureDescription buildGestureDescription(List<PlaybackStroke> strokes,
+                                                      int startIndex,
+                                                      int endIndex,
+                                                      long batchStart,
+                                                      long maxGestureDuration) {
+        GestureDescription.Builder builder = new GestureDescription.Builder();
+        for (int i = startIndex; i < endIndex; i++) {
+            PlaybackStroke stroke = strokes.get(i);
+            long relativeStart = Math.max(0L, stroke.startTime - batchStart);
+            long duration = Math.max(MIN_STROKE_DURATION_MS,
+                    Math.min(stroke.duration, maxGestureDuration - relativeStart));
+            builder.addStroke(new GestureDescription.StrokeDescription(
+                    stroke.path,
+                    relativeStart,
+                    duration));
+        }
+        return builder.build();
+    }
+
+    private List<PlaybackStroke> buildPlaybackStrokes(GestureOverlayView.GestureNode node) {
+        List<PlaybackStroke> out = new ArrayList<>();
+        if (node == null || node.strokes == null) {
+            return out;
+        }
+        Point displaySize = getCurrentDisplaySize();
+        for (GestureOverlayView.GestureStroke stroke : node.strokes) {
+            if (stroke == null || stroke.points == null || stroke.points.isEmpty()) {
+                continue;
+            }
+            Path path = new Path();
+            GestureOverlayView.PointF first = stroke.points.get(0);
+            path.moveTo(clampCoordinate(first.x, displaySize.x), clampCoordinate(first.y, displaySize.y));
+            for (int i = 1; i < stroke.points.size(); i++) {
+                GestureOverlayView.PointF point = stroke.points.get(i);
+                path.lineTo(clampCoordinate(point.x, displaySize.x), clampCoordinate(point.y, displaySize.y));
+            }
+            long start = Math.max(0L, stroke.relativeStartTime);
+            long duration = stroke.duration > 0L
+                    ? stroke.duration
+                    : Math.max(MIN_STROKE_DURATION_MS, node.duration - start);
+            out.add(new PlaybackStroke(path, start, Math.max(MIN_STROKE_DURATION_MS, duration)));
+        }
+        out.sort(Comparator.comparingLong(s -> s.startTime));
+        return out;
+    }
+
+    private Point getCurrentDisplaySize() {
+        Point point = new Point(0, 0);
+        try {
+            WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) {
+                Display display = wm.getDefaultDisplay();
+                if (display != null) {
+                    display.getRealSize(point);
                 }
             }
-        }, null);
+        } catch (Exception e) {
+            Log.w(TAG, "获取屏幕尺寸失败，跳过坐标裁剪", e);
+        }
+        return point;
+    }
+
+    private float clampCoordinate(float value, int maxExclusive) {
+        if (maxExclusive <= 1) {
+            return value;
+        }
+        return Math.max(0f, Math.min(value, maxExclusive - 1f));
+    }
+
+    private static final class PlaybackStroke {
+        final Path path;
+        final long startTime;
+        final long duration;
+
+        PlaybackStroke(Path path, long startTime, long duration) {
+            this.path = path;
+            this.startTime = startTime;
+            this.duration = duration;
+        }
+
+        long endTime() {
+            return startTime + duration;
+        }
     }
 
     public static boolean isConnected() {

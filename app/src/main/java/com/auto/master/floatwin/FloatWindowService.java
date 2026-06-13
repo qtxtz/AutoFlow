@@ -2274,6 +2274,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         EditText captureScaleInput = dialogView.findViewById(R.id.et_system_capture_scale);
         EditText idlePauseInput = dialogView.findViewById(R.id.et_system_idle_pause_ms);
+        EditText gestureRecordIdleFinishInput = dialogView.findViewById(R.id.et_system_gesture_record_idle_finish_ms);
         View templatePolling = dialogView.findViewById(R.id.include_template_polling);
         View matchMapPolling = dialogView.findViewById(R.id.include_match_map_polling);
         View colorPolling = dialogView.findViewById(R.id.include_color_polling);
@@ -2282,6 +2283,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogView,
                 captureScaleInput,
                 idlePauseInput,
+                gestureRecordIdleFinishInput,
                 templatePolling,
                 matchMapPolling,
                 colorPolling,
@@ -2295,6 +2297,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         dialogView,
                         captureScaleInput,
                         idlePauseInput,
+                        gestureRecordIdleFinishInput,
                         templatePolling,
                         matchMapPolling,
                         colorPolling,
@@ -2304,6 +2307,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 SystemRuntimeConfig cfg = readSystemRuntimeConfigFromInputs(
                         captureScaleInput,
                         idlePauseInput,
+                        gestureRecordIdleFinishInput,
                         templatePolling,
                         matchMapPolling,
                         colorPolling);
@@ -2324,6 +2328,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private void bindSystemRuntimeConfigValues(View root,
                                                EditText captureScaleInput,
                                                EditText idlePauseInput,
+                                               EditText gestureRecordIdleFinishInput,
                                                View templatePolling,
                                                View matchMapPolling,
                                                View colorPolling,
@@ -2338,6 +2343,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (idlePauseInput != null) {
             idlePauseInput.setText(String.valueOf(cfg.idlePauseThresholdMs));
         }
+        if (gestureRecordIdleFinishInput != null) {
+            gestureRecordIdleFinishInput.setText(String.valueOf(cfg.gestureRecordIdleFinishMs));
+        }
         bindPollingTriplet(templatePolling, cfg.templateFastMs, cfg.templateMediumMs, cfg.templateSlowMs);
         bindPollingTriplet(matchMapPolling, cfg.matchMapFastMs, cfg.matchMapMediumMs, cfg.matchMapSlowMs);
         bindPollingTriplet(colorPolling, cfg.colorFastMs, cfg.colorMediumMs, cfg.colorSlowMs);
@@ -2345,12 +2353,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private SystemRuntimeConfig readSystemRuntimeConfigFromInputs(EditText captureScaleInput,
                                                                   EditText idlePauseInput,
+                                                                  EditText gestureRecordIdleFinishInput,
                                                                   View templatePolling,
                                                                   View matchMapPolling,
                                                                   View colorPolling) {
         SystemRuntimeConfig cfg = new SystemRuntimeConfig();
         cfg.captureScale = parseFloatInput(captureScaleInput, "CAPTURE_SCALE", 0.25f, 1.0f);
         cfg.idlePauseThresholdMs = parseLongInput(idlePauseInput, "IDLE_PAUSE_THRESHOLD_MS", 500L, 120000L);
+        cfg.gestureRecordIdleFinishMs = parseLongInput(
+                gestureRecordIdleFinishInput,
+                "手势录制空闲结束",
+                500L,
+                120000L);
         long[] template = readPollingTriplet(templatePolling, "模板匹配");
         cfg.templateFastMs = template[0];
         cfg.templateMediumMs = template[1];
@@ -2421,6 +2435,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return String.valueOf(Math.round(value));
         }
         return String.format(Locale.US, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+
+    private String formatDurationSecondsText(long ms) {
+        long roundedTenths = Math.round(ms / 100f);
+        if (roundedTenths % 10L == 0L) {
+            return (roundedTenths / 10L) + "秒";
+        }
+        return String.format(Locale.US, "%.1f秒", roundedTenths / 10f);
     }
 
     // ==================== Dialog Factory 初始化 ====================
@@ -7249,7 +7271,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             statusView.setText("状态：手势文件无效");
             return;
         }
-        statusView.setText("状态：已选择 " + file.getName() + " | 轨迹" + node.strokes.size() + "条 | " + node.duration + "ms");
+        statusView.setText("状态：已选择 " + file.getName() + " | 步骤" + node.strokes.size() + "步 | " + node.duration + "ms");
     }
 
     private void playGestureFromInput(AutoCompleteTextView gestureInput, TextView statusView) {
@@ -7405,13 +7427,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         final String finalGestureName = normalized;
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
+        long gestureRecordIdleFinishMs = SystemRuntimeConfig.load(this).gestureRecordIdleFinishMs;
+        String idleFinishText = formatDurationSecondsText(gestureRecordIdleFinishMs);
 
         postToUiDelayed(() -> {
             try {
                 if (tvGestureStatus != null) {
-                    tvGestureStatus.setText("状态：录制中，请在屏幕上完成手势");
+                    tvGestureStatus.setText("状态：连续录制中，请完成多次滑动，停顿约" + idleFinishText + "自动保存");
                 }
-                Toast.makeText(this, "开始录制手势，请在屏幕上操作", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "开始连续录制手势，停顿约" + idleFinishText + "自动保存", Toast.LENGTH_SHORT).show();
                 svc.startGestureRecording(node -> {
                     boolean ok = saveGestureNodeForCurrentTask(finalGestureName, node);
                     refreshGestureOptions(edtGestureFile);

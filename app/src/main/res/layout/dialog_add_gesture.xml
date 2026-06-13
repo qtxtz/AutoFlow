@@ -60,7 +60,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="支持手势库选择、录制/重录与一键回放"
+                android:text="支持手势库选择、连续多步录制/重录与一键回放"
                 android:textSize="12sp"
                 android:textColor="#6a7682"
                 android:layout_marginBottom="10dp"/>
@@ -127,7 +127,7 @@
                 android:id="@+id/btn_record_gesture"
                 android:layout_width="match_parent"
                 android:layout_height="40dp"
-                android:text="录制 / 重新录制手势"
+                android:text="连续录制 / 重新录制手势"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:gravity="center"
