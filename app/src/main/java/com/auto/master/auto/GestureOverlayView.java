@@ -27,6 +27,10 @@ public class GestureOverlayView extends FrameLayout {
     private Runnable finishRunnable;
     private long idleFinishDelayMs = 0L;
     private boolean finished;
+    private OnStrokeGroupCompletedListener strokeGroupCompletedListener;
+    private boolean isWaitingResume = false;
+    private int currentGroupStartIndex = 0;
+    private long pausedAt = 0L; // 暂停等待 replay 时的时刻，用于补偿 startTime
 
     // 遮罩 View（最稳定方式：独立子 View 画全屏灰色）
     public View maskView;
@@ -34,6 +38,10 @@ public class GestureOverlayView extends FrameLayout {
 
     public interface OnGestureRecordedListener {
         void onGestureRecorded(GestureNode node);
+    }
+
+    public interface OnStrokeGroupCompletedListener {
+        void onStrokeGroupCompleted(GestureNode strokeNode, Runnable resumeRecording);
     }
 
     public GestureOverlayView(Context context) {
@@ -77,6 +85,10 @@ public class GestureOverlayView extends FrameLayout {
         startTime = 0L;
         finished = false;
         this.idleFinishDelayMs = Math.max(0L, idleFinishDelayMs);
+        strokeGroupCompletedListener = null;
+        isWaitingResume = false;
+        currentGroupStartIndex = 0;
+        pausedAt = 0L;
         showMask();
         setVisibility(VISIBLE);
         invalidate();
@@ -106,6 +118,7 @@ public class GestureOverlayView extends FrameLayout {
         if (finished) {
             return true;
         }
+        if (isWaitingResume) return true;
         int action = ev.getActionMasked();
 
         switch (action) {
@@ -177,7 +190,39 @@ public class GestureOverlayView extends FrameLayout {
                             System.currentTimeMillis() - startTime - stroke.relativeStartTime);
                 }
                 if (activePaths.isEmpty()) {
-                    if (idleFinishDelayMs > 0L && action != MotionEvent.ACTION_CANCEL) {
+                    if (strokeGroupCompletedListener != null) {
+                        // 提取本轮 stroke group（从 currentGroupStartIndex 到末尾），时间归零
+                        List<GestureStroke> groupStrokes = new ArrayList<>(
+                            allStrokes.subList(currentGroupStartIndex, allStrokes.size()));
+                        long baseTime = groupStrokes.isEmpty() ? 0 : groupStrokes.get(0).relativeStartTime;
+                        List<GestureStroke> normalized = new ArrayList<>();
+                        for (GestureStroke s : groupStrokes) {
+                            normalized.add(new GestureStroke(s.pointerId, s.points,
+                                Math.max(0L, s.relativeStartTime - baseTime), s.duration));
+                        }
+                        long groupDuration = 1L;
+                        for (GestureStroke s : normalized) {
+                            long end = s.relativeStartTime + s.duration;
+                            if (end > groupDuration) groupDuration = end;
+                        }
+                        GestureNode strokeNode = new GestureNode(normalized, groupDuration);
+                        isWaitingResume = true;
+                        pausedAt = System.currentTimeMillis(); // 记录暂停时刻
+                        int nextGroupStart = allStrokes.size();
+                        Runnable resumeRecording = () -> {
+                            // 补偿 startTime：把 replay + 等待占用的时间从计时中扣除
+                            // 这样下一步 stroke 的 relativeStartTime 只计算"遮罩出现→手指按下"的时间
+                            if (pausedAt > 0 && startTime > 0) {
+                                startTime += System.currentTimeMillis() - pausedAt;
+                            }
+                            pausedAt = 0L;
+                            isWaitingResume = false;
+                            currentGroupStartIndex = nextGroupStart;
+                            showMask();
+                            if (idleFinishDelayMs > 0L) scheduleFinish();
+                        };
+                        strokeGroupCompletedListener.onStrokeGroupCompleted(strokeNode, resumeRecording);
+                    } else if (idleFinishDelayMs > 0L && action != MotionEvent.ACTION_CANCEL) {
                         scheduleFinish();
                     } else {
                         finishRecordingNow();
@@ -232,6 +277,10 @@ public class GestureOverlayView extends FrameLayout {
 
     public void setOnGestureRecordedListener(OnGestureRecordedListener l) {
         this.listener = l;
+    }
+
+    public void setOnStrokeGroupCompletedListener(OnStrokeGroupCompletedListener l) {
+        this.strokeGroupCompletedListener = l;
     }
 
     // 内部类保持 public static

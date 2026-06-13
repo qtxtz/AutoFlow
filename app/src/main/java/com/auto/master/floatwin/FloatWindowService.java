@@ -2275,11 +2275,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText captureScaleInput = dialogView.findViewById(R.id.et_system_capture_scale);
         EditText idlePauseInput = dialogView.findViewById(R.id.et_system_idle_pause_ms);
         EditText gestureRecordIdleFinishInput = dialogView.findViewById(R.id.et_system_gesture_record_idle_finish_ms);
+        CheckBox cbGestureStepReplay = dialogView.findViewById(R.id.cb_gesture_step_replay);
+        EditText etGestureStepIntervalMs = dialogView.findViewById(R.id.et_gesture_step_interval_ms);
         View templatePolling = dialogView.findViewById(R.id.include_template_polling);
         View matchMapPolling = dialogView.findViewById(R.id.include_match_map_polling);
         View colorPolling = dialogView.findViewById(R.id.include_color_polling);
 
-        Runnable bindCurrentValues = () -> bindSystemRuntimeConfigValues(
+        Runnable bindCurrentValues = () -> {
+            SystemRuntimeConfig cfg = SystemRuntimeConfig.load(this);
+            bindSystemRuntimeConfigValues(
                 dialogView,
                 captureScaleInput,
                 idlePauseInput,
@@ -2287,21 +2291,28 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 templatePolling,
                 matchMapPolling,
                 colorPolling,
-                SystemRuntimeConfig.load(this));
+                cfg);
+            if (cbGestureStepReplay != null) cbGestureStepReplay.setChecked(cfg.gestureStepReplay);
+            if (etGestureStepIntervalMs != null) etGestureStepIntervalMs.setText(String.valueOf(cfg.gestureStepIntervalMs));
+        };
         bindCurrentValues.run();
 
         dialogView.findViewById(R.id.btn_system_config_close).setOnClickListener(v -> safeRemoveView(dialogView));
         dialogView.findViewById(R.id.btn_system_config_cancel).setOnClickListener(v -> safeRemoveView(dialogView));
-        dialogView.findViewById(R.id.btn_system_config_reset).setOnClickListener(v ->
-                bindSystemRuntimeConfigValues(
-                        dialogView,
-                        captureScaleInput,
-                        idlePauseInput,
-                        gestureRecordIdleFinishInput,
-                        templatePolling,
-                        matchMapPolling,
-                        colorPolling,
-                        new SystemRuntimeConfig()));
+        dialogView.findViewById(R.id.btn_system_config_reset).setOnClickListener(v -> {
+            SystemRuntimeConfig defaults = new SystemRuntimeConfig();
+            bindSystemRuntimeConfigValues(
+                    dialogView,
+                    captureScaleInput,
+                    idlePauseInput,
+                    gestureRecordIdleFinishInput,
+                    templatePolling,
+                    matchMapPolling,
+                    colorPolling,
+                    defaults);
+            if (cbGestureStepReplay != null) cbGestureStepReplay.setChecked(defaults.gestureStepReplay);
+            if (etGestureStepIntervalMs != null) etGestureStepIntervalMs.setText(String.valueOf(defaults.gestureStepIntervalMs));
+        });
         dialogView.findViewById(R.id.btn_system_config_save).setOnClickListener(v -> {
             try {
                 SystemRuntimeConfig cfg = readSystemRuntimeConfigFromInputs(
@@ -2311,6 +2322,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         templatePolling,
                         matchMapPolling,
                         colorPolling);
+                if (cbGestureStepReplay != null) cfg.gestureStepReplay = cbGestureStepReplay.isChecked();
+                if (etGestureStepIntervalMs != null) {
+                    try {
+                        String txt = etGestureStepIntervalMs.getText() == null ? "" : etGestureStepIntervalMs.getText().toString().trim();
+                        cfg.gestureStepIntervalMs = TextUtils.isEmpty(txt) ? 500L : Long.parseLong(txt);
+                    } catch (NumberFormatException ignored) {}
+                }
                 float previousScale = ScreenCaptureManager.CAPTURE_SCALE;
                 cfg.save(this);
                 cfg.applyToRuntime();
@@ -2553,10 +2571,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             @Override public void refreshGestureOptions(android.widget.AutoCompleteTextView v) { FloatWindowService.this.refreshGestureOptions(v); }
             @Override public java.io.File resolveTaskGestureFile(String n) { return FloatWindowService.this.resolveTaskGestureFile(n); }
             @Override public String generateGestureTimestampName() { return FloatWindowService.this.generateGestureTimestampName(); }
-            @Override public void showGestureLibraryDialog(android.widget.AutoCompleteTextView g, android.widget.TextView s) { FloatWindowService.this.showGestureLibraryDialog(g, s); }
-            @Override public void playGestureFromInput(android.widget.AutoCompleteTextView g, android.widget.TextView s) { FloatWindowService.this.playGestureFromInput(g, s); }
-            @Override public void beginGestureRecordFromDialog(View d, android.widget.AutoCompleteTextView e, android.widget.TextView t) { FloatWindowService.this.beginGestureRecordFromDialog(d, e, t); }
-            @Override public void updateGestureStatus(android.widget.TextView s, String n) { FloatWindowService.this.updateGestureStatus(s, n); }
+            @Override public void showGestureLibraryDialog(String currentFile, java.util.function.Consumer<String> onFileSelected) { FloatWindowService.this.showGestureLibraryDialogPipeline(currentFile, onFileSelected); }
+            @Override public void beginPipelineStepRecord(View d, boolean singleStroke, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.beginPipelineStepRecord(d, singleStroke, onFileSaved); }
+            @Override public void rerecordPipelineStep(View d, boolean singleStroke, String oldFile, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.rerecordPipelineStep(d, singleStroke, oldFile, onFileSaved); }
+            @Override public void playGestureFile(View d, String fileName, android.widget.TextView statusView) { FloatWindowService.this.playGestureFileByName(d, fileName, statusView); }
+            @Override public void playFullPipeline(View d, org.json.JSONArray pipeline, android.widget.TextView statusView) { FloatWindowService.this.playFullPipelineSequence(d, pipeline, statusView); }
+            @Override public com.auto.master.auto.GestureOverlayView.GestureNode readGestureFile(String fileName) { return FloatWindowService.this.readGestureFileByName(fileName); }
             @Override public String normalizeGestureFileName(String r) { return FloatWindowService.this.normalizeGestureFileName(r); }
         });
 
@@ -7498,6 +7518,243 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }, 220);
     }
+
+    // ─── Pipeline Gesture Methods ───────────────────────────────────────────────
+
+    private void showGestureLibraryDialogPipeline(String currentFile, java.util.function.Consumer<String> onFileSelected) {
+        List<GestureLibraryAdapter.GestureLibraryItem> items = getCurrentTaskGestureLibraryItems();
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_gesture_library, null);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(360, true);
+        wm.addView(dialogView, dialogLp);
+
+        RecyclerView rv = dialogView.findViewById(R.id.rv_library);
+        EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        GestureLibraryAdapter adapter = new GestureLibraryAdapter(items, item -> {
+            if (onFileSelected != null) onFileSelected.accept(item.fileName);
+            safeRemoveView(dialogView);
+        });
+        rv.setAdapter(adapter);
+
+        dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_library_clear).setOnClickListener(v -> {
+            if (onFileSelected != null) onFileSelected.accept("");
+            safeRemoveView(dialogView);
+        });
+        edtSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void afterTextChanged(Editable s) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.updateFilter(s == null ? "" : s.toString());
+            }
+        });
+    }
+
+    private void beginPipelineStepRecord(View dialogView, boolean singleStroke,
+                                          java.util.function.Consumer<String> onFileSaved) {
+        doPipelineStepRecord(dialogView, singleStroke, generateGestureTimestampName(), onFileSaved, false);
+    }
+
+    private void rerecordPipelineStep(View dialogView, boolean singleStroke, String oldFile,
+                                       java.util.function.Consumer<String> onFileSaved) {
+        String fileName = normalizeGestureFileName(TextUtils.isEmpty(oldFile) ? generateGestureTimestampName() : oldFile);
+        doPipelineStepRecord(dialogView, singleStroke, fileName, onFileSaved, true);
+    }
+
+    private void doPipelineStepRecord(View dialogView, boolean singleStroke, String fileName,
+                                       java.util.function.Consumer<String> onFileSaved, boolean isRerecord) {
+        if (currentProjectDir == null || currentTaskDir == null) {
+            Toast.makeText(this, "当前 Task 无效", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            Toast.makeText(this, "无障碍服务未连接", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        SystemRuntimeConfig cfg = SystemRuntimeConfig.load(this);
+        boolean stepReplay = cfg.gestureStepReplay;
+        long intervalMs = Math.max(100L, cfg.gestureStepIntervalMs);
+        long idleMs = singleStroke ? 0L : cfg.gestureRecordIdleFinishMs;
+        Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
+
+        String hint = singleStroke
+                ? (isRerecord ? "重录单次手势，滑动一次即完成" : "录制单次手势，滑动一次即完成")
+                : (isRerecord ? "重录多次手势，停顿 " + formatDurationSecondsText(idleMs) + " 自动保存"
+                              : "录制多次手势，停顿 " + formatDurationSecondsText(idleMs) + " 自动保存");
+
+        GestureOverlayView.OnGestureRecordedListener doneListener = node -> {
+            boolean ok = saveGestureNodeForCurrentTask(fileName, node);
+            if (!ok) {
+                postToUi(() -> {
+                    restoreViews.run();
+                    Toast.makeText(this, "手势保存失败", Toast.LENGTH_SHORT).show();
+                });
+                return;
+            }
+            if (singleStroke) {
+                // 单次模式：保持 dialog 隐藏，回放完成后才恢复，防止 dialog 遮挡手势事件
+                AutoAccessibilityService replaySvc = AutoAccessibilityService.get();
+                if (replaySvc != null) {
+                    postToUiDelayed(() -> {
+                        replaySvc.showGestureTrail(node);
+                        replaySvc.replayGesture(node, success -> postToUi(() -> {
+                            restoreViews.run();
+                            if (onFileSaved != null) onFileSaved.accept(fileName);
+                            Toast.makeText(this, (isRerecord ? "重录完成: " : "录制完成: ") + fileName, Toast.LENGTH_SHORT).show();
+                        }));
+                    }, 300);
+                } else {
+                    postToUi(() -> {
+                        restoreViews.run();
+                        if (onFileSaved != null) onFileSaved.accept(fileName);
+                        Toast.makeText(this, (isRerecord ? "重录完成: " : "录制完成: ") + fileName, Toast.LENGTH_SHORT).show();
+                    });
+                }
+            } else {
+                postToUi(() -> {
+                    restoreViews.run();
+                    if (onFileSaved != null) onFileSaved.accept(fileName);
+                    Toast.makeText(this, (isRerecord ? "重录完成: " : "录制完成: ") + fileName, Toast.LENGTH_SHORT).show();
+                });
+            }
+        };
+
+        postToUiDelayed(() -> {
+            try {
+                Toast.makeText(this, hint, Toast.LENGTH_SHORT).show();
+                if (singleStroke || !stepReplay) {
+                    svc.startGestureRecording(doneListener, idleMs);
+                } else {
+                    // 多次 + 即时回放
+                    // 修复：setGestureOverlayInteractive 是异步 IPC，需要足够延迟让标志生效
+                    // 才能保证 dispatchGesture 的事件穿透到底层 App
+                    svc.startGestureRecording(doneListener, idleMs, (strokeNode, resumeRecording) -> {
+                        AutoAccessibilityService rs = AutoAccessibilityService.get();
+                        if (rs == null) { resumeRecording.run(); return; }
+                        postToUiDelayed(() -> {
+                            rs.setGestureOverlayInteractive(false);
+                            // 等待 WM 标志异步生效后再 dispatch，避免事件被 overlay 拦截
+                            postToUiDelayed(() -> {
+                                rs.showGestureTrail(strokeNode); // 补回轨迹动画
+                                rs.replayGesture(strokeNode, success ->
+                                    postToUiDelayed(() -> {
+                                        rs.setGestureOverlayInteractive(true);
+                                        postToUiDelayed(resumeRecording::run, intervalMs);
+                                    }, 80)
+                                );
+                            }, 250);
+                        }, 80);
+                    });
+                }
+            } catch (Exception e) {
+                restoreViews.run();
+                Log.e(TAG, "启动录制失败", e);
+                Toast.makeText(this, "启动录制失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }, 220);
+    }
+
+    private GestureOverlayView.GestureNode readGestureFileByName(String fileName) {
+        if (TextUtils.isEmpty(fileName)) return null;
+        File file = resolveTaskGestureFile(normalizeGestureFileName(fileName));
+        if (file == null) return null;
+        return readGestureNodeFromFile(file);
+    }
+
+    private void playGestureFileByName(View dialogView, String fileName, android.widget.TextView statusView) {
+        if (TextUtils.isEmpty(fileName)) {
+            Toast.makeText(this, "请先选择手势文件", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String normalized = normalizeGestureFileName(fileName);
+        File file = resolveTaskGestureFile(normalized);
+        if (file == null) {
+            Toast.makeText(this, "手势文件不存在: " + normalized, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        GestureOverlayView.GestureNode node = readGestureNodeFromFile(file);
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            Toast.makeText(this, "无障碍服务未连接", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (node == null || node.strokes == null || node.strokes.isEmpty()) {
+            Toast.makeText(this, "手势数据无效", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (statusView != null) statusView.setText("回放中...");
+        Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
+        postToUiDelayed(() -> {
+            svc.showGestureTrail(node);
+            svc.replayGesture(node, success -> {
+                postToUi(() -> {
+                    restoreViews.run();
+                    if (statusView != null) statusView.setText(success ? "回放完成: " + normalized : "回放取消");
+                    Toast.makeText(this, success ? "回放完成" : "回放取消", Toast.LENGTH_SHORT).show();
+                });
+            });
+        }, 180);
+    }
+
+    private void playFullPipelineSequence(View dialogView, org.json.JSONArray pipeline, android.widget.TextView statusView) {
+        if (pipeline == null || pipeline.length() == 0) {
+            Toast.makeText(this, "流水线为空", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            Toast.makeText(this, "无障碍服务未连接", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (statusView != null) statusView.setText("回放中...");
+        Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
+        postToUiDelayed(() -> {
+            ExecutorService exec = Executors.newSingleThreadExecutor();
+            exec.submit(() -> {
+                for (int i = 0; i < pipeline.length(); i++) {
+                    org.json.JSONObject step;
+                    try { step = pipeline.getJSONObject(i); } catch (Exception e) { continue; }
+                    String file = step.optString(MetaOperation.GESTURE_STEP_FILE, "");
+                    long delayMs = step.optLong(MetaOperation.GESTURE_STEP_DELAY_MS, 0);
+                    if (TextUtils.isEmpty(file)) continue;
+
+                    File gestureFile = resolveTaskGestureFile(normalizeGestureFileName(file));
+                    if (gestureFile == null) { Log.w(TAG, "Pipeline 回放：文件不存在 " + file); continue; }
+                    GestureOverlayView.GestureNode node = readGestureNodeFromFile(gestureFile);
+                    if (node == null || node.strokes == null || node.strokes.isEmpty()) { Log.w(TAG, "Pipeline 回放：数据无效 " + file); continue; }
+
+                    final int stepNum = i + 1;
+                    final int total = pipeline.length();
+                    postToUi(() -> { if (statusView != null) statusView.setText("回放步骤 " + stepNum + "/" + total); });
+                    svc.showGestureTrail(node);
+
+                    final boolean[] done = {false};
+                    final Object lock = new Object();
+                    synchronized (lock) {
+                        svc.replayGestureWithRetry(node,
+                            () -> { synchronized (lock) { done[0] = true; lock.notifyAll(); } },
+                            () -> { synchronized (lock) { done[0] = true; lock.notifyAll(); } },
+                            1);
+                        try { if (!done[0]) lock.wait(30000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                    }
+
+                    if (delayMs > 0 && i < pipeline.length() - 1) {
+                        try { Thread.sleep(delayMs); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                    }
+                }
+                postToUi(() -> {
+                    restoreViews.run();
+                    if (statusView != null) statusView.setText("流水线回放完成");
+                    Toast.makeText(this, "流水线回放完成", Toast.LENGTH_SHORT).show();
+                });
+            });
+            exec.shutdown();
+        }, 180);
+    }
+
+    // ─── End Pipeline Gesture Methods ───────────────────────────────────────────
 
     private List<String> getRecentTemplateFiles(int maxCount) {
         List<String> all = getCurrentTaskTemplateFiles();

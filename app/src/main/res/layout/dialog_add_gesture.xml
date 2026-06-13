@@ -58,14 +58,6 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="支持手势库选择、连续多步录制/重录与一键回放"
-                android:textSize="12sp"
-                android:textColor="#6a7682"
-                android:layout_marginBottom="10dp"/>
-
-            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="操作名称"
@@ -81,86 +73,57 @@
                 android:layout_marginBottom="10dp"/>
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="手势文件"
-                android:textSize="13sp"
-                android:textColor="#4e5f74"
-                android:layout_marginBottom="4dp"/>
-
-            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginBottom="8dp">
-
-                <AutoCompleteTextView
-                    android:id="@+id/edt_gesture_file"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:hint="例如: gesture_login_swipe.json"/>
-
-                <TextView
-                    android:id="@+id/btn_gesture_ts"
-                    android:layout_width="74dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:gravity="center"
-                    android:text="时间戳"
-                    android:textSize="12sp"
-                    android:textColor="#315dbf"
-                    android:background="@drawable/item_operation_compact_bg"/>
-            </LinearLayout>
+                android:text="手势流水线"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#315dbf"
+                android:layout_marginBottom="6dp"/>
 
             <TextView
-                android:id="@+id/tv_gesture_status"
+                android:id="@+id/tv_gesture_pipeline_status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="状态：未录制"
+                android:text="尚未添加手势步骤"
                 android:textColor="#6a7682"
                 android:textSize="12sp"
-                android:layout_marginBottom="8dp"/>
+                android:layout_marginBottom="6dp"/>
 
-            <TextView
-                android:id="@+id/btn_record_gesture"
+            <LinearLayout
+                android:id="@+id/ly_gesture_pipeline_steps"
                 android:layout_width="match_parent"
-                android:layout_height="40dp"
-                android:text="连续录制 / 重新录制手势"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF"
-                android:gravity="center"
-                android:background="@drawable/btn_run_selector"
-                android:layout_marginBottom="10dp"/>
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginBottom="8dp"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="40dp"
                 android:orientation="horizontal"
-                android:layout_marginBottom="10dp">
+                android:layout_marginBottom="12dp">
 
                 <TextView
-                    android:id="@+id/btn_gesture_library"
+                    android:id="@+id/btn_pipeline_record_step"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
+                    android:text="+ 添加步骤"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
                     android:gravity="center"
-                    android:text="手势库"
-                    android:textColor="#315dbf"
-                    android:background="@drawable/item_operation_compact_bg"
+                    android:background="@drawable/btn_run_selector"
                     android:layout_marginEnd="6dp"/>
 
                 <TextView
-                    android:id="@+id/btn_play_gesture"
+                    android:id="@+id/btn_pipeline_play_all"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="回放"
+                    android:text="▶ 整段回放"
                     android:textColor="#315dbf"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:layout_marginStart="6dp"/>
+                    android:gravity="center"
+                    android:background="@drawable/item_operation_compact_bg"/>
             </LinearLayout>
 
             <TextView

@@ -50,24 +50,49 @@ public class AutoAccessibilityService extends AccessibilityService {
     // 内部类：专门用于绘制轨迹动画的 View
     private static class GestureTrailOverlay extends View {
         private final Paint paint = new Paint();
-        private final List<GestureOverlayView.GestureStroke> strokes;
-        private final long duration;
+        private final Path drawPath = new Path();
         private long startTime = 0;
         private boolean isAnimating = false;
         private final Handler handler = new Handler(Looper.getMainLooper());
 
+        // 压缩时间线：每个 stroke 独立的动画区间，抹掉 stroke 间的空闲间隔
+        private static class Segment {
+            final List<GestureOverlayView.PointF> points;
+            final long animStart; // 在压缩时间线上的开始时刻
+            final long animEnd;   // 在压缩时间线上的结束时刻
+            Segment(List<GestureOverlayView.PointF> p, long s, long e) {
+                points = p; animStart = s; animEnd = e;
+            }
+        }
+        private final List<Segment> segments = new ArrayList<>();
+        private final long compressedDuration;
+
         public GestureTrailOverlay(Context context, GestureOverlayView.GestureNode node) {
             super(context);
             setBackgroundColor(Color.TRANSPARENT);
+            setLayerType(LAYER_TYPE_HARDWARE, null);
 
-            paint.setColor(0x44FF0000); // 亮绿色，不透明，便于观察
+            paint.setColor(0xCCFF3300);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(35f);
+            paint.setStrokeWidth(28f);
             paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
             paint.setAntiAlias(true);
 
-            this.strokes = node.strokes;
-            this.duration = node.duration > 0 ? node.duration : 2000; // 防止 duration 为 0
+            // 时间线策略：
+            //   保留 stroke 间的真实相对间隔（relativeStartTime 已编码了步间等待），
+            //   但截止在最后一步结束，去掉末尾的 idle timeout 空白
+            long lastEnd = 1L;
+            if (node != null && node.strokes != null) {
+                for (GestureOverlayView.GestureStroke s : node.strokes) {
+                    if (s == null || s.points == null || s.points.size() < 2) continue;
+                    long strokeStart = Math.max(0L, s.relativeStartTime);
+                    long strokeEnd = strokeStart + Math.max(80L, s.duration);
+                    segments.add(new Segment(s.points, strokeStart, strokeEnd));
+                    if (strokeEnd > lastEnd) lastEnd = strokeEnd;
+                }
+            }
+            compressedDuration = lastEnd; // 只到最后一步结束，不含末尾 idle
         }
 
         public void startAnimation() {
@@ -75,63 +100,51 @@ public class AutoAccessibilityService extends AccessibilityService {
             isAnimating = true;
             startTime = System.currentTimeMillis();
             invalidate();
-            handler.post(this::animate);
+            handler.post(this::tick);
         }
 
-        public ViewPropertyAnimator animate() {
-            if (!isAnimating) return null;
-
+        private void tick() {
+            if (!isAnimating) return;
+            invalidate();
             long elapsed = System.currentTimeMillis() - startTime;
-            float progress = Math.min(1f, (float) elapsed / duration);
-
-            invalidate(); // 强制重绘
-
-            if (progress < 1f) {
-                handler.postDelayed(this::animate, 16); // ~60fps
+            if (elapsed < compressedDuration) {
+                handler.postDelayed(this::tick, 16);
             } else {
-                // 动画结束，延迟 800ms 后移除
                 handler.postDelayed(() -> {
                     isAnimating = false;
                     Context ctx = getContext();
                     if (ctx instanceof AutoAccessibilityService) {
-                        AutoAccessibilityService service = (AutoAccessibilityService) ctx;
-                        WindowManager wm = (WindowManager) service.getSystemService(WINDOW_SERVICE);
+                        WindowManager wm = (WindowManager) ((AutoAccessibilityService) ctx)
+                                .getSystemService(WINDOW_SERVICE);
                         if (wm != null) {
-                            try {
-                                wm.removeView(this);
-                                Log.d(TAG, "轨迹 overlay 已移除");
-                            } catch (Exception ignored) {}
+                            try { wm.removeView(this); } catch (Exception ignored) {}
                         }
                     }
-                }, 800);
+                }, 500);
             }
-            return null;
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-
-            if (!isAnimating || strokes == null) return;
-
+            if (!isAnimating || segments.isEmpty()) return;
             long elapsed = System.currentTimeMillis() - startTime;
-            float progress = Math.min(1f, (float) elapsed / duration);
 
-            for (GestureOverlayView.GestureStroke stroke : strokes) {
-                Path path = new Path();
-                List<GestureOverlayView.PointF> points = stroke.points;
-                if (points == null || points.size() < 2) continue;
-
-                path.moveTo(points.get(0).x, points.get(0).y);
-
-                int targetIndex = (int) (progress * (points.size() - 1));
-                targetIndex = Math.min(targetIndex, points.size() - 1);
-
+            for (Segment seg : segments) {
+                if (elapsed < seg.animStart) continue; // 这步还没到
+                if (elapsed >= seg.animEnd) continue;  // 这步已画完，清除（不保留残影）
+                float strokeProgress = Math.min(1f,
+                        (float)(elapsed - seg.animStart) / (seg.animEnd - seg.animStart));
+                List<GestureOverlayView.PointF> points = seg.points;
+                drawPath.reset();
+                drawPath.moveTo(points.get(0).x, points.get(0).y);
+                int targetIndex = Math.min(
+                        (int)(strokeProgress * (points.size() - 1)),
+                        points.size() - 1);
                 for (int i = 1; i <= targetIndex; i++) {
-                    path.lineTo(points.get(i).x, points.get(i).y);
+                    drawPath.lineTo(points.get(i).x, points.get(i).y);
                 }
-
-                canvas.drawPath(path, paint);
+                canvas.drawPath(drawPath, paint);
             }
         }
     }
@@ -306,6 +319,41 @@ public class AutoAccessibilityService extends AccessibilityService {
             gestureOverlay.maskView.invalidate(); // 强制遮罩子 View 重绘
             Log.d(TAG, "手势录制遮罩已启动");
         });
+    }
+
+    public void startGestureRecording(GestureOverlayView.OnGestureRecordedListener doneListener,
+                                       GestureOverlayView.OnStrokeGroupCompletedListener perStrokeListener) {
+        startGestureRecording(doneListener);
+        if (gestureOverlay != null && perStrokeListener != null) {
+            gestureOverlay.setOnStrokeGroupCompletedListener(perStrokeListener);
+        }
+    }
+
+    // 同时控制 idleFinishDelayMs 和 per-stroke 监听器
+    public void startGestureRecording(GestureOverlayView.OnGestureRecordedListener doneListener,
+                                       long idleFinishDelayMs,
+                                       GestureOverlayView.OnStrokeGroupCompletedListener perStrokeListener) {
+        startGestureRecording(doneListener, idleFinishDelayMs);
+        if (gestureOverlay != null && perStrokeListener != null) {
+            gestureOverlay.setOnStrokeGroupCompletedListener(perStrokeListener);
+        }
+    }
+
+    public void setGestureOverlayInteractive(boolean interactive) {
+        if (gestureOverlay == null) return;
+        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        if (wm == null) return;
+        try {
+            WindowManager.LayoutParams lp = (WindowManager.LayoutParams) gestureOverlay.getLayoutParams();
+            if (interactive) {
+                lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+            } else {
+                lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+            }
+            wm.updateViewLayout(gestureOverlay, lp);
+        } catch (Exception e) {
+            Log.e(TAG, "setGestureOverlayInteractive failed", e);
+        }
     }
 
     public void stopGestureRecording() {

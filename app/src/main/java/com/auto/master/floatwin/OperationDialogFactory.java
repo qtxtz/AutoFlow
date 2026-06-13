@@ -109,10 +109,12 @@ public class OperationDialogFactory {
         void refreshGestureOptions(android.widget.AutoCompleteTextView gestureInput);
         java.io.File resolveTaskGestureFile(String gestureFileName);
         String generateGestureTimestampName();
-        void showGestureLibraryDialog(android.widget.AutoCompleteTextView gestureInput, android.widget.TextView statusView);
-        void playGestureFromInput(android.widget.AutoCompleteTextView gestureInput, android.widget.TextView statusView);
-        void beginGestureRecordFromDialog(View dialogView, android.widget.AutoCompleteTextView edtGestureFile, android.widget.TextView tvGestureStatus);
-        void updateGestureStatus(android.widget.TextView statusView, String gestureFileName);
+        void showGestureLibraryDialog(String currentFile, java.util.function.Consumer<String> onFileSelected);
+        void beginPipelineStepRecord(View dialogView, boolean singleStroke, java.util.function.Consumer<String> onFileSaved);
+        void rerecordPipelineStep(View dialogView, boolean singleStroke, String oldFile, java.util.function.Consumer<String> onFileSaved);
+        void playGestureFile(View dialogView, String fileName, android.widget.TextView statusView);
+        void playFullPipeline(View dialogView, org.json.JSONArray pipeline, android.widget.TextView statusView);
+        com.auto.master.auto.GestureOverlayView.GestureNode readGestureFile(String fileName);
         String normalizeGestureFileName(String rawName);
     }
 
@@ -1382,15 +1384,14 @@ public class OperationDialogFactory {
         dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 350, 440, null);
 
         EditText edtName = dialogView.findViewById(R.id.edt_name);
-        AutoCompleteTextView edtGestureFile = dialogView.findViewById(R.id.edt_gesture_file);
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
-        android.widget.TextView tvGestureStatus = dialogView.findViewById(R.id.tv_gesture_status);
+        android.widget.TextView tvPipelineStatus = dialogView.findViewById(R.id.tv_gesture_pipeline_status);
+        LinearLayout lyPipelineSteps = dialogView.findViewById(R.id.ly_gesture_pipeline_steps);
         android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
 
-        if (gestureHelper != null) {
-            gestureHelper.refreshGestureOptions(edtGestureFile);
-        }
+        final JSONArray[] pipelineHolder = {new JSONArray()};
+
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
         }
@@ -1399,51 +1400,48 @@ public class OperationDialogFactory {
         try {
             edtName.setText(operationObject.optString("name", ""));
             JSONObject inputMap = operationObject.optJSONObject("inputMap");
-            String gestureFile = "";
             if (inputMap != null) {
-                gestureFile = inputMap.optString(MetaOperation.SAVEFILENAME, "");
-                if (TextUtils.isEmpty(gestureFile)) {
-                    gestureFile = inputMap.optString(MetaOperation.GESTURE_TEMPLATE_ID, "");
-                }
                 setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
-            }
-            edtGestureFile.setText(gestureFile);
-
-            if (gestureHelper != null) {
-                java.io.File gestureFileObj = gestureHelper.resolveTaskGestureFile(gestureFile);
-                if (tvGestureStatus != null) {
-                    tvGestureStatus.setText(gestureFileObj != null ?
-                        ("状态：已存在 " + gestureFileObj.getName()) : "状态：未录制，建议点击下方按钮录制");
+                JSONArray existingPipeline = inputMap.optJSONArray(MetaOperation.GESTURE_PIPELINE);
+                if (existingPipeline != null && existingPipeline.length() > 0) {
+                    pipelineHolder[0] = existingPipeline;
+                } else {
+                    // 兼容旧的 SAVEFILENAME 格式：把单文件转为 1-step pipeline
+                    String oldFile = inputMap.optString(MetaOperation.SAVEFILENAME, "");
+                    if (TextUtils.isEmpty(oldFile)) {
+                        oldFile = inputMap.optString(MetaOperation.GESTURE_TEMPLATE_ID, "");
+                    }
+                    if (!TextUtils.isEmpty(oldFile)) {
+                        JSONObject step = new JSONObject();
+                        step.put(MetaOperation.GESTURE_STEP_FILE, oldFile);
+                        step.put(MetaOperation.GESTURE_STEP_DELAY_MS, 0);
+                        pipelineHolder[0] = new JSONArray();
+                        pipelineHolder[0].put(step);
+                    }
                 }
             }
         } catch (Exception e) {
             host.showToast("加载操作数据失败: " + e.getMessage());
         }
 
+        renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
+
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
-        dialogView.findViewById(R.id.btn_gesture_ts).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                edtGestureFile.setText(gestureHelper.generateGestureTimestampName());
-            }
+        dialogView.findViewById(R.id.btn_pipeline_record_step).setOnClickListener(v -> {
+            try {
+                JSONObject emptyStep = new JSONObject();
+                emptyStep.put(MetaOperation.GESTURE_STEP_FILE, "");
+                emptyStep.put(MetaOperation.GESTURE_STEP_DELAY_MS, 500);
+                pipelineHolder[0].put(emptyStep);
+            } catch (Exception ignored) {}
+            renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
         });
 
-        dialogView.findViewById(R.id.btn_gesture_library).setOnClickListener(v -> {
+        dialogView.findViewById(R.id.btn_pipeline_play_all).setOnClickListener(v -> {
             if (gestureHelper != null) {
-                gestureHelper.showGestureLibraryDialog(edtGestureFile, tvGestureStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_play_gesture).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                gestureHelper.playGestureFromInput(edtGestureFile, tvGestureStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_record_gesture).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                gestureHelper.beginGestureRecordFromDialog(dialogView, edtGestureFile, tvGestureStatus);
+                gestureHelper.playFullPipeline(dialogView, pipelineHolder[0], tvPipelineStatus);
             }
         });
 
@@ -1456,38 +1454,16 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
-        edtGestureFile.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (gestureHelper != null && tvGestureStatus != null) {
-                    gestureHelper.updateGestureStatus(tvGestureStatus, s == null ? "" : s.toString());
-                }
-            }
-
-            @Override
-            public void afterTextChanged(android.text.Editable s) {
-            }
-        });
-
         btnConfirm.setOnClickListener(v -> {
             String name = edtName.getText().toString().trim();
-            String normalizedGestureFile = "";
-            if (gestureHelper != null) {
-                normalizedGestureFile = gestureHelper.normalizeGestureFileName(
-                    edtGestureFile.getText() == null ? "" : edtGestureFile.getText().toString().trim());
-            }
             String nextOp = safeText(edtNextOperation);
 
             if (TextUtils.isEmpty(name)) {
                 edtName.setError("请填写操作名称");
                 return;
             }
-            if (TextUtils.isEmpty(normalizedGestureFile)) {
-                edtGestureFile.setError("请填写手势文件名");
+            if (pipelineHolder[0].length() == 0) {
+                host.showToast("请至少录制一个手势步骤");
                 return;
             }
 
@@ -1503,8 +1479,7 @@ public class OperationDialogFactory {
                 java.io.File currentTaskDir = host.getCurrentTaskDir();
                 inputMap.put(MetaOperation.PROJECT, currentProjectDir != null ? currentProjectDir.getName() : "");
                 inputMap.put(MetaOperation.TASK, currentTaskDir != null ? currentTaskDir.getName() : "");
-                inputMap.put(MetaOperation.SAVEFILENAME, normalizedGestureFile);
-                inputMap.put(MetaOperation.GESTURE_TEMPLATE_ID, normalizedGestureFile);
+                inputMap.put(MetaOperation.GESTURE_PIPELINE, pipelineHolder[0]);
                 if (!TextUtils.isEmpty(nextOp)) {
                     inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
                 }
@@ -1742,16 +1717,11 @@ public class OperationDialogFactory {
         dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 350, 440, null);
 
         EditText edtName = dialogView.findViewById(R.id.edt_name);
-        AutoCompleteTextView edtGestureFile = dialogView.findViewById(R.id.edt_gesture_file);
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
-        android.widget.TextView tvGestureStatus = dialogView.findViewById(R.id.tv_gesture_status);
+        android.widget.TextView tvPipelineStatus = dialogView.findViewById(R.id.tv_gesture_pipeline_status);
+        LinearLayout lyPipelineSteps = dialogView.findViewById(R.id.ly_gesture_pipeline_steps);
 
-        if (gestureHelper != null) {
-            gestureHelper.refreshGestureOptions(edtGestureFile);
-            String timestampName = gestureHelper.generateGestureTimestampName();
-            edtGestureFile.setText(timestampName);
-            gestureHelper.updateGestureStatus(tvGestureStatus, timestampName);
-        }
+        final JSONArray[] pipelineHolder = {new JSONArray()};
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -1760,27 +1730,19 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
-        dialogView.findViewById(R.id.btn_gesture_ts).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                edtGestureFile.setText(gestureHelper.generateGestureTimestampName());
-            }
+        dialogView.findViewById(R.id.btn_pipeline_record_step).setOnClickListener(v -> {
+            try {
+                JSONObject emptyStep = new JSONObject();
+                emptyStep.put(MetaOperation.GESTURE_STEP_FILE, "");
+                emptyStep.put(MetaOperation.GESTURE_STEP_DELAY_MS, 500);
+                pipelineHolder[0].put(emptyStep);
+            } catch (Exception ignored) {}
+            renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
         });
 
-        dialogView.findViewById(R.id.btn_gesture_library).setOnClickListener(v -> {
+        dialogView.findViewById(R.id.btn_pipeline_play_all).setOnClickListener(v -> {
             if (gestureHelper != null) {
-                gestureHelper.showGestureLibraryDialog(edtGestureFile, tvGestureStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_play_gesture).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                gestureHelper.playGestureFromInput(edtGestureFile, tvGestureStatus);
-            }
-        });
-
-        dialogView.findViewById(R.id.btn_record_gesture).setOnClickListener(v -> {
-            if (gestureHelper != null) {
-                gestureHelper.beginGestureRecordFromDialog(dialogView, edtGestureFile, tvGestureStatus);
+                gestureHelper.playFullPipeline(dialogView, pipelineHolder[0], tvPipelineStatus);
             }
         });
 
@@ -1793,38 +1755,16 @@ public class OperationDialogFactory {
         dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
             dialogHelpers.safeRemoveView(dialogView));
 
-        edtGestureFile.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (gestureHelper != null && tvGestureStatus != null) {
-                    gestureHelper.updateGestureStatus(tvGestureStatus, s == null ? "" : s.toString());
-                }
-            }
-
-            @Override
-            public void afterTextChanged(android.text.Editable s) {
-            }
-        });
-
         dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
             String name = edtName.getText().toString().trim();
-            String gestureFile = "";
-            if (gestureHelper != null) {
-                gestureFile = gestureHelper.normalizeGestureFileName(
-                    edtGestureFile.getText() == null ? "" : edtGestureFile.getText().toString().trim());
-            }
             String nextOp = safeText(edtNextOperation);
 
             if (TextUtils.isEmpty(name)) {
                 edtName.setError("请填写操作名称");
                 return;
             }
-            if (TextUtils.isEmpty(gestureFile)) {
-                edtGestureFile.setError("请填写手势文件名");
+            if (pipelineHolder[0].length() == 0) {
+                host.showToast("请至少录制一个手势步骤");
                 return;
             }
 
@@ -1842,8 +1782,7 @@ public class OperationDialogFactory {
                 java.io.File currentTaskDir = host.getCurrentTaskDir();
                 inputMap.put(MetaOperation.PROJECT, currentProjectDir != null ? currentProjectDir.getName() : "");
                 inputMap.put(MetaOperation.TASK, currentTaskDir != null ? currentTaskDir.getName() : "");
-                inputMap.put(MetaOperation.SAVEFILENAME, gestureFile);
-                inputMap.put(MetaOperation.GESTURE_TEMPLATE_ID, gestureFile);
+                inputMap.put(MetaOperation.GESTURE_PIPELINE, pipelineHolder[0]);
                 if (!TextUtils.isEmpty(nextOp)) {
                     inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
                 }
@@ -1867,6 +1806,233 @@ public class OperationDialogFactory {
                 host.showToast("构建手势操作失败: " + e.getMessage());
             }
         });
+    }
+
+    private void renderGesturePipelineSteps(LinearLayout container, JSONArray[] pipelineHolder,
+                                             android.widget.TextView statusView, View dialogView) {
+        if (container == null) return;
+        container.removeAllViews();
+        JSONArray pipeline = pipelineHolder[0];
+        if (pipeline == null || pipeline.length() == 0) {
+            if (statusView != null) statusView.setText("尚未添加手势步骤");
+            return;
+        }
+        if (statusView != null) {
+            statusView.setText("共 " + pipeline.length() + " 个手势步骤");
+        }
+        android.content.Context ctx = container.getContext();
+        float density = ctx.getResources().getDisplayMetrics().density;
+        int dp4 = (int) (4 * density);
+        int dp6 = (int) (6 * density);
+        int dp8 = (int) (8 * density);
+        int dp56 = (int) (56 * density);
+
+        for (int i = 0; i < pipeline.length(); i++) {
+            final int idx = i;
+            JSONObject step;
+            try { step = pipeline.getJSONObject(i); } catch (Exception e) { continue; }
+            final String[] fileHolder = {step.optString(MetaOperation.GESTURE_STEP_FILE, "")};
+            long delayMs = step.optLong(MetaOperation.GESTURE_STEP_DELAY_MS, 300);
+
+            // Card row
+            LinearLayout row = new LinearLayout(ctx);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setBackgroundResource(com.auto.master.R.drawable.item_operation_compact_bg);
+            row.setPadding(dp8, dp6, dp8, dp6);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rowLp.setMargins(0, 0, 0, dp6);
+            row.setLayoutParams(rowLp);
+
+            // Top: thumbnail + (label + buttons) side by side
+            LinearLayout topRow = new LinearLayout(ctx);
+            topRow.setOrientation(LinearLayout.HORIZONTAL);
+            topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            boolean isEmpty = TextUtils.isEmpty(fileHolder[0]);
+
+            // Gesture thumbnail (or placeholder)
+            GesturePreviewView preview = new GesturePreviewView(ctx);
+            LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(dp56, dp56);
+            previewLp.setMargins(0, 0, dp8, 0);
+            preview.setLayoutParams(previewLp);
+            preview.setBackgroundColor(isEmpty ? 0x22FF6600 : 0x11000000);
+            if (!isEmpty && gestureHelper != null) {
+                com.auto.master.auto.GestureOverlayView.GestureNode node =
+                        gestureHelper.readGestureFile(fileHolder[0]);
+                if (node != null) preview.setGestureNode(node);
+            }
+            topRow.addView(preview);
+
+            // Right: label + buttons stacked
+            LinearLayout rightCol = new LinearLayout(ctx);
+            rightCol.setOrientation(LinearLayout.VERTICAL);
+            rightCol.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            android.widget.TextView tvLabel = new android.widget.TextView(ctx);
+            tvLabel.setText(isEmpty ? "步骤 " + (idx + 1) + "  ·  待录制" : (idx + 1) + ". " + fileHolder[0]);
+            tvLabel.setTextSize(11f);
+            tvLabel.setTextColor(isEmpty ? 0xFFBF5000 : 0xFF1F2937);
+            tvLabel.setSingleLine(true);
+            tvLabel.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            tvLabel.setPadding(0, 0, 0, dp4);
+            rightCol.addView(tvLabel);
+
+            // Action buttons row
+            LinearLayout btnRow = new LinearLayout(ctx);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            btnRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            if (!isEmpty) {
+                // 有文件：回放 + 单次重录 + 多次重录 + 选库 + 删除
+                android.widget.TextView btnPlay = makePipelineBtn(ctx, "▶", 0xFF1a5276);
+                btnPlay.setOnClickListener(v2 -> {
+                    if (gestureHelper != null) gestureHelper.playGestureFile(dialogView, fileHolder[0], statusView);
+                });
+                btnRow.addView(btnPlay);
+                btnRow.addView(makePipelineBtnSpace(ctx, dp4));
+            }
+
+            // 单次录制/重录
+            android.widget.TextView btnSingle = makePipelineBtn(ctx, isEmpty ? "单次录制" : "单次重录", 0xFF5C3600);
+            btnSingle.setOnClickListener(v2 -> {
+                if (gestureHelper == null) return;
+                if (isEmpty) {
+                    gestureHelper.beginPipelineStepRecord(dialogView, true, newFile -> {
+                        try { step.put(MetaOperation.GESTURE_STEP_FILE, newFile); fileHolder[0] = newFile; }
+                        catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                } else {
+                    gestureHelper.rerecordPipelineStep(dialogView, true, fileHolder[0], newFile -> {
+                        try { step.put(MetaOperation.GESTURE_STEP_FILE, newFile); fileHolder[0] = newFile; }
+                        catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                }
+            });
+            btnRow.addView(btnSingle);
+            btnRow.addView(makePipelineBtnSpace(ctx, dp4));
+
+            // 多次录制/重录
+            android.widget.TextView btnMulti = makePipelineBtn(ctx, isEmpty ? "多次录制" : "多次重录", 0xFF1a3a6e);
+            btnMulti.setOnClickListener(v2 -> {
+                if (gestureHelper == null) return;
+                if (isEmpty) {
+                    gestureHelper.beginPipelineStepRecord(dialogView, false, newFile -> {
+                        try { step.put(MetaOperation.GESTURE_STEP_FILE, newFile); fileHolder[0] = newFile; }
+                        catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                } else {
+                    gestureHelper.rerecordPipelineStep(dialogView, false, fileHolder[0], newFile -> {
+                        try { step.put(MetaOperation.GESTURE_STEP_FILE, newFile); fileHolder[0] = newFile; }
+                        catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                }
+            });
+            btnRow.addView(btnMulti);
+            btnRow.addView(makePipelineBtnSpace(ctx, dp4));
+
+            if (!isEmpty) {
+                android.widget.TextView btnLib = makePipelineBtn(ctx, "选库", 0xFF1a5e36);
+                btnLib.setOnClickListener(v2 -> {
+                    if (gestureHelper != null) {
+                        gestureHelper.showGestureLibraryDialog(fileHolder[0], newFile -> {
+                            try { step.put(MetaOperation.GESTURE_STEP_FILE, newFile); fileHolder[0] = newFile; }
+                            catch (Exception ignored) {}
+                            renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                        });
+                    }
+                });
+                btnRow.addView(btnLib);
+                btnRow.addView(makePipelineBtnSpace(ctx, dp4));
+            }
+
+            android.widget.TextView btnDel = makePipelineBtn(ctx, "×", 0xFFB23B3B);
+            btnDel.setOnClickListener(v2 -> {
+                JSONArray newArr = new JSONArray();
+                for (int j = 0; j < pipeline.length(); j++) {
+                    if (j != idx) { try { newArr.put(pipeline.get(j)); } catch (Exception ignored) {} }
+                }
+                pipelineHolder[0] = newArr;
+                renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+            });
+            btnRow.addView(btnDel);
+
+            rightCol.addView(btnRow);
+            topRow.addView(rightCol);
+            row.addView(topRow);
+
+            // Delay row
+            LinearLayout delayRow = new LinearLayout(ctx);
+            delayRow.setOrientation(LinearLayout.HORIZONTAL);
+            delayRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams delayLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            delayLp.setMargins(0, dp4, 0, 0);
+            delayRow.setLayoutParams(delayLp);
+
+            android.widget.TextView tvDelay = new android.widget.TextView(ctx);
+            tvDelay.setText("步后延时:");
+            tvDelay.setTextSize(11f);
+            tvDelay.setTextColor(0xFF4e5f74);
+            tvDelay.setPadding(0, 0, dp6, 0);
+            delayRow.addView(tvDelay);
+
+            EditText etDelay = new EditText(ctx);
+            LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                    (int)(100 * density), LinearLayout.LayoutParams.WRAP_CONTENT);
+            etDelay.setLayoutParams(etLp);
+            etDelay.setText(String.valueOf(delayMs));
+            etDelay.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            etDelay.setSingleLine(true);
+            etDelay.setTextSize(11f);
+            etDelay.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void afterTextChanged(android.text.Editable s) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    try {
+                        long val = TextUtils.isEmpty(s) ? 0 : Long.parseLong(s.toString());
+                        step.put(MetaOperation.GESTURE_STEP_DELAY_MS, val);
+                    } catch (Exception ignored) {}
+                }
+            });
+            delayRow.addView(etDelay);
+
+            android.widget.TextView tvMs = new android.widget.TextView(ctx);
+            tvMs.setText(" ms");
+            tvMs.setTextSize(11f);
+            tvMs.setTextColor(0xFF4e5f74);
+            delayRow.addView(tvMs);
+
+            row.addView(delayRow);
+            container.addView(row);
+        }
+    }
+
+    private android.widget.TextView makePipelineBtn(android.content.Context ctx, String text, int bgColor) {
+        android.widget.TextView btn = new android.widget.TextView(ctx);
+        btn.setText(text);
+        btn.setTextSize(11f);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setGravity(android.view.Gravity.CENTER);
+        float d = ctx.getResources().getDisplayMetrics().density;
+        int h = (int)(26 * d);
+        int px = (int)(8 * d);
+        btn.setPadding(px, 0, px, 0);
+        btn.setMinHeight(h);
+        btn.setBackgroundColor(bgColor);
+        return btn;
+    }
+
+    private View makePipelineBtnSpace(android.content.Context ctx, int width) {
+        View v = new View(ctx);
+        v.setLayoutParams(new LinearLayout.LayoutParams(width, 1));
+        return v;
     }
 
     public void showAddMatchTemplateDialog() {

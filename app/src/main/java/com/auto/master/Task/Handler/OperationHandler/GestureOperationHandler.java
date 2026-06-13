@@ -18,7 +18,9 @@ import com.google.gson.GsonBuilder;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -135,6 +137,14 @@ public class GestureOperationHandler extends OperationHandler {
             ctx.lastOperation = obj;
             return true;
         } else if (obj.getResponseType() == 2) {
+            // 优先检查 pipeline 模式
+            Object pipelineObj = inputMap.get(MetaOperation.GESTURE_PIPELINE);
+            List<Map<String, Object>> pipelineSteps = toPipelineSteps(pipelineObj);
+            if (pipelineSteps != null && !pipelineSteps.isEmpty()) {
+                Activity topActivity = ActivityHolder.getTopActivity();
+                return executePipeline(pipelineSteps, projectName, taskName, topActivity, svc, ctx, obj);
+            }
+
             // 执行模式 - 同步等待手势完成
             Activity topActivity = ActivityHolder.getTopActivity();
             GestureOverlayView.GestureNode gestureNode;
@@ -218,5 +228,73 @@ public class GestureOperationHandler extends OperationHandler {
     private String getStringSafe(Map<String, Object> map, String key, String def) {
         Object v = map.get(key);
         return (v instanceof String) ? (String) v : def;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> toPipelineSteps(Object obj) {
+        if (obj instanceof List) {
+            try { return (List<Map<String, Object>>) obj; } catch (Exception e) { return null; }
+        }
+        return null;
+    }
+
+    private boolean executePipeline(List<Map<String, Object>> steps,
+                                     String projectName, String taskName,
+                                     android.app.Activity activity,
+                                     AutoAccessibilityService svc,
+                                     OperationContext ctx,
+                                     MetaOperation op) {
+        for (int i = 0; i < steps.size(); i++) {
+            Map<String, Object> step = steps.get(i);
+            String file = getStringSafe(step, MetaOperation.GESTURE_STEP_FILE, "");
+            long delayAfterMs = toLongSafe(step.get(MetaOperation.GESTURE_STEP_DELAY_MS), 0L);
+            if (android.text.TextUtils.isEmpty(file)) continue;
+
+            GestureOverlayView.GestureNode node = Template.getTaskSingleGestureCache(projectName, taskName, file);
+            if (node == null) {
+                node = loadGestureData(activity, projectName, taskName, file);
+                if (node != null) Template.putTaskSingleGestureCache(projectName, taskName, file, node);
+            }
+            if (node == null || node.strokes == null || node.strokes.isEmpty()) {
+                Log.e(TAG, "Pipeline 步骤 " + (i + 1) + " 文件无效: " + file);
+                return false;
+            }
+
+            final boolean[] result = {false};
+            final Object lock = new Object();
+            final boolean[] done = {false};
+            final GestureOverlayView.GestureNode finalNode = node;
+            synchronized (lock) {
+                svc.replayGestureWithRetry(finalNode,
+                    () -> { synchronized (lock) { result[0] = true; done[0] = true; lock.notifyAll(); } },
+                    () -> { synchronized (lock) { result[0] = false; done[0] = true; lock.notifyAll(); } },
+                    MAX_GESTURE_RETRY_COUNT);
+                try {
+                    if (!done[0]) lock.wait(30000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            if (!result[0]) {
+                Log.e(TAG, "Pipeline 步骤 " + (i + 1) + " 执行失败");
+                return false;
+            }
+            if (delayAfterMs > 0 && i < steps.size() - 1) {
+                try { Thread.sleep(delayAfterMs); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return false; }
+            }
+        }
+        ctx.currentOperation = op;
+        ctx.lastOperation = op;
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("GESTURE_PLAYED", true);
+        ctx.currentResponse = res;
+        return true;
+    }
+
+    private long toLongSafe(Object v, long def) {
+        if (v instanceof Number) return ((Number) v).longValue();
+        if (v instanceof String) { try { return Long.parseLong((String) v); } catch (Exception e) { return def; } }
+        return def;
     }
 }

@@ -20,6 +20,8 @@ public final class SystemRuntimeConfig {
     private static final String KEY_COLOR_FAST_MS = "color_fast_ms";
     private static final String KEY_COLOR_MEDIUM_MS = "color_medium_ms";
     private static final String KEY_COLOR_SLOW_MS = "color_slow_ms";
+    private static final String KEY_GESTURE_STEP_REPLAY = "gesture_step_replay";
+    private static final String KEY_GESTURE_STEP_INTERVAL_MS = "gesture_step_interval_ms";
 
     public static final float DEFAULT_CAPTURE_SCALE = 0.4f;
     public static final long DEFAULT_IDLE_PAUSE_THRESHOLD_MS = 5000L;
@@ -37,6 +39,8 @@ public final class SystemRuntimeConfig {
     public long colorFastMs = 220L;
     public long colorMediumMs = 380L;
     public long colorSlowMs = 560L;
+    public boolean gestureStepReplay = true;
+    public long gestureStepIntervalMs = 500L;
 
     public static SystemRuntimeConfig load(Context context) {
         SystemRuntimeConfig cfg = new SystemRuntimeConfig();
@@ -60,6 +64,8 @@ public final class SystemRuntimeConfig {
         cfg.colorFastMs = clampPolling(prefs.getLong(KEY_COLOR_FAST_MS, cfg.colorFastMs));
         cfg.colorMediumMs = clampPolling(prefs.getLong(KEY_COLOR_MEDIUM_MS, cfg.colorMediumMs));
         cfg.colorSlowMs = clampPolling(prefs.getLong(KEY_COLOR_SLOW_MS, cfg.colorSlowMs));
+        cfg.gestureStepReplay = prefs.getBoolean(KEY_GESTURE_STEP_REPLAY, true);
+        cfg.gestureStepIntervalMs = clampLong(prefs.getLong(KEY_GESTURE_STEP_INTERVAL_MS, 500L), 0L, 30000L);
         return cfg;
     }
 
@@ -82,6 +88,8 @@ public final class SystemRuntimeConfig {
                 .putLong(KEY_COLOR_FAST_MS, colorFastMs)
                 .putLong(KEY_COLOR_MEDIUM_MS, colorMediumMs)
                 .putLong(KEY_COLOR_SLOW_MS, colorSlowMs)
+                .putBoolean(KEY_GESTURE_STEP_REPLAY, gestureStepReplay)
+                .putLong(KEY_GESTURE_STEP_INTERVAL_MS, gestureStepIntervalMs)
                 .apply();
         CaptureScaleHelper.saveScale(context, captureScale);
     }

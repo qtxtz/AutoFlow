@@ -151,6 +151,9 @@ public abstract class MetaOperation {
     public static String MTRY_RETRY_SHOW_COUNTDOWN = "MTRY_RETRY_SHOW_COUNTDOWN";
 
     // Gesture 参数
+    public static String GESTURE_PIPELINE = "GESTURE_PIPELINE";
+    public static String GESTURE_STEP_FILE = "file";
+    public static String GESTURE_STEP_DELAY_MS = "delayAfterMs";
     public static String GESTURE_TEMPLATE_ID = "GESTURE_TEMPLATE_ID";
     public static String COLOR_POINTS = "COLOR_POINTS";
     public static String COLOR_MATCH_MODE = "COLOR_MATCH_MODE";
