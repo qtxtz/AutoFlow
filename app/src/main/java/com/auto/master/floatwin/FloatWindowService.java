@@ -6794,6 +6794,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         view.setOnClickListener(v -> view.showDropDown());
     }
 
+    private void bindDropdownSelect(AutoCompleteTextView view, List<String> options) {
+        if (dialogHelpers != null) {
+            dialogHelpers.bindDropdownSelect(view, options);
+        }
+    }
+
     private void bindNextOperationSuggestions(View dialogView, String excludeId) {
         AutoCompleteTextView next = dialogView.findViewById(R.id.edt_next_operation);
         if (next == null) {
@@ -9154,7 +9160,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 pollSlowInput,
                 AdaptivePollingController.Profile.TEMPLATE_MATCH);
 
-        bindAutoComplete(methodInput, getMatchMethodOptions());
+        bindDropdownSelect(methodInput, getMatchMethodOptions());
         bindAutoComplete(fallbackInput, getCurrentTaskOperationIds(excludeId));
         methodInput.setText(METHOD_TM_CCOEFF_NORMED, false);
         if (sampleRatioInput != null) sampleRatioInput.setText("0.1");

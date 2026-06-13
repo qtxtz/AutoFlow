@@ -318,7 +318,7 @@ public class OperationDialogFactory {
         EditText edtClickWaitTimeoutMs = dialogView.findViewById(R.id.edt_click_wait_timeout_ms);
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
 
-        dialogHelpers.bindAutoComplete(edtClickMode, java.util.Arrays.asList(
+        dialogHelpers.bindDropdownSelect(edtClickMode, java.util.Arrays.asList(
                 MetaOperation.CLICK_MODE_FAST,
                 MetaOperation.CLICK_MODE_STRICT
         ));
@@ -1167,7 +1167,7 @@ public class OperationDialogFactory {
         EditText edtClickWaitTimeoutMs = dialogView.findViewById(R.id.edt_click_wait_timeout_ms);
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
 
-        dialogHelpers.bindAutoComplete(edtClickMode, java.util.Arrays.asList(
+        dialogHelpers.bindDropdownSelect(edtClickMode, java.util.Arrays.asList(
                 MetaOperation.CLICK_MODE_FAST,
                 MetaOperation.CLICK_MODE_STRICT
         ));
@@ -3110,7 +3110,7 @@ public class OperationDialogFactory {
 
         edtTimeout.setText(defaultMatchTimeoutText());
         setupMatchDelayHint(edtPreDelay);
-        dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
+        dialogHelpers.bindDropdownSelect(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
         setupAdvancedToggle(dialogView);
         setupPollingIntervalInputs(dialogView, AdaptivePollingController.Profile.COLOR_CHECK, null);
@@ -3205,7 +3205,7 @@ public class OperationDialogFactory {
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         btnConfirm.setText("保存");
 
-        dialogHelpers.bindAutoComplete(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
+        dialogHelpers.bindDropdownSelect(edtMode, java.util.Arrays.asList("全部点都命中", "任意一点命中"));
         edtMode.setText("全部点都命中", false);
         edtTimeout.setText(defaultMatchTimeoutText());
         setupMatchDelayHint(edtPreDelay);
@@ -3542,8 +3542,8 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
 
         if (variableHelper != null) {
-            dialogHelpers.bindAutoComplete(edtSourceMode, variableHelper.getVariableSourceModes());
-            dialogHelpers.bindAutoComplete(edtVarType, variableHelper.getVariableValueTypes());
+            dialogHelpers.bindDropdownSelect(edtSourceMode, variableHelper.getVariableSourceModes());
+            dialogHelpers.bindDropdownSelect(edtVarType, variableHelper.getVariableValueTypes());
             variableHelper.bindVariableSourceModeWatcher(edtSourceMode, tvSourceLabel, edtSourceValue);
             edtSourceMode.setText(variableHelper.sourceModeValueToDisplay("literal"), false);
             variableHelper.updateVariableSourceInputUi(tvSourceLabel, edtSourceValue,
@@ -3651,8 +3651,8 @@ public class OperationDialogFactory {
         btnConfirm.setText("保存");
 
         if (variableHelper != null) {
-            dialogHelpers.bindAutoComplete(edtSourceMode, variableHelper.getVariableSourceModes());
-            dialogHelpers.bindAutoComplete(edtVarType, variableHelper.getVariableValueTypes());
+            dialogHelpers.bindDropdownSelect(edtSourceMode, variableHelper.getVariableSourceModes());
+            dialogHelpers.bindDropdownSelect(edtVarType, variableHelper.getVariableValueTypes());
             variableHelper.bindVariableSourceModeWatcher(edtSourceMode, tvSourceLabel, edtSourceValue);
         }
 
@@ -3934,10 +3934,10 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
 
         if (variableMathHelper != null) {
-            dialogHelpers.bindAutoComplete(edtAction, variableMathHelper.getVariableMathActions());
+            dialogHelpers.bindDropdownSelect(edtAction, variableMathHelper.getVariableMathActions());
         }
-        dialogHelpers.bindAutoComplete(edtOperandMode, java.util.Arrays.asList("literal", "variable"));
-        dialogHelpers.bindAutoComplete(edtOperandType, java.util.Collections.singletonList("number"));
+        dialogHelpers.bindDropdownSelect(edtOperandMode, java.util.Arrays.asList("literal", "variable"));
+        dialogHelpers.bindDropdownSelect(edtOperandType, java.util.Collections.singletonList("number"));
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -4044,10 +4044,10 @@ public class OperationDialogFactory {
         btnConfirm.setText("保存");
 
         if (variableMathHelper != null) {
-            dialogHelpers.bindAutoComplete(edtAction, variableMathHelper.getVariableMathActions());
+            dialogHelpers.bindDropdownSelect(edtAction, variableMathHelper.getVariableMathActions());
         }
-        dialogHelpers.bindAutoComplete(edtOperandMode, java.util.Arrays.asList("literal", "variable"));
-        dialogHelpers.bindAutoComplete(edtOperandType, java.util.Collections.singletonList("number"));
+        dialogHelpers.bindDropdownSelect(edtOperandMode, java.util.Arrays.asList("literal", "variable"));
+        dialogHelpers.bindDropdownSelect(edtOperandType, java.util.Collections.singletonList("number"));
 
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -5009,7 +5009,7 @@ public class OperationDialogFactory {
 
         java.util.List<String> operators = java.util.Arrays.asList(
             "is_true", "is_false", "lt", "lte", "gt", "gte", "eq", "neq", "not_empty", "empty");
-        dialogHelpers.bindAutoComplete(edtOperator, operators);
+        dialogHelpers.bindDropdownSelect(edtOperator, operators);
         edtOperator.setText("is_true", false);
 
         if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
@@ -5089,7 +5089,7 @@ public class OperationDialogFactory {
 
         java.util.List<String> operators = java.util.Arrays.asList(
             "is_true", "is_false", "lt", "lte", "gt", "gte", "eq", "neq", "not_empty", "empty");
-        dialogHelpers.bindAutoComplete(edtOperator, operators);
+        dialogHelpers.bindDropdownSelect(edtOperator, operators);
 
         if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
 
@@ -5790,10 +5790,10 @@ public class OperationDialogFactory {
         ));
         edtModel.setOnItemClickListener((parent, view, position, id) ->
                 applyOcrModelPreset(safeText(edtModel), edtLanguage, edtTrainedData));
-        dialogHelpers.bindAutoComplete(edtPsm, java.util.Arrays.asList(
+        dialogHelpers.bindDropdownSelect(edtPsm, java.util.Arrays.asList(
                 "auto", "block", "line", "word", "sparse"
         ));
-        dialogHelpers.bindAutoComplete(edtMorphMode, java.util.Arrays.asList(
+        dialogHelpers.bindDropdownSelect(edtMorphMode, java.util.Arrays.asList(
                 "none", "dilate", "erode", "open", "close"
         ));
 

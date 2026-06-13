@@ -203,7 +203,7 @@ public class DialogHelpers {
     }
 
     /**
-     * Bind autocomplete suggestions to an AutoCompleteTextView
+     * Bind autocomplete suggestions to an AutoCompleteTextView (searchable, free-text allowed)
      */
     public void bindAutoComplete(AutoCompleteTextView view, List<String> options) {
         if (view == null || options == null) {
@@ -216,5 +216,44 @@ public class DialogHelpers {
         );
         view.setAdapter(adapter);
         view.setThreshold(1);
+    }
+
+    /**
+     * Bind a fixed option set to an AutoCompleteTextView as a true dropdown selector.
+     * Disables keyboard input; clicking always shows the full option list immediately.
+     * Use this for fields that only accept values from a predefined list.
+     */
+    public void bindDropdownSelect(AutoCompleteTextView view, List<String> options) {
+        if (view == null || options == null || options.isEmpty()) return;
+
+        // Disable text input so no keyboard appears and user cannot type
+        view.setInputType(android.text.InputType.TYPE_NULL);
+        view.setKeyListener(null);
+        view.setLongClickable(false);
+
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                host.getContext(),
+                android.R.layout.simple_dropdown_item_1line,
+                options);
+        view.setAdapter(adapter);
+        view.setThreshold(0);
+
+        // Always show full list on click, suppress keyboard
+        view.setOnClickListener(v -> {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager)
+                    host.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            view.showDropDown();
+        });
+        view.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager)
+                        host.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+                view.post(view::showDropDown);
+            }
+        });
     }
 }
