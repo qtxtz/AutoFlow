@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   悬浮按钮配置弹窗
-  宽 300dp，内容过多时可滚动
+  尺寸由 NodeFloatButtonUiHelper 按屏幕比例设置，内容过多时可滚动
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="300dp"
-    android:layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     android:background="@drawable/project_panel_shell_bg"
-    android:fillViewport="false"
+    android:fillViewport="true"
     android:scrollbars="none">
 
     <LinearLayout
@@ -30,11 +30,31 @@
         <!-- ── 预览圆 ── -->
         <FrameLayout
             android:id="@+id/cfg_preview"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
             android:layout_gravity="center_horizontal"
             android:elevation="3dp"
             android:layout_marginBottom="14dp">
+
+            <ImageView
+                android:id="@+id/cfg_preview_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:padding="6dp"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/cfg_preview_icon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/cfg_preview_label"
@@ -86,6 +106,69 @@
                 android:orientation="horizontal" />
         </HorizontalScrollView>
 
+        <!-- ── 外圈颜色 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="外圈颜色" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="8dp">
+
+            <LinearLayout
+                android:id="@+id/cfg_border_color_row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="外圈粗细"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/cfg_border_minus"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
+                android:text="−"
+                android:textColor="#3C6DE4"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/cfg_border_val"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="#243244"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/cfg_border_plus"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
+                android:text="+"
+                android:textColor="#3C6DE4"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <!-- ── 文字颜色 ── -->
         <TextView
             style="@style/CfgSectionLabel"
@@ -95,6 +178,122 @@
             android:id="@+id/cfg_text_color_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp" />
+
+        <!-- ── 自定义图片 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="自定义图片" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <EditText
+                android:id="@+id/cfg_et_image"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/item_operation_compact_bg"
+                android:clickable="false"
+                android:cursorVisible="false"
+                android:focusable="false"
+                android:hint="未选择图片"
+                android:inputType="none"
+                android:padding="8dp"
+                android:singleLine="true"
+                android:textColor="#243244"
+                android:textColorHint="#AABBCC"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/cfg_btn_pick_image"
+                android:layout_width="52dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:gravity="center"
+                android:text="选择"
+                android:textColor="#3C6DE4"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/cfg_btn_clear_image"
+                android:layout_width="52dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:gravity="center"
+                android:text="清除"
+                android:textColor="#6a7682"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- ── 内置图标 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="图标库" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:id="@+id/cfg_icon_row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- ── 形状 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="按钮形状" />
+
+        <LinearLayout
+            android:id="@+id/cfg_shape_row"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp" />
+
+        <!-- ── 点击动效 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="点击动效" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:id="@+id/cfg_effect_row"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- ── 运行状态样式 ── -->
+        <TextView
+            style="@style/CfgSectionLabel"
+            android:text="运行状态样式" />
+
+        <LinearLayout
+            android:id="@+id/cfg_status_style_row"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:layout_marginBottom="12dp" />

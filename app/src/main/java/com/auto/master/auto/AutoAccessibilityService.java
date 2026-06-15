@@ -28,6 +28,7 @@ import android.view.accessibility.AccessibilityEvent;
 import androidx.annotation.NonNull;
 import androidx.core.util.Consumer;
 
+import com.auto.master.utils.RuntimeDisplayConfig;
 import com.auto.master.utils.SystemRuntimeConfig;
 
 import java.util.List;
@@ -41,6 +42,14 @@ public class AutoAccessibilityService extends AccessibilityService {
 
     private static final String TAG = "AutoAccService";
     private static volatile AutoAccessibilityService sInstance;
+
+    private static int runtimeGestureColorWithFallbackAlpha(int fallbackAlpha) {
+        int color = RuntimeDisplayConfig.GESTURE_STROKE_COLOR;
+        if ((color & 0xFF000000) == 0) {
+            color |= (fallbackAlpha & 0xFF) << 24;
+        }
+        return color;
+    }
 
     // 新增一个独立的轨迹展示 overlay（内部类或单独类都可以，这里用内部类简化）
     private GestureTrailOverlay gestureTrailOverlay = null;
@@ -72,7 +81,7 @@ public class AutoAccessibilityService extends AccessibilityService {
             setBackgroundColor(Color.TRANSPARENT);
             setLayerType(LAYER_TYPE_HARDWARE, null);
 
-            paint.setColor(0xCCFF3300);
+            paint.setColor(runtimeGestureColorWithFallbackAlpha(0xCC));
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(28f);
             paint.setStrokeCap(Paint.Cap.ROUND);
@@ -128,6 +137,7 @@ public class AutoAccessibilityService extends AccessibilityService {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if (!isAnimating || segments.isEmpty()) return;
+            paint.setColor(runtimeGestureColorWithFallbackAlpha(0xCC));
             long elapsed = System.currentTimeMillis() - startTime;
 
             for (Segment seg : segments) {
@@ -841,7 +851,6 @@ public class AutoAccessibilityService extends AccessibilityService {
     };
     
     static {
-        CIRCLE_FEEDBACK_PAINT.setColor(0x88FF0000);
         RECT_FEEDBACK_FILL_PAINT.setStyle(Paint.Style.FILL);
         RECT_FEEDBACK_BORDER_PAINT.setStyle(Paint.Style.STROKE);
     }
@@ -950,6 +959,7 @@ public class AutoAccessibilityService extends AccessibilityService {
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
                 // 使用静态 Paint，避免每次 new Paint()
+                CIRCLE_FEEDBACK_PAINT.setColor(runtimeGestureColorWithFallbackAlpha(0x88));
                 canvas.drawCircle(getWidth() / 2f, getHeight() / 2f, getWidth() / 2f, CIRCLE_FEEDBACK_PAINT);
             }
         };

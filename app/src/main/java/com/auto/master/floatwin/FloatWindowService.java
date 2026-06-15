@@ -5868,6 +5868,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (focusRunMode) {
             return;
         }
+        if (nodeFloatButtonUiHelper != null) {
+            nodeFloatButtonUiHelper.onOperationRunComplete(operationId, success);
+        }
         stepDelayOverlayManager.stopDelayIfMatch(operationId);
         Long startMs = opStartTimeMs.remove(operationId);
         long cost = startMs == null ? -1 : (System.currentTimeMillis() - startMs);

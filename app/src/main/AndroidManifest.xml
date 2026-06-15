@@ -120,6 +120,12 @@
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <activity
+            android:name=".floatwin.NodeButtonImagePickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".auto.AutoAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
