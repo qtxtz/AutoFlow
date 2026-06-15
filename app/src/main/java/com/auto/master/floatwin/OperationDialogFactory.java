@@ -5786,7 +5786,11 @@ public class OperationDialogFactory {
         dialogHelpers.bindDropdownSelect(edtModel, java.util.Arrays.asList(
                 "chi_sim.traineddata + eng.traineddata",
                 "chi_sim.traineddata",
-                "eng.traineddata"
+                "eng.traineddata",
+                "digits_comma.traineddata",
+                "digitsall_layer.traineddata",
+                "digits_layer.traineddata",
+                "digits.traineddata"
         ));
         edtModel.setOnItemClickListener((parent, view, position, id) ->
                 applyOcrModelPreset(safeText(edtModel), edtLanguage, edtTrainedData));
