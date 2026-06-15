@@ -2581,7 +2581,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             @Override public String generateGestureTimestampName() { return FloatWindowService.this.generateGestureTimestampName(); }
             @Override public void showGestureLibraryDialog(String currentFile, java.util.function.Consumer<String> onFileSelected) { FloatWindowService.this.showGestureLibraryDialogPipeline(currentFile, onFileSelected); }
             @Override public void beginPipelineStepRecord(View d, boolean singleStroke, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.beginPipelineStepRecord(d, singleStroke, onFileSaved); }
+            @Override public void beginPipelineContinuousRecord(View d, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.beginPipelineContinuousRecord(d, onFileSaved); }
             @Override public void rerecordPipelineStep(View d, boolean singleStroke, String oldFile, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.rerecordPipelineStep(d, singleStroke, oldFile, onFileSaved); }
+            @Override public void rerecordPipelineContinuousRecord(View d, String oldFile, java.util.function.Consumer<String> onFileSaved) { FloatWindowService.this.rerecordPipelineContinuousRecord(d, oldFile, onFileSaved); }
             @Override public void playGestureFile(View d, String fileName, android.widget.TextView statusView) { FloatWindowService.this.playGestureFileByName(d, fileName, statusView); }
             @Override public void playFullPipeline(View d, org.json.JSONArray pipeline, android.widget.TextView statusView) { FloatWindowService.this.playFullPipelineSequence(d, pipeline, statusView); }
             @Override public com.auto.master.auto.GestureOverlayView.GestureNode readGestureFile(String fileName) { return FloatWindowService.this.readGestureFileByName(fileName); }
@@ -7594,14 +7596,31 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         doPipelineStepRecord(dialogView, singleStroke, generateGestureTimestampName(), onFileSaved, false);
     }
 
+    private void beginPipelineContinuousRecord(View dialogView,
+                                                java.util.function.Consumer<String> onFileSaved) {
+        doPipelineStepRecord(dialogView, false, generateGestureTimestampName(), onFileSaved, false, true);
+    }
+
     private void rerecordPipelineStep(View dialogView, boolean singleStroke, String oldFile,
                                        java.util.function.Consumer<String> onFileSaved) {
         String fileName = normalizeGestureFileName(TextUtils.isEmpty(oldFile) ? generateGestureTimestampName() : oldFile);
         doPipelineStepRecord(dialogView, singleStroke, fileName, onFileSaved, true);
     }
 
+    private void rerecordPipelineContinuousRecord(View dialogView, String oldFile,
+                                                   java.util.function.Consumer<String> onFileSaved) {
+        String fileName = normalizeGestureFileName(TextUtils.isEmpty(oldFile) ? generateGestureTimestampName() : oldFile);
+        doPipelineStepRecord(dialogView, false, fileName, onFileSaved, true, true);
+    }
+
     private void doPipelineStepRecord(View dialogView, boolean singleStroke, String fileName,
                                        java.util.function.Consumer<String> onFileSaved, boolean isRerecord) {
+        doPipelineStepRecord(dialogView, singleStroke, fileName, onFileSaved, isRerecord, false);
+    }
+
+    private void doPipelineStepRecord(View dialogView, boolean singleStroke, String fileName,
+                                       java.util.function.Consumer<String> onFileSaved, boolean isRerecord,
+                                       boolean forceContinuous) {
         if (currentProjectDir == null || currentTaskDir == null) {
             Toast.makeText(this, "当前 Task 无效", Toast.LENGTH_SHORT).show();
             return;
@@ -7613,15 +7632,21 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
 
         SystemRuntimeConfig cfg = SystemRuntimeConfig.load(this);
-        boolean stepReplay = cfg.gestureStepReplay;
+        boolean stepReplay = !forceContinuous && cfg.gestureStepReplay;
         long intervalMs = Math.max(100L, cfg.gestureStepIntervalMs);
         long idleMs = singleStroke ? 0L : cfg.gestureRecordIdleFinishMs;
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
 
-        String hint = singleStroke
-                ? (isRerecord ? "重录单次手势，滑动一次即完成" : "录制单次手势，滑动一次即完成")
-                : (isRerecord ? "重录多次手势，停顿 " + formatDurationSecondsText(idleMs) + " 自动保存"
-                              : "录制多次手势，停顿 " + formatDurationSecondsText(idleMs) + " 自动保存");
+        String idleText = formatDurationSecondsText(idleMs);
+        String hint;
+        if (singleStroke) {
+            hint = isRerecord ? "重录单次手势，滑动一次即完成" : "录制单次手势，滑动一次即完成";
+        } else if (forceContinuous) {
+            hint = "连续录制多步手势，停顿 " + idleText + " 自动保存";
+        } else {
+            hint = isRerecord ? "重录步进手势，停顿 " + idleText + " 自动保存"
+                    : "录制步进手势，停顿 " + idleText + " 自动保存";
+        }
 
         GestureOverlayView.OnGestureRecordedListener doneListener = node -> {
             boolean ok = saveGestureNodeForCurrentTask(fileName, node);

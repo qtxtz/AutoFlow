@@ -113,7 +113,9 @@ public class OperationDialogFactory {
         String generateGestureTimestampName();
         void showGestureLibraryDialog(String currentFile, java.util.function.Consumer<String> onFileSelected);
         void beginPipelineStepRecord(View dialogView, boolean singleStroke, java.util.function.Consumer<String> onFileSaved);
+        void beginPipelineContinuousRecord(View dialogView, java.util.function.Consumer<String> onFileSaved);
         void rerecordPipelineStep(View dialogView, boolean singleStroke, String oldFile, java.util.function.Consumer<String> onFileSaved);
+        void rerecordPipelineContinuousRecord(View dialogView, String oldFile, java.util.function.Consumer<String> onFileSaved);
         void playGestureFile(View dialogView, String fileName, android.widget.TextView statusView);
         void playFullPipeline(View dialogView, org.json.JSONArray pipeline, android.widget.TextView statusView);
         com.auto.master.auto.GestureOverlayView.GestureNode readGestureFile(String fileName);
@@ -1432,13 +1434,16 @@ public class OperationDialogFactory {
             dialogHelpers.safeRemoveView(dialogView));
 
         dialogView.findViewById(R.id.btn_pipeline_record_step).setOnClickListener(v -> {
-            try {
-                JSONObject emptyStep = new JSONObject();
-                emptyStep.put(MetaOperation.GESTURE_STEP_FILE, "");
-                emptyStep.put(MetaOperation.GESTURE_STEP_DELAY_MS, 500);
-                pipelineHolder[0].put(emptyStep);
-            } catch (Exception ignored) {}
+            appendEmptyGesturePipelineStep(pipelineHolder);
             renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
+        });
+
+        dialogView.findViewById(R.id.btn_pipeline_record_continuous).setOnClickListener(v -> {
+            if (gestureHelper == null) return;
+            gestureHelper.beginPipelineContinuousRecord(dialogView, newFile -> {
+                appendGesturePipelineStep(pipelineHolder, newFile, 0L);
+                renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
+            });
         });
 
         dialogView.findViewById(R.id.btn_pipeline_play_all).setOnClickListener(v -> {
@@ -1733,13 +1738,16 @@ public class OperationDialogFactory {
             dialogHelpers.safeRemoveView(dialogView));
 
         dialogView.findViewById(R.id.btn_pipeline_record_step).setOnClickListener(v -> {
-            try {
-                JSONObject emptyStep = new JSONObject();
-                emptyStep.put(MetaOperation.GESTURE_STEP_FILE, "");
-                emptyStep.put(MetaOperation.GESTURE_STEP_DELAY_MS, 500);
-                pipelineHolder[0].put(emptyStep);
-            } catch (Exception ignored) {}
+            appendEmptyGesturePipelineStep(pipelineHolder);
             renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
+        });
+
+        dialogView.findViewById(R.id.btn_pipeline_record_continuous).setOnClickListener(v -> {
+            if (gestureHelper == null) return;
+            gestureHelper.beginPipelineContinuousRecord(dialogView, newFile -> {
+                appendGesturePipelineStep(pipelineHolder, newFile, 0L);
+                renderGesturePipelineSteps(lyPipelineSteps, pipelineHolder, tvPipelineStatus, dialogView);
+            });
         });
 
         dialogView.findViewById(R.id.btn_pipeline_play_all).setOnClickListener(v -> {
@@ -1808,6 +1816,21 @@ public class OperationDialogFactory {
                 host.showToast("构建手势操作失败: " + e.getMessage());
             }
         });
+    }
+
+    private void appendEmptyGesturePipelineStep(JSONArray[] pipelineHolder) {
+        appendGesturePipelineStep(pipelineHolder, "", 500L);
+    }
+
+    private void appendGesturePipelineStep(JSONArray[] pipelineHolder, String fileName, long delayAfterMs) {
+        if (pipelineHolder == null || pipelineHolder.length == 0) return;
+        if (pipelineHolder[0] == null) pipelineHolder[0] = new JSONArray();
+        try {
+            JSONObject step = new JSONObject();
+            step.put(MetaOperation.GESTURE_STEP_FILE, fileName == null ? "" : fileName);
+            step.put(MetaOperation.GESTURE_STEP_DELAY_MS, Math.max(0L, delayAfterMs));
+            pipelineHolder[0].put(step);
+        } catch (Exception ignored) {}
     }
 
     private void renderGesturePipelineSteps(LinearLayout container, JSONArray[] pipelineHolder,
@@ -1888,7 +1911,7 @@ public class OperationDialogFactory {
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
             if (!isEmpty) {
-                // 有文件：回放 + 单次重录 + 多次重录 + 选库 + 删除
+                // 有文件：回放 + 单次重录 + 步进重录 + 连续重录 + 选库 + 删除
                 android.widget.TextView btnPlay = makePipelineBtn(ctx, "▶", 0xFF1a5276);
                 btnPlay.setOnClickListener(v2 -> {
                     if (gestureHelper != null) gestureHelper.playGestureFile(dialogView, fileHolder[0], statusView);
@@ -1898,7 +1921,7 @@ public class OperationDialogFactory {
             }
 
             // 单次录制/重录
-            android.widget.TextView btnSingle = makePipelineBtn(ctx, isEmpty ? "单次录制" : "单次重录", 0xFF5C3600);
+            android.widget.TextView btnSingle = makePipelineBtn(ctx, "单次", 0xFF5C3600);
             btnSingle.setOnClickListener(v2 -> {
                 if (gestureHelper == null) return;
                 if (isEmpty) {
@@ -1918,8 +1941,8 @@ public class OperationDialogFactory {
             btnRow.addView(btnSingle);
             btnRow.addView(makePipelineBtnSpace(ctx, dp4));
 
-            // 多次录制/重录
-            android.widget.TextView btnMulti = makePipelineBtn(ctx, isEmpty ? "多次录制" : "多次重录", 0xFF1a3a6e);
+            // 步进录制/重录
+            android.widget.TextView btnMulti = makePipelineBtn(ctx, "步进", 0xFF1a3a6e);
             btnMulti.setOnClickListener(v2 -> {
                 if (gestureHelper == null) return;
                 if (isEmpty) {
@@ -1939,8 +1962,34 @@ public class OperationDialogFactory {
             btnRow.addView(btnMulti);
             btnRow.addView(makePipelineBtnSpace(ctx, dp4));
 
+            android.widget.TextView btnContinuous = makePipelineBtn(ctx, "连续", 0xFF0F766E);
+            btnContinuous.setOnClickListener(v2 -> {
+                if (gestureHelper == null) return;
+                if (isEmpty) {
+                    gestureHelper.beginPipelineContinuousRecord(dialogView, newFile -> {
+                        try {
+                            step.put(MetaOperation.GESTURE_STEP_FILE, newFile);
+                            step.put(MetaOperation.GESTURE_STEP_DELAY_MS, 0L);
+                            fileHolder[0] = newFile;
+                        } catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                } else {
+                    gestureHelper.rerecordPipelineContinuousRecord(dialogView, fileHolder[0], newFile -> {
+                        try {
+                            step.put(MetaOperation.GESTURE_STEP_FILE, newFile);
+                            step.put(MetaOperation.GESTURE_STEP_DELAY_MS, 0L);
+                            fileHolder[0] = newFile;
+                        } catch (Exception ignored) {}
+                        renderGesturePipelineSteps(container, pipelineHolder, statusView, dialogView);
+                    });
+                }
+            });
+            btnRow.addView(btnContinuous);
+            btnRow.addView(makePipelineBtnSpace(ctx, dp4));
+
             if (!isEmpty) {
-                android.widget.TextView btnLib = makePipelineBtn(ctx, "选库", 0xFF1a5e36);
+                android.widget.TextView btnLib = makePipelineBtn(ctx, "库", 0xFF1a5e36);
                 btnLib.setOnClickListener(v2 -> {
                     if (gestureHelper != null) {
                         gestureHelper.showGestureLibraryDialog(fileHolder[0], newFile -> {

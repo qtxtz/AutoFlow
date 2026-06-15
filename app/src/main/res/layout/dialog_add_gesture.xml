@@ -108,7 +108,19 @@
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:text="+ 添加步骤"
+                    android:text="+ 步骤"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:gravity="center"
+                    android:background="@drawable/btn_run_selector"
+                    android:layout_marginEnd="6dp"/>
+
+                <TextView
+                    android:id="@+id/btn_pipeline_record_continuous"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="连续录制"
                     android:textStyle="bold"
                     android:textColor="#FFFFFF"
                     android:gravity="center"
@@ -120,7 +132,7 @@
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:text="▶ 整段回放"
+                    android:text="整段回放"
                     android:textColor="#315dbf"
                     android:gravity="center"
                     android:background="@drawable/item_operation_compact_bg"/>
