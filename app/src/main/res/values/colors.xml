@@ -91,6 +91,10 @@
     <color name="op_http_request_bg">#E0F7FA</color>
     <color name="op_a11y_node">#2E7D32</color>
     <color name="op_a11y_node_bg">#E8F5E9</color>
+    <color name="op_play_audio">#E65100</color>
+    <color name="op_play_audio_bg">#FFF3E0</color>
+    <color name="op_set_sys_param">#00838F</color>
+    <color name="op_set_sys_param_bg">#E0F7FA</color>
     <color name="op_unknown">#757575</color>
     <color name="op_unknown_bg">#F5F5F5</color>
 

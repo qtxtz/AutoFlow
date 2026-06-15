@@ -1882,6 +1882,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditAiDetectDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 28) {
+                dialogFactory.showEditPlayAudioDialog(selected.id, operationObject);
+                return;
+            }
+            if (type == 29) {
+                dialogFactory.showEditSetSystemParamDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2780,6 +2788,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         new AddOperationMenuAdapter.MenuItem("crop_region", "截图区域", "截取屏幕区域并将图像编码为 Base64 存入变量", "截", R.color.op_crop, true)
                 )));
 
+        sections.add(new AddOperationMenuAdapter.MenuSection(
+                "多媒体节点",
+                null,
+                Arrays.asList(
+                        new AddOperationMenuAdapter.MenuItem("play_audio", "播放音频", "播放指定路径的音频文件", "音", R.color.op_play_audio, true)
+                )));
+
+        sections.add(new AddOperationMenuAdapter.MenuSection(
+                "系统配置节点",
+                null,
+                Arrays.asList(
+                        new AddOperationMenuAdapter.MenuItem("set_sys_param", "修改系统参数", "运行时修改采集倍率、倒计时颜色或手势颜色", "参", R.color.op_set_sys_param, true)
+                )));
+
         return sections;
     }
 
@@ -2857,6 +2879,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "crop_region":
                 dialogFactory.showAddCropRegionDialog();
+                return;
+            case "play_audio":
+                dialogFactory.showAddPlayAudioDialog();
+                return;
+            case "set_sys_param":
+                dialogFactory.showAddSetSystemParamDialog();
                 return;
             default:
                 Toast.makeText(this, "暂不支持该节点类型", Toast.LENGTH_SHORT).show();
@@ -3908,6 +3936,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private List<OperationItem> readOperationItems(File taskDir) {
+        List<OperationItem> directOperations = readOperationItemsDirect(taskDir);
+        if (!directOperations.isEmpty()) {
+            return directOperations;
+        }
+
         List<OperationItem> operations = new ArrayList<>();
         if (currentProjectDir != null) {
             Project cachedProject = findCachedProjectByName(currentProjectDir.getName());
@@ -3939,7 +3972,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
         }
 
-        return readOperationItemsDirect(taskDir);
+        return operations;
     }
 
     private List<OperationItem> readOperationItemsDirect(File taskDir) {
@@ -8286,9 +8319,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         taskItemsMemoryCache.put(projectKey, new ArrayList<>(taskItems));
         taskItemsMemoryVersions.put(projectKey, projectDir.lastModified());
 
-        List<OperationItem> operationItems = buildOperationItemsFromTask(task);
+        List<OperationItem> operationItems = readOperationItemsDirect(taskDir);
         if (operationItems.isEmpty()) {
-            operationItems = readOperationItemsDirect(taskDir);
+            operationItems = buildOperationItemsFromTask(task);
         }
         File opFile = new File(taskDir, "operations.json");
         long opVersion = opFile.exists() ? opFile.lastModified() : Long.MIN_VALUE;

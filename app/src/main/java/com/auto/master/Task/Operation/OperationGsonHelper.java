@@ -117,6 +117,7 @@ public class OperationGsonHelper {
             Integer type = extractType(typeElement);
             Map<String, Object> inputMap = extractInputMap(jsonObject, type);
             MetaOperation operation = createOperationByType(type, typeElement, inputMap);
+            operation.setType(type);
 
             // 设置通用字段
             if (jsonObject.has("id")) {

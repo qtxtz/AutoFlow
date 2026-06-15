@@ -11,6 +11,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 
+import com.auto.master.utils.RuntimeDisplayConfig;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,7 +51,7 @@ public class GestureOverlayView extends FrameLayout {
 
         // 初始化轨迹画笔
         paint = new Paint();
-        paint.setColor(0x88FF0000);
+        paint.setColor(RuntimeDisplayConfig.GESTURE_STROKE_COLOR);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(45f);
         paint.setStrokeCap(Paint.Cap.ROUND);
@@ -108,6 +110,7 @@ public class GestureOverlayView extends FrameLayout {
     @Override
     protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
+        paint.setColor(RuntimeDisplayConfig.GESTURE_STROKE_COLOR);
         for (Path path : activePaths.values()) {
             canvas.drawPath(path, paint);
         }

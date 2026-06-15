@@ -16,5 +16,7 @@ package com.auto.master.Task.Operation;
  * 否则匹配会因找不到对应 scale 子目录下的模板而失败。
  */
 public class SetCaptureScaleOperation extends MetaOperation {
-    public SetCaptureScaleOperation() {}
+    public SetCaptureScaleOperation() {
+        this.setType(OperationType.SET_CAPTURE_SCALE.getCode());
+    }
 }

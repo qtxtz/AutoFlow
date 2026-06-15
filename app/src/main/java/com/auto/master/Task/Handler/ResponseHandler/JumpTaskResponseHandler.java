@@ -6,6 +6,7 @@ import android.util.Log;
 import com.auto.master.Task.Operation.JumpTaskOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.Task.Project.Project;
 import com.auto.master.Task.Task;
 import com.auto.master.auto.ScriptExecuteContext;
@@ -150,7 +151,11 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
                         typeName,
                         index++,
                         com.auto.master.floatwin.FloatWindowService.extractDelayDurationMs(op),
-                        com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(op)
+                        com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(op),
+                        com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMs(op),
+                        com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMinMs(op),
+                        com.auto.master.floatwin.FloatWindowService.extractNodePreDelayMaxMs(op),
+                        com.auto.master.floatwin.FloatWindowService.extractNodePreDelayRandom(op)
                     ));
                 }
             }
@@ -164,21 +169,7 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
     }
 
     private String getOperationTypeName(Integer type) {
-        if (type == null) return "未知";
-        switch (type) {
-            case 1: return "点击";
-            case 2: return "延时";
-            case 3: return "截图";
-            case 4: return "加载图片";
-            case 5: return "手势";
-            case 6: return "模板匹配";
-            case 7: return "多模板匹配";
-            case 8: return "跳转Task";
-            case 10: return "条件分支";
-            case 11: return "变量脚本";
-            case 12: return "变量运算";
-            case 13: return "变量模板";
-            default: return "未知";
-        }
+        OperationType operationType = OperationType.fromCode(type);
+        return operationType == null ? "未知" : operationType.getDisplayName();
     }
 }

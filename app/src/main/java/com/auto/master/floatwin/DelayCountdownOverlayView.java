@@ -9,6 +9,8 @@ import android.util.TypedValue;
 import android.view.Choreographer;
 import android.view.View;
 
+import com.auto.master.utils.RuntimeDisplayConfig;
+
 import java.util.Locale;
 
 /**
@@ -38,7 +40,7 @@ public class DelayCountdownOverlayView extends View {
         trackPaint.setColor(0x33FFFFFF);
         trackPaint.setStyle(Paint.Style.FILL);
 
-        fillPaint.setColor(0xFFFFB3B3);
+        fillPaint.setColor(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
         fillPaint.setStyle(Paint.Style.FILL);
 
         textPaint.setColor(0xFFFFFFFF);
@@ -90,6 +92,8 @@ public class DelayCountdownOverlayView extends View {
         long elapsed   = Math.min(durationMs, SystemClock.uptimeMillis() - startUptimeMs);
         long remaining = Math.max(0L, durationMs - elapsed);
         float fraction = elapsed / (float) durationMs;
+
+        fillPaint.setColor(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
 
         float r = dp(5f);
         trackRect.set(0f, 0f, getWidth(), getHeight());

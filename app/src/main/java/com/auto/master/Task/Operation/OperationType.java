@@ -30,7 +30,9 @@ public enum OperationType {
     ACCESSIBILITY_NODE(24, "无障碍节点", "a11y_node"),
     MTRY(25, "多次尝试节点", "mtry"),
     OCR_TEXT(26, "OCR识别", "ocr"),
-    AI_DETECT(27, "AI目标检测", "ai_detect");
+    AI_DETECT(27, "AI目标检测", "ai_detect"),
+    PLAY_AUDIO(28, "播放音频", "play_audio"),
+    SET_SYSTEM_PARAM(29, "修改系统参数", "set_sys_param");
 
     private final int code;
     private final String displayName;

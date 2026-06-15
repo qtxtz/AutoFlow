@@ -8,6 +8,8 @@ import com.auto.master.Task.Handler.ResponseHandler.JumpToNextOperationResponseH
 import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResponseHandler;
 import com.auto.master.Task.Operation.AccessibilityNodeOperation;
 import com.auto.master.Task.Operation.AiDetectOperation;
+import com.auto.master.Task.Operation.PlayAudioOperation;
+import com.auto.master.Task.Operation.SetSystemParamOperation;
 import com.auto.master.Task.Operation.AppCloseOperation;
 import com.auto.master.Task.Operation.AppLaunchOperation;
 import com.auto.master.Task.Operation.BackKeyOperation;
@@ -77,6 +79,10 @@ public class OperationHandlerManager {
         register(OperationType.OCR_TEXT, OcrTextOperation.class, OcrTextOperation::new, OcrTextOperationHandler::new, "ocr", "ocr_text", "text_ocr");
         register(OperationType.AI_DETECT, AiDetectOperation.class, AiDetectOperation::new, AiDetectOperationHandler::new,
                 "ai_detect", "yolo", "object_detect", "object_detection");
+        register(OperationType.PLAY_AUDIO, PlayAudioOperation.class, PlayAudioOperation::new, PlayAudioOperationHandler::new,
+                "play_audio", "audio", "sound");
+        register(OperationType.SET_SYSTEM_PARAM, SetSystemParamOperation.class, SetSystemParamOperation::new, SetSystemParamOperationHandler::new,
+                "set_sys_param", "system_param", "sys_param");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -107,6 +113,8 @@ public class OperationHandlerManager {
         registerResponse(OperationType.MTRY.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.OCR_TEXT.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.AI_DETECT.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.PLAY_AUDIO.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.SET_SYSTEM_PARAM.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

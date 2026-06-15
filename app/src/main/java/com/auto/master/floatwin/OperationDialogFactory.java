@@ -38,6 +38,8 @@ import com.auto.master.capture.ScreenCapture;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
 import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
 import com.auto.master.utils.AdaptivePollingController;
+import com.auto.master.utils.RuntimeDisplayConfig;
+import com.auto.master.utils.SystemRuntimeConfig;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Locale;
@@ -8370,6 +8372,430 @@ public class OperationDialogFactory {
         } catch (Exception e) {
             host.showToast("保存失败: " + e.getMessage());
         }
+    }
+
+    // ==================== 播放音频操作 ====================
+
+    public void showAddPlayAudioDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_play_audio, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        bindPlayAudioDialog(dialogView, null, null);
+    }
+
+    public void showEditPlayAudioDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_play_audio, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+        bindPlayAudioDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindPlayAudioDialog(View dialogView, String operationId, JSONObject operationObject) {
+        android.widget.EditText edtName      = dialogView.findViewById(R.id.edt_name);
+        android.widget.EditText edtAudioPath = dialogView.findViewById(R.id.edt_audio_path);
+        android.widget.CheckBox chkWait      = dialogView.findViewById(R.id.chk_wait_complete);
+        android.widget.AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    edtAudioPath.setText(im.optString(MetaOperation.AUDIO_FILE_PATH, ""));
+                    if (chkWait != null) chkWait.setChecked(im.optBoolean(MetaOperation.AUDIO_WAIT_COMPLETE, false));
+                    setOperationReferenceText(edtNext, im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载数据失败: " + e.getMessage());
+            }
+        }
+
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择下一节点", operationId, edtNext);
+        });
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name      = edtName.getText().toString().trim();
+            String audioPath = edtAudioPath.getText().toString().trim();
+            String nextOp    = safeText(edtNext);
+            boolean waitComplete = chkWait != null && chkWait.isChecked();
+
+            if (TextUtils.isEmpty(name))      { edtName.setError("请填写操作名称"); return; }
+            if (TextUtils.isEmpty(audioPath)) { edtAudioPath.setError("请填写音频文件路径"); return; }
+
+            try {
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.AUDIO_FILE_PATH, audioPath);
+                if (waitComplete) inputMap.put(MetaOperation.AUDIO_WAIT_COMPLETE, true);
+                if (!TextUtils.isEmpty(nextOp)) inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+
+                boolean isEdit = operationId != null;
+                if (isEdit) {
+                    JSONObject updated = new JSONObject();
+                    updated.put("id", operationId);
+                    updated.put("name", name);
+                    updated.put("type", 28);
+                    updated.put("responseType", 1);
+                    updated.put("inputMap", inputMap);
+                    if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) updateListener.onOperationUpdated();
+                    }
+                } else {
+                    JSONObject opObj = new JSONObject();
+                    if (idGenerator != null) opObj.put("id", idGenerator.generateId());
+                    opObj.put("name", name);
+                    opObj.put("type", 28);
+                    opObj.put("responseType", 1);
+                    opObj.put("inputMap", inputMap);
+                    JSONArray operations = crudHelper.readOperationsArray();
+                    operations.put(opObj);
+                    crudHelper.writeOperationsArray(operations, "已添加播放音频节点", () -> {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (addListener != null) addListener.onOperationAdded();
+                    });
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
+    // ==================== 修改系统参数操作 ====================
+
+    private static final String[] SYS_PARAM_KEY_LABELS = {
+            "全局采集倍率", "倒计时颜色", "手势颜色"
+    };
+    private static final String[] SYS_PARAM_KEY_VALUES = {
+            MetaOperation.SYS_PARAM_CAPTURE_SCALE,
+            MetaOperation.SYS_PARAM_COUNTDOWN_COLOR,
+            MetaOperation.SYS_PARAM_GESTURE_COLOR
+    };
+
+    private static final String[] SCALE_LABELS = {
+            "0.25 (25%)", "0.375 (37.5%)", "0.4 (40% 默认)", "0.5 (50%)",
+            "0.625 (62.5%)", "0.75 (75%)", "0.875 (87.5%)", "1.0 (100%)"
+    };
+    private static final String[] SCALE_VALUES = {
+            "0.25", "0.375", "0.4", "0.5", "0.625", "0.75", "0.875", "1.0"
+    };
+
+    private static final String[] COUNTDOWN_COLOR_LABELS = {
+            "红粉 (默认)", "蓝色", "绿色", "黄色", "橙色", "白色", "青色"
+    };
+    private static final String[] COUNTDOWN_COLOR_VALUES = {
+            "FFFFB3B3", "FF99BBFF", "FF99FFB3", "FFFFEEAA", "FFFFCC88", "FFFFFFFF", "FF80FFFF"
+    };
+
+    private static final String[] GESTURE_COLOR_LABELS = {
+            "红色 (默认)", "蓝色", "绿色", "黄色", "橙色", "白色", "青色"
+    };
+    private static final String[] GESTURE_COLOR_VALUES = {
+            "AAFF0000", "AA0044FF", "AA00CC44", "AAFFCC00", "AAFF6600", "AAFFFFFF", "AA00CCFF"
+    };
+
+    public void showAddSetSystemParamDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_set_system_param, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        bindSetSystemParamDialog(dialogView, null, null);
+    }
+
+    public void showEditSetSystemParamDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_set_system_param, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+        bindSetSystemParamDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindSetSystemParamDialog(View dialogView, String operationId, JSONObject operationObject) {
+        android.widget.EditText edtName            = dialogView.findViewById(R.id.edt_name);
+        android.widget.Spinner  spinnerParamKey    = dialogView.findViewById(R.id.spinner_param_key);
+        android.widget.Spinner  spinnerParamValue  = dialogView.findViewById(R.id.spinner_param_value);
+        android.widget.AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+
+        // 参数类型 Spinner
+        android.widget.ArrayAdapter<String> keyAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, SYS_PARAM_KEY_LABELS);
+        keyAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerParamKey.setAdapter(keyAdapter);
+
+        int initialKeyPos = 0;
+        String initialValue = currentSystemParamValue(0);
+
+        // 预填充（编辑模式）
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    String savedKey = im.optString(MetaOperation.SYS_PARAM_KEY, "");
+                    String savedValue = im.optString(MetaOperation.SYS_PARAM_VALUE, "");
+                    for (int i = 0; i < SYS_PARAM_KEY_VALUES.length; i++) {
+                        if (SYS_PARAM_KEY_VALUES[i].equals(savedKey)) {
+                            initialKeyPos = i;
+                            initialValue = savedValue;
+                            break;
+                        }
+                    }
+                    setOperationReferenceText(edtNext, im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载数据失败: " + e.getMessage());
+            }
+        }
+
+        spinnerParamKey.setSelection(initialKeyPos, false);
+        updateSystemParamValueSpinner(spinnerParamValue, initialKeyPos, initialValue);
+        final int[] lastParamKeyPos = {initialKeyPos};
+        final boolean[] paramKeySelectionReady = {false};
+        spinnerParamKey.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
+                if (!paramKeySelectionReady[0]) {
+                    lastParamKeyPos[0] = pos;
+                    return;
+                }
+                if (pos == lastParamKeyPos[0]) {
+                    return;
+                }
+                lastParamKeyPos[0] = pos;
+                updateSystemParamValueSpinner(spinnerParamValue, pos, currentSystemParamValue(pos));
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p) {}
+        });
+        spinnerParamKey.post(() -> paramKeySelectionReady[0] = true);
+
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择下一节点", operationId, edtNext);
+        });
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name   = edtName.getText().toString().trim();
+            String nextOp = safeText(edtNext);
+
+            if (TextUtils.isEmpty(name)) { edtName.setError("请填写操作名称"); return; }
+
+            int keyPos   = spinnerParamKey.getSelectedItemPosition();
+            int valuePos = spinnerParamValue.getSelectedItemPosition();
+            if (keyPos < 0 || keyPos >= SYS_PARAM_KEY_VALUES.length) return;
+
+            String paramKey = SYS_PARAM_KEY_VALUES[keyPos];
+            String[] vals = getSpinnerValueOptions(spinnerParamValue, keyPos);
+            if (valuePos < 0 || valuePos >= vals.length) return;
+            String paramValue = vals[valuePos];
+
+            try {
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.SYS_PARAM_KEY, paramKey);
+                inputMap.put(MetaOperation.SYS_PARAM_VALUE, paramValue);
+                if (!TextUtils.isEmpty(nextOp)) inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+
+                boolean isEdit = operationId != null;
+                if (isEdit) {
+                    JSONObject updated = new JSONObject();
+                    updated.put("id", operationId);
+                    updated.put("name", name);
+                    updated.put("type", 29);
+                    updated.put("responseType", 1);
+                    updated.put("inputMap", inputMap);
+                    if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) updateListener.onOperationUpdated();
+                    }
+                } else {
+                    JSONObject opObj = new JSONObject();
+                    if (idGenerator != null) opObj.put("id", idGenerator.generateId());
+                    opObj.put("name", name);
+                    opObj.put("type", 29);
+                    opObj.put("responseType", 1);
+                    opObj.put("inputMap", inputMap);
+                    JSONArray operations = crudHelper.readOperationsArray();
+                    operations.put(opObj);
+                    crudHelper.writeOperationsArray(operations, "已添加修改系统参数节点", () -> {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (addListener != null) addListener.onOperationAdded();
+                    });
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
+    private void updateSystemParamValueSpinner(android.widget.Spinner spinnerParamValue,
+                                               int keyPos,
+                                               String preferredValue) {
+        String[] baseLabels = systemParamValueLabels(keyPos);
+        String[] baseValues = systemParamValueValues(keyPos);
+        java.util.ArrayList<String> labels = new java.util.ArrayList<>();
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        for (int i = 0; i < baseValues.length; i++) {
+            labels.add(baseLabels[i]);
+            values.add(baseValues[i]);
+        }
+
+        int selected = findSystemParamValueIndex(values, keyPos, preferredValue);
+        if (selected < 0 && !TextUtils.isEmpty(preferredValue)) {
+            String normalized = normalizeSystemParamValue(keyPos, preferredValue);
+            if (!TextUtils.isEmpty(normalized)) {
+                labels.add(0, systemParamDynamicLabel(keyPos, normalized));
+                values.add(0, normalized);
+                selected = 0;
+            }
+        }
+        if (selected < 0) {
+            selected = Math.min(defaultSystemParamValueIndex(keyPos), Math.max(0, values.size() - 1));
+        }
+
+        android.widget.ArrayAdapter<String> valueAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, labels);
+        valueAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerParamValue.setAdapter(valueAdapter);
+        spinnerParamValue.setTag(values.toArray(new String[0]));
+        spinnerParamValue.setSelection(selected, false);
+    }
+
+    private String[] getSpinnerValueOptions(android.widget.Spinner spinnerParamValue, int keyPos) {
+        Object tag = spinnerParamValue == null ? null : spinnerParamValue.getTag();
+        if (tag instanceof String[]) {
+            return (String[]) tag;
+        }
+        return systemParamValueValues(keyPos);
+    }
+
+    private String[] systemParamValueLabels(int keyPos) {
+        if (keyPos == 0) return SCALE_LABELS;
+        if (keyPos == 1) return COUNTDOWN_COLOR_LABELS;
+        return GESTURE_COLOR_LABELS;
+    }
+
+    private String[] systemParamValueValues(int keyPos) {
+        if (keyPos == 0) return SCALE_VALUES;
+        if (keyPos == 1) return COUNTDOWN_COLOR_VALUES;
+        return GESTURE_COLOR_VALUES;
+    }
+
+    private int defaultSystemParamValueIndex(int keyPos) {
+        return keyPos == 0 ? findSystemParamValueIndex(
+                new java.util.ArrayList<>(java.util.Arrays.asList(SCALE_VALUES)),
+                keyPos,
+                trimSystemParamFloat(SystemRuntimeConfig.DEFAULT_CAPTURE_SCALE)) : 0;
+    }
+
+    private String currentSystemParamValue(int keyPos) {
+        if (keyPos == 0) {
+            return trimSystemParamFloat(SystemRuntimeConfig.load(host.getContext()).captureScale);
+        }
+        if (keyPos == 1) {
+            return colorToSystemParamValue(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
+        }
+        return colorToSystemParamValue(RuntimeDisplayConfig.GESTURE_STROKE_COLOR);
+    }
+
+    private int findSystemParamValueIndex(java.util.List<String> values, int keyPos, String preferredValue) {
+        if (values == null || TextUtils.isEmpty(preferredValue)) {
+            return -1;
+        }
+        String normalized = normalizeSystemParamValue(keyPos, preferredValue);
+        for (int i = 0; i < values.size(); i++) {
+            if (systemParamValuesEqual(keyPos, values.get(i), normalized)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean systemParamValuesEqual(int keyPos, String left, String right) {
+        if (keyPos == 0) {
+            try {
+                return Math.abs(Float.parseFloat(left.trim()) - Float.parseFloat(right.trim())) < 0.0001f;
+            } catch (Exception ignored) {
+                return TextUtils.equals(left, right);
+            }
+        }
+        return TextUtils.equals(normalizeSystemColorValue(left), normalizeSystemColorValue(right));
+    }
+
+    private String normalizeSystemParamValue(int keyPos, String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return "";
+        }
+        if (keyPos == 0) {
+            try {
+                float value = Float.parseFloat(raw.trim());
+                value = Math.max(0.25f, Math.min(1.0f, value));
+                return trimSystemParamFloat(value);
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+        return normalizeSystemColorValue(raw);
+    }
+
+    private String systemParamDynamicLabel(int keyPos, String value) {
+        if (keyPos == 0) {
+            try {
+                float scale = Float.parseFloat(value);
+                return value + " (" + Math.round(scale * 100f) + "%)";
+            } catch (Exception ignored) {
+                return value;
+            }
+        }
+        return "#" + value;
+    }
+
+    private String trimSystemParamFloat(float value) {
+        if (Math.abs(value - Math.round(value)) < 0.0001f) {
+            return String.valueOf(Math.round(value));
+        }
+        return String.format(Locale.US, "%.3f", value)
+                .replaceAll("0+$", "")
+                .replaceAll("\\.$", "");
+    }
+
+    private String colorToSystemParamValue(int color) {
+        return String.format(Locale.US, "%08X", color);
+    }
+
+    private String normalizeSystemColorValue(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String value = raw.trim().replace("#", "").toUpperCase(Locale.US);
+        if (value.length() == 6) {
+            value = "FF" + value;
+        }
+        return value;
     }
 
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {

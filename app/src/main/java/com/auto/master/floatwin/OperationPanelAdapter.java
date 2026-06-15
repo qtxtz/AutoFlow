@@ -530,6 +530,12 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             case "返回按键":
                 return new OperationVisualSpec(R.drawable.ic_back, null,
                         0xFFF3F5F8, 0x338A97A6, 0xFF637083);
+            case "播放音频":
+                return new OperationVisualSpec(0, "音",
+                        0xFFFFF3E0, 0x33E65100, 0xFFE65100);
+            case "修改系统参数":
+                return new OperationVisualSpec(0, "参",
+                        0xFFE0F7FA, 0x3300838F, 0xFF00838F);
             case "HTTP请求":
                 return new OperationVisualSpec(0, "API",
                         0xFFFFEEF2, 0x33D45A72, 0xFFC23B57);

@@ -1,12 +1,15 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
+import android.content.Context;
 import android.os.SystemClock;
 import android.util.Log;
 
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.utils.SystemRuntimeConfig;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +47,7 @@ public class SetCaptureScaleOperationHandler extends OperationHandler {
         requestedScale = Math.max(0.25f, Math.min(1.0f, requestedScale));
 
         float prevScale = ScreenCaptureManager.CAPTURE_SCALE;
+        syncCaptureScaleConfig(requestedScale);
 
         if (Math.abs(requestedScale - prevScale) < 0.001f) {
             Log.d(TAG, "CAPTURE_SCALE 已是 " + requestedScale + "，无需切换");
@@ -81,6 +85,18 @@ public class SetCaptureScaleOperationHandler extends OperationHandler {
         resp.put("newScale", newScale);
         resp.put("scaleDirName", CaptureScaleHelper.getScaleDirName(newScale));
         return resp;
+    }
+
+    private void syncCaptureScaleConfig(float scale) {
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return;
+        }
+        Context context = svc.getApplicationContext();
+        SystemRuntimeConfig cfg = SystemRuntimeConfig.load(context);
+        cfg.captureScale = scale;
+        cfg.save(context);
+        cfg.applyToRuntime();
     }
 
     private float parseFloat(Object raw, float def) {

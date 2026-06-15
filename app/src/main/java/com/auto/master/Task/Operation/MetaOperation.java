@@ -214,6 +214,18 @@ public abstract class MetaOperation {
     public static final String OCR_MATCH_REGEX = "regex";
     public static final String OCR_MATCH_ANY = "any";
 
+    // 播放音频参数
+    public static String AUDIO_FILE_PATH = "AUDIO_FILE_PATH";
+    public static String AUDIO_WAIT_COMPLETE = "AUDIO_WAIT_COMPLETE";
+
+    // 修改系统参数
+    public static String SYS_PARAM_KEY = "SYS_PARAM_KEY";
+    public static String SYS_PARAM_VALUE = "SYS_PARAM_VALUE";
+    // SYS_PARAM_KEY 的可选值
+    public static final String SYS_PARAM_CAPTURE_SCALE = "capture_scale";
+    public static final String SYS_PARAM_COUNTDOWN_COLOR = "countdown_color";
+    public static final String SYS_PARAM_GESTURE_COLOR = "gesture_color";
+
     // AI 目标检测参数
     public static String AI_MODEL_PATH = "AI_MODEL_PATH";
     public static String AI_LABELS_PATH = "AI_LABELS_PATH";
