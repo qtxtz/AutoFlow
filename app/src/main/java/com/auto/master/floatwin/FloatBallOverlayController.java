@@ -25,6 +25,7 @@ final class FloatBallOverlayController {
         void togglePauseState();
         void removeProjectPanel();
         void showProjectPanel();
+        void toggleRuntimeLogPanel();
         void showToast(String message);
         boolean isPaused();
     }
@@ -438,17 +439,23 @@ final class FloatBallOverlayController {
         fanMenuLp.y = Math.max(0, ballLp.y - host.dp(112));
 
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
+        View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
 
         btnPanel.setOnClickListener(v -> {
             hideFanMenu();
             host.showProjectPanel();
         });
+        btnLog.setOnClickListener(v -> {
+            hideFanMenu();
+            host.toggleRuntimeLogPanel();
+        });
         btnClose.setOnClickListener(v -> hideFanMenu());
 
         host.getWindowManager().addView(fanMenuView, fanMenuLp);
         animateFanButton(btnPanel, 0);
-        animateFanButton(btnClose, 90);
+        animateFanButton(btnLog, 90);
+        animateFanButton(btnClose, 180);
     }
 
     private void animateFanButton(View btn, long delayMs) {
@@ -468,10 +475,12 @@ final class FloatBallOverlayController {
             return;
         }
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
+        View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
         View toRemove = fanMenuView;
         btnClose.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(0).start();
-        btnPanel.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(40)
+        btnLog.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(40).start();
+        btnPanel.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(80)
                 .withEndAction(() -> {
                     try {
                         host.getWindowManager().removeView(toRemove);

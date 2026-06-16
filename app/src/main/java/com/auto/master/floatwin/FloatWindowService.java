@@ -226,6 +226,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private String currentRunningProject = "";
     private String currentRunningTask = "";
     private final List<String> currentRunLogs = new ArrayList<>();
+    private RuntimeLogPanelView runtimeLogPanelView;
+    private WindowManager.LayoutParams runtimeLogPanelLp;
     private final Map<String, Long> opStartTimeMs = new HashMap<>();
     private final List<Long> opDurationsMs = new ArrayList<>();
     private final Map<String, Integer> opFailureReasons = new HashMap<>();
@@ -1191,6 +1193,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public void toggleRuntimeLogPanel() {
+                    FloatWindowService.this.toggleRuntimeLogPanel();
+                }
+
+                @Override
                 public void showToast(String message) {
                     Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
                 }
@@ -1362,6 +1369,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             taskActionPopupWindow = null;
         }
         nodeFloatButtonUiHelper.onDestroy();
+        removeRuntimeLogPanel();
         removeBall();
         projectPanelUiHelper.onDestroy();
         flowGraphPanelHelper.onDestroy();
@@ -1890,6 +1898,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditSetSystemParamDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 30) {
+                dialogFactory.showEditLogOutputDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2285,6 +2297,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText gestureRecordIdleFinishInput = dialogView.findViewById(R.id.et_system_gesture_record_idle_finish_ms);
         CheckBox cbGestureStepReplay = dialogView.findViewById(R.id.cb_gesture_step_replay);
         EditText etGestureStepIntervalMs = dialogView.findViewById(R.id.et_gesture_step_interval_ms);
+        CheckBox cbRuntimeLogEnabled = dialogView.findViewById(R.id.cb_runtime_log_enabled);
         View templatePolling = dialogView.findViewById(R.id.include_template_polling);
         View matchMapPolling = dialogView.findViewById(R.id.include_match_map_polling);
         View colorPolling = dialogView.findViewById(R.id.include_color_polling);
@@ -2302,6 +2315,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 cfg);
             if (cbGestureStepReplay != null) cbGestureStepReplay.setChecked(cfg.gestureStepReplay);
             if (etGestureStepIntervalMs != null) etGestureStepIntervalMs.setText(String.valueOf(cfg.gestureStepIntervalMs));
+            if (cbRuntimeLogEnabled != null) cbRuntimeLogEnabled.setChecked(cfg.runtimeLogEnabled);
         };
         bindCurrentValues.run();
 
@@ -2320,6 +2334,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     defaults);
             if (cbGestureStepReplay != null) cbGestureStepReplay.setChecked(defaults.gestureStepReplay);
             if (etGestureStepIntervalMs != null) etGestureStepIntervalMs.setText(String.valueOf(defaults.gestureStepIntervalMs));
+            if (cbRuntimeLogEnabled != null) cbRuntimeLogEnabled.setChecked(defaults.runtimeLogEnabled);
         });
         dialogView.findViewById(R.id.btn_system_config_save).setOnClickListener(v -> {
             try {
@@ -2337,6 +2352,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         cfg.gestureStepIntervalMs = TextUtils.isEmpty(txt) ? 500L : Long.parseLong(txt);
                     } catch (NumberFormatException ignored) {}
                 }
+                if (cbRuntimeLogEnabled != null) cfg.runtimeLogEnabled = cbRuntimeLogEnabled.isChecked();
                 float previousScale = ScreenCaptureManager.CAPTURE_SCALE;
                 cfg.save(this);
                 cfg.applyToRuntime();
@@ -2773,7 +2789,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("launch_app", "启动应用", "拉起指定应用并等待前台", "启", R.color.op_app_launch, true),
                         new AddOperationMenuAdapter.MenuItem("close_app", "关闭应用", "退回桌面并请求结束后台进程", "关", R.color.op_app_close, true),
-                        new AddOperationMenuAdapter.MenuItem("a11y_node", "无障碍节点", "通过无障碍服务查找并操作界面元素", "障", R.color.op_a11y_node, true)
+                        new AddOperationMenuAdapter.MenuItem("a11y_node", "无障碍节点", "通过无障碍服务查找并操作界面元素", "障", R.color.op_a11y_node, true),
+                        new AddOperationMenuAdapter.MenuItem("log_output", "日志输出", "向悬浮日志面板输出文本", "日", R.color.op_set_sys_param, true)
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
@@ -2887,6 +2904,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "set_sys_param":
                 dialogFactory.showAddSetSystemParamDialog();
+                return;
+            case "log_output":
+                dialogFactory.showAddLogOutputDialog();
                 return;
             default:
                 Toast.makeText(this, "暂不支持该节点类型", Toast.LENGTH_SHORT).show();
@@ -5522,7 +5542,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return;
         }
         opStartTimeMs.put(operationId, System.currentTimeMillis());
-        appendRunLog("[start] " + operationId + " | " + operationName);
         // 1. 更新运行状态面板
         currentRunningOperationId = operationId;
         currentRunningOperationName = operationName;
@@ -5621,7 +5640,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (opItem == null) return;
         stopAppLaunchPolling();
         opStartTimeMs.put(opItem.id, System.currentTimeMillis());
-        appendRunLog("[start] " + opItem.id + " | " + opItem.name);
         currentRunningOperationId = opItem.id;
         currentRunningOperationName = opItem.name;
         currentOperationIndex = opItem.index + 1;
@@ -5874,7 +5892,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         stepDelayOverlayManager.stopDelayIfMatch(operationId);
         Long startMs = opStartTimeMs.remove(operationId);
         long cost = startMs == null ? -1 : (System.currentTimeMillis() - startMs);
-        appendRunLog("[done] " + operationId + " | success=" + success + (cost >= 0 ? (" | " + cost + "ms") : ""));
         if (cost >= 0) {
             opDurationsMs.add(cost);
         }
@@ -8308,6 +8325,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         OperationContext ctx = new OperationContext();
         ctx.anchorProject = project;
+        ctx.runtimeLogSink = this::appendRunLog;
 
         RunLaunchData launchData = new RunLaunchData();
         launchData.startOperation = startOperation;
@@ -8743,6 +8761,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         currentRunStartMs = System.currentTimeMillis();
         acquireScriptWakeLock();
         currentRunLogs.clear();
+        if (runtimeLogPanelView != null) {
+            runtimeLogPanelView.setLines(currentRunLogs);
+        }
         opStartTimeMs.clear();
         opDurationsMs.clear();
         opFailureReasons.clear();
@@ -8827,37 +8848,160 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
     private static final int MAX_RUN_LOG_ENTRIES = 2000;
 
+    private void toggleRuntimeLogPanel() {
+        if (runtimeLogPanelView == null) {
+            showRuntimeLogPanel();
+        } else {
+            removeRuntimeLogPanel();
+        }
+    }
+
+    private void showRuntimeLogPanel() {
+        if (wm == null || runtimeLogPanelView != null) {
+            return;
+        }
+        runtimeLogPanelView = new RuntimeLogPanelView(this);
+        runtimeLogPanelView.setOnClose(this::removeRuntimeLogPanel);
+        runtimeLogPanelView.setOnClear(() -> {
+            synchronized (currentRunLogs) {
+                currentRunLogs.clear();
+            }
+            if (runtimeLogPanelView != null) {
+                runtimeLogPanelView.setLines(currentRunLogs);
+            }
+        });
+        runtimeLogPanelView.setLines(currentRunLogs);
+
+        int[] screen = getScreenSizePx();
+        int width = Math.max(dp(260), (int) (screen[0] * 0.62f));
+        int height = Math.max(dp(180), (int) (screen[1] * 0.34f));
+        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        runtimeLogPanelLp = new WindowManager.LayoutParams(
+                width,
+                height,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+        runtimeLogPanelLp.gravity = Gravity.TOP | Gravity.START;
+        runtimeLogPanelLp.x = Math.max(dp(8), (screen[0] - width) / 2);
+        runtimeLogPanelLp.y = Math.max(dp(32), (screen[1] - height) / 3);
+
+        bindRuntimeLogPanelGestures(runtimeLogPanelView, runtimeLogPanelLp);
+        try {
+            wm.addView(runtimeLogPanelView, runtimeLogPanelLp);
+        } catch (Exception e) {
+            Log.w(TAG, "show runtime log panel failed", e);
+            runtimeLogPanelView = null;
+            runtimeLogPanelLp = null;
+        }
+    }
+
+    private void removeRuntimeLogPanel() {
+        if (runtimeLogPanelView == null) {
+            return;
+        }
+        safeRemoveView(runtimeLogPanelView);
+        runtimeLogPanelView = null;
+        runtimeLogPanelLp = null;
+    }
+
+    private void bindRuntimeLogPanelGestures(RuntimeLogPanelView panel, WindowManager.LayoutParams lp) {
+        if (panel == null || lp == null) {
+            return;
+        }
+        panel.getHeaderView().setOnTouchListener(new View.OnTouchListener() {
+            private int startX;
+            private int startY;
+            private float downRawX;
+            private float downRawY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = lp.x;
+                        startY = lp.y;
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int[] screen = getScreenSizePx();
+                        lp.x = Math.max(0, Math.min(startX + (int) (event.getRawX() - downRawX),
+                                Math.max(0, screen[0] - lp.width)));
+                        lp.y = Math.max(0, Math.min(startY + (int) (event.getRawY() - downRawY),
+                                Math.max(0, screen[1] - lp.height)));
+                        try {
+                            wm.updateViewLayout(panel, lp);
+                        } catch (Exception ignored) {
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+        panel.getResizeHandle().setOnTouchListener(new View.OnTouchListener() {
+            private int startWidth;
+            private int startHeight;
+            private float downRawX;
+            private float downRawY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startWidth = lp.width;
+                        startHeight = lp.height;
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int[] screen = getScreenSizePx();
+                        lp.width = Math.max(dp(220), Math.min(startWidth + (int) (event.getRawX() - downRawX),
+                                Math.max(dp(220), screen[0] - lp.x)));
+                        lp.height = Math.max(dp(140), Math.min(startHeight + (int) (event.getRawY() - downRawY),
+                                Math.max(dp(140), screen[1] - lp.y)));
+                        try {
+                            wm.updateViewLayout(panel, lp);
+                        } catch (Exception ignored) {
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+    }
+
+    private boolean shouldEmitRuntimeLog() {
+        SystemRuntimeConfig cfg = SystemRuntimeConfig.load(this);
+        return cfg.runtimeLogEnabled && !focusRunMode;
+    }
+
     private void appendRunLog(String line) {
+        if (TextUtils.isEmpty(line) || !shouldEmitRuntimeLog()) {
+            return;
+        }
         String ts = RUN_LOG_FMT.format(new Date());
         String logLine = ts + "  " + line;
-        if (currentRunLogs.size() >= MAX_RUN_LOG_ENTRIES) {
-            currentRunLogs.subList(0, MAX_RUN_LOG_ENTRIES / 2).clear();
+        synchronized (currentRunLogs) {
+            if (currentRunLogs.size() >= MAX_RUN_LOG_ENTRIES) {
+                currentRunLogs.subList(0, MAX_RUN_LOG_ENTRIES / 2).clear();
+            }
+            currentRunLogs.add(logLine);
         }
-        currentRunLogs.add(logLine);
-        CrashLogger.appendRunLog(this, logLine);
+        uiHandler.post(() -> {
+            if (runtimeLogPanelView != null) {
+                runtimeLogPanelView.appendLine(logLine);
+            }
+        });
     }
 
     private void persistCurrentRunLog() {
-        if (currentProjectDir == null || TextUtils.isEmpty(currentRunningTask) || currentRunLogs.isEmpty()) {
-            return;
-        }
-        try {
-            File taskDir = new File(currentProjectDir, currentRunningTask);
-            File logDir = new File(taskDir, "run_logs");
-            if (!logDir.exists()) {
-                logDir.mkdirs();
-            }
-            String fileName = "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date(currentRunStartMs)) + ".log";
-            File logFile = new File(logDir, fileName);
-            try (FileWriter writer = new FileWriter(logFile)) {
-                for (String line : currentRunLogs) {
-                    writer.write(line);
-                    writer.write("\n");
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "写入运行日志失败", e);
-        }
+        // Runtime logs are overlay-only and in-memory to avoid IO during script execution.
     }
 
     private void transitionAfterRunStart(boolean openProjectPanelNow, boolean focusMode) {

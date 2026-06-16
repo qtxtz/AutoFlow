@@ -51,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import com.auto.master.Task.Handler.OperationHandler.LoadImgToMatOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
+import com.auto.master.Task.Handler.OperationHandler.RuntimeOperationLogFormatter;
 import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.ResponseHandlerManager;
 import com.auto.master.Task.Operation.LoadImgToMatOperation;
@@ -519,6 +520,8 @@ public final class ScriptRunner {
                                         com.auto.master.floatwin.FloatWindowService.extractDelayDurationMs(operation);
                                 final boolean delayCountdownOperation = delayDurationMs > 0L
                                         && com.auto.master.floatwin.FloatWindowService.extractDelayShowCountdown(operation);
+                                final long operationLogStartMs = System.currentTimeMillis();
+                                RuntimeOperationLogFormatter.logOperationStart(operation, scriptExecuteContext.sharedContext);
                                 // 非延时倒计时节点：正常通知 operationStart
                                 if (!delayCountdownOperation && currentListener != null) {
                                     final ScriptExecutionListener listener = currentListener;
@@ -569,6 +572,12 @@ public final class ScriptRunner {
                                 }
 
                                 boolean ok = operationHandler.handle(operation, scriptExecuteContext.sharedContext);
+                                RuntimeOperationLogFormatter.logOperationDetail(operation, scriptExecuteContext.sharedContext, ok);
+                                RuntimeOperationLogFormatter.logOperationComplete(
+                                        operation,
+                                        scriptExecuteContext.sharedContext,
+                                        ok,
+                                        System.currentTimeMillis() - operationLogStartMs);
 
                                 long nowMs = System.currentTimeMillis();
                                 boolean shouldNotifyComplete = currentListener != null

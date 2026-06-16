@@ -23,6 +23,7 @@ import com.auto.master.Task.Operation.GestureOperation;
 import com.auto.master.Task.Operation.HttpRequestOperation;
 import com.auto.master.Task.Operation.JumpTaskOperation;
 import com.auto.master.Task.Operation.LoadImgToMatOperation;
+import com.auto.master.Task.Operation.LogOutputOperation;
 import com.auto.master.Task.Operation.LoopOperation;
 import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
@@ -83,6 +84,8 @@ public class OperationHandlerManager {
                 "play_audio", "audio", "sound");
         register(OperationType.SET_SYSTEM_PARAM, SetSystemParamOperation.class, SetSystemParamOperation::new, SetSystemParamOperationHandler::new,
                 "set_sys_param", "system_param", "sys_param");
+        register(OperationType.LOG_OUTPUT, LogOutputOperation.class, LogOutputOperation::new, LogOutputOperationHandler::new,
+                "log_output", "log", "print_log");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -115,6 +118,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.AI_DETECT.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.PLAY_AUDIO.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_SYSTEM_PARAM.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.LOG_OUTPUT.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

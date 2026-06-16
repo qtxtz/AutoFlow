@@ -8525,15 +8525,137 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== 日志输出操作 ====================
+
+    private static final String[] LOG_LEVEL_LABELS = {
+            "INFO", "WARN", "ERROR", "DEBUG"
+    };
+
+    public void showAddLogOutputDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_log_output, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(350, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 350, 0.78f, 0.9f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 350, 430, null);
+        bindLogOutputDialog(dialogView, null, null);
+    }
+
+    public void showEditLogOutputDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_log_output, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(350, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 350, 0.78f, 0.9f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 350, 430, null);
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+        bindLogOutputDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindLogOutputDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtMessage = dialogView.findViewById(R.id.edt_log_message);
+        android.widget.Spinner spinnerLevel = dialogView.findViewById(R.id.spinner_log_level);
+        AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+
+        android.widget.ArrayAdapter<String> levelAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, LOG_LEVEL_LABELS);
+        levelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerLevel.setAdapter(levelAdapter);
+
+        if (operationObject != null) {
+            edtName.setText(operationObject.optString("name", ""));
+            JSONObject im = operationObject.optJSONObject("inputMap");
+            if (im != null) {
+                edtMessage.setText(im.optString(MetaOperation.LOG_MESSAGE, ""));
+                String level = im.optString(MetaOperation.LOG_LEVEL, "INFO");
+                for (int i = 0; i < LOG_LEVEL_LABELS.length; i++) {
+                    if (LOG_LEVEL_LABELS[i].equalsIgnoreCase(level)) {
+                        spinnerLevel.setSelection(i, false);
+                        break;
+                    }
+                }
+                setOperationReferenceText(edtNext, im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+            }
+        } else {
+            edtName.setText("日志输出");
+            spinnerLevel.setSelection(0, false);
+        }
+
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", operationId, edtNext);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name = edtName.getText() == null ? "" : edtName.getText().toString().trim();
+            String message = edtMessage.getText() == null ? "" : edtMessage.getText().toString();
+            String nextOp = safeText(edtNext);
+            int levelPos = spinnerLevel.getSelectedItemPosition();
+            String level = levelPos >= 0 && levelPos < LOG_LEVEL_LABELS.length
+                    ? LOG_LEVEL_LABELS[levelPos]
+                    : "INFO";
+
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+
+            try {
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.LOG_MESSAGE, message);
+                inputMap.put(MetaOperation.LOG_LEVEL, level);
+                if (!TextUtils.isEmpty(nextOp)) inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+
+                if (operationId != null) {
+                    JSONObject updated = new JSONObject();
+                    updated.put("id", operationId);
+                    updated.put("name", name);
+                    updated.put("type", 30);
+                    updated.put("responseType", 1);
+                    updated.put("inputMap", inputMap);
+                    if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) updateListener.onOperationUpdated();
+                    }
+                } else {
+                    JSONObject opObj = new JSONObject();
+                    if (idGenerator != null) opObj.put("id", idGenerator.generateId());
+                    opObj.put("name", name);
+                    opObj.put("type", 30);
+                    opObj.put("responseType", 1);
+                    opObj.put("inputMap", inputMap);
+                    JSONArray operations = crudHelper.readOperationsArray();
+                    operations.put(opObj);
+                    crudHelper.writeOperationsArray(operations, "已添加日志输出节点", () -> {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (addListener != null) addListener.onOperationAdded();
+                    });
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
     // ==================== 修改系统参数操作 ====================
 
     private static final String[] SYS_PARAM_KEY_LABELS = {
-            "全局采集倍率", "倒计时颜色", "手势颜色"
+            "全局采集倍率", "倒计时颜色", "手势颜色", "运行日志输出"
     };
     private static final String[] SYS_PARAM_KEY_VALUES = {
             MetaOperation.SYS_PARAM_CAPTURE_SCALE,
             MetaOperation.SYS_PARAM_COUNTDOWN_COLOR,
-            MetaOperation.SYS_PARAM_GESTURE_COLOR
+            MetaOperation.SYS_PARAM_GESTURE_COLOR,
+            MetaOperation.SYS_PARAM_RUNTIME_LOG_ENABLED
     };
 
     private static final String[] SCALE_LABELS = {
@@ -8556,6 +8678,13 @@ public class OperationDialogFactory {
     };
     private static final String[] GESTURE_COLOR_VALUES = {
             "AAFF0000", "AA0044FF", "AA00CC44", "AAFFCC00", "AAFF6600", "AAFFFFFF", "AA00CCFF"
+    };
+
+    private static final String[] BOOLEAN_LABELS = {
+            "开启", "关闭"
+    };
+    private static final String[] BOOLEAN_VALUES = {
+            "true", "false"
     };
 
     public void showAddSetSystemParamDialog() {
@@ -8745,13 +8874,15 @@ public class OperationDialogFactory {
     private String[] systemParamValueLabels(int keyPos) {
         if (keyPos == 0) return SCALE_LABELS;
         if (keyPos == 1) return COUNTDOWN_COLOR_LABELS;
-        return GESTURE_COLOR_LABELS;
+        if (keyPos == 2) return GESTURE_COLOR_LABELS;
+        return BOOLEAN_LABELS;
     }
 
     private String[] systemParamValueValues(int keyPos) {
         if (keyPos == 0) return SCALE_VALUES;
         if (keyPos == 1) return COUNTDOWN_COLOR_VALUES;
-        return GESTURE_COLOR_VALUES;
+        if (keyPos == 2) return GESTURE_COLOR_VALUES;
+        return BOOLEAN_VALUES;
     }
 
     private int defaultSystemParamValueIndex(int keyPos) {
@@ -8768,7 +8899,10 @@ public class OperationDialogFactory {
         if (keyPos == 1) {
             return colorToSystemParamValue(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
         }
-        return colorToSystemParamValue(RuntimeDisplayConfig.GESTURE_STROKE_COLOR);
+        if (keyPos == 2) {
+            return colorToSystemParamValue(RuntimeDisplayConfig.GESTURE_STROKE_COLOR);
+        }
+        return SystemRuntimeConfig.load(host.getContext()).runtimeLogEnabled ? "true" : "false";
     }
 
     private int findSystemParamValueIndex(java.util.List<String> values, int keyPos, String preferredValue) {
@@ -8792,6 +8926,9 @@ public class OperationDialogFactory {
                 return TextUtils.equals(left, right);
             }
         }
+        if (keyPos == 3) {
+            return TextUtils.equals(normalizeSystemBooleanValue(left), normalizeSystemBooleanValue(right));
+        }
         return TextUtils.equals(normalizeSystemColorValue(left), normalizeSystemColorValue(right));
     }
 
@@ -8808,6 +8945,9 @@ public class OperationDialogFactory {
                 return "";
             }
         }
+        if (keyPos == 3) {
+            return normalizeSystemBooleanValue(raw);
+        }
         return normalizeSystemColorValue(raw);
     }
 
@@ -8819,6 +8959,9 @@ public class OperationDialogFactory {
             } catch (Exception ignored) {
                 return value;
             }
+        }
+        if (keyPos == 3) {
+            return "true".equals(normalizeSystemBooleanValue(value)) ? "开启" : "关闭";
         }
         return "#" + value;
     }
@@ -8845,6 +8988,18 @@ public class OperationDialogFactory {
             value = "FF" + value;
         }
         return value;
+    }
+
+    private String normalizeSystemBooleanValue(String raw) {
+        if (raw == null) {
+            return "false";
+        }
+        String value = raw.trim();
+        return ("true".equalsIgnoreCase(value)
+                || "1".equals(value)
+                || "on".equalsIgnoreCase(value)
+                || "yes".equalsIgnoreCase(value)
+                || "enable".equalsIgnoreCase(value)) ? "true" : "false";
     }
 
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {

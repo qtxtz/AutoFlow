@@ -38,6 +38,9 @@ public class SetSystemParamOperationHandler extends OperationHandler {
             case MetaOperation.SYS_PARAM_GESTURE_COLOR:
                 success = applyGestureColor(paramValue);
                 break;
+            case MetaOperation.SYS_PARAM_RUNTIME_LOG_ENABLED:
+                success = applyRuntimeLogEnabled(paramValue);
+                break;
             default:
                 Log.w(TAG, "未知系统参数: " + paramKey);
         }
@@ -106,6 +109,24 @@ public class SetSystemParamOperationHandler extends OperationHandler {
             Log.e(TAG, "设置手势颜色失败: " + value, e);
             return false;
         }
+    }
+
+    private boolean applyRuntimeLogEnabled(String value) {
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return false;
+        }
+        String normalized = value == null ? "" : value.trim();
+        boolean enabled = "true".equalsIgnoreCase(normalized)
+                || "1".equals(normalized)
+                || "on".equalsIgnoreCase(normalized)
+                || "yes".equalsIgnoreCase(normalized)
+                || "enable".equalsIgnoreCase(normalized);
+        Context context = svc.getApplicationContext();
+        SystemRuntimeConfig cfg = SystemRuntimeConfig.load(context);
+        cfg.runtimeLogEnabled = enabled;
+        cfg.save(context);
+        return true;
     }
 
     private static String toString(Object obj) {

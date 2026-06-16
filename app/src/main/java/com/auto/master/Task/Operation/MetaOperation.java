@@ -218,6 +218,10 @@ public abstract class MetaOperation {
     public static String AUDIO_FILE_PATH = "AUDIO_FILE_PATH";
     public static String AUDIO_WAIT_COMPLETE = "AUDIO_WAIT_COMPLETE";
 
+    // 日志输出参数
+    public static String LOG_MESSAGE = "LOG_MESSAGE";
+    public static String LOG_LEVEL = "LOG_LEVEL";
+
     // 修改系统参数
     public static String SYS_PARAM_KEY = "SYS_PARAM_KEY";
     public static String SYS_PARAM_VALUE = "SYS_PARAM_VALUE";
@@ -225,6 +229,7 @@ public abstract class MetaOperation {
     public static final String SYS_PARAM_CAPTURE_SCALE = "capture_scale";
     public static final String SYS_PARAM_COUNTDOWN_COLOR = "countdown_color";
     public static final String SYS_PARAM_GESTURE_COLOR = "gesture_color";
+    public static final String SYS_PARAM_RUNTIME_LOG_ENABLED = "runtime_log_enabled";
 
     // AI 目标检测参数
     public static String AI_MODEL_PATH = "AI_MODEL_PATH";

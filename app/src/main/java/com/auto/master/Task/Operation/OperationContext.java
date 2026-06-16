@@ -27,6 +27,15 @@ public class OperationContext {
     public boolean suppressVisualFeedback = false;
 
     /**
+     * Runtime log output is intentionally in-memory: the sink may update an
+     * overlay view, but handlers should not perform file/network IO for logs.
+     */
+    public interface RuntimeLogSink {
+        void log(String line);
+    }
+    public RuntimeLogSink runtimeLogSink;
+
+    /**
      * 动态延时节点在 sleep 前通过此回调通知 Service 实际时长，
      * Service 据此启动倒计时覆盖层。
      */
