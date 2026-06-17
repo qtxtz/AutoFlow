@@ -1,0 +1,116 @@
+AutoMaster Non-Commercial License (ANCL) v1.0
+AutoMaster 非商业许可证（ANCL）v1.0
+
+Copyright (c) 2026 Amalrich
+版权所有 (c) 2026 Amalrich
+
+本文件包含两部分：第一部分为中文说明（仅供理解，不具备独立法律效力）；
+第二部分为英文正式条款（具有法律效力，如中英文存在歧义，以英文条款为准）。
+
+================================================================================
+第一部分：中文说明（非正式，便于理解）
+================================================================================
+
+1. 你可以免费地使用、复制、修改、合并、出版发行本软件及其源代码，
+   但仅限于"非商业用途"。
+
+2. "非商业用途"包括但不限于：个人学习、研究、测试、非营利组织内部使用、
+   学术交流、开源社区贡献等不以营利为目的的场景。
+
+3. "商业用途"包括但不限于：
+   - 直接或间接销售本软件、其修改版本或其衍生作品；
+   - 将本软件（或其衍生作品）作为收费产品、付费服务、SaaS 服务的一部分提供给第三方；
+   - 在本软件中嵌入广告、付费推广或其他营利性内容用于变现；
+   - 代表企业、机构为获取报酬而提供基于本软件的定制开发、部署或技术支持服务；
+   - 任何以本软件为基础、以营利为直接或间接目的的商业活动。
+
+4. 如需将本软件用于商业用途，必须事先取得版权所有者的明确书面授权，
+   双方可另行约定商业许可条款及费用。
+
+5. 在分发本软件原始版本或修改版本时，必须完整保留本许可证全文、
+   版权声明，以及任何已有的署名信息。
+
+6. 修改版本必须清晰标注"已修改"及修改说明，且修改后的版本仍受本许可证约束，
+   不得擅自变更许可条款使其允许商业用途。
+
+7. 本软件以"现状"提供，不附带任何明示或暗示的担保，
+   包括但不限于适销性、特定用途适用性及不侵权的担保。
+   在任何情况下，作者或版权所有者均不对因使用本软件而产生的任何索赔、
+   损害或其他责任负责。
+
+8. 若你违反本许可证的任何条款，本许可证授予的权利将自动终止；
+   版权所有者亦可选择书面通知终止本许可证。
+
+================================================================================
+PART TWO: English Terms (Operative / Legally Binding)
+================================================================================
+
+1. Grant of Rights. Subject to the terms of this License, the copyright
+   holder grants you a worldwide, royalty-free, non-exclusive license to
+   use, copy, modify, merge, publish, and distribute copies of this
+   software and its source code (the "Software"), and to permit persons
+   to whom the Software is furnished to do so, solely for Non-Commercial
+   purposes as defined below.
+
+2. Definition of "Non-Commercial Use". Non-Commercial Use means use of
+   the Software that is not intended for or directed toward commercial
+   advantage or monetary compensation, including but not limited to:
+   personal use, education, academic research, testing, internal use by
+   a non-profit organization, and non-monetized open-source contribution.
+
+3. Definition of "Commercial Use". Commercial Use means any use of the
+   Software, in whole or in part, or any modified or derivative version
+   thereof, that is intended for or directed toward commercial advantage
+   or monetary compensation, including but not limited to:
+   a. selling, renting, leasing, or sublicensing the Software or any
+      derivative work;
+   b. offering the Software or any derivative work as part of a paid
+      product, paid service, or Software-as-a-Service offering;
+   c. distributing the Software bundled with advertising, paid
+      promotion, or other revenue-generating content;
+   d. providing paid consulting, customization, deployment, or support
+      services based on the Software on behalf of any business or
+      organization for compensation;
+   e. any other commercial activity, direct or indirect, that relies on
+      the Software for monetary gain.
+
+4. Commercial License Required. Any Commercial Use of the Software
+   requires a separate, express written license from the copyright
+   holder. Please contact the copyright holder to negotiate commercial
+   licensing terms and fees.
+
+5. Preservation of Notices. You must retain, in all copies or
+   substantial portions of the Software (including modified versions),
+   the above copyright notice, this License in its entirety, and any
+   existing attribution notices.
+
+6. Modifications. If you modify the Software, you must clearly state
+   that changes have been made and describe their nature. Any modified
+   or derivative version remains subject to this License; you may not
+   relicense it under terms that permit Commercial Use without the
+   copyright holder's separate written authorization.
+
+7. Disclaimer of Warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT
+   WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+   AND NONINFRINGEMENT.
+
+8. Limitation of Liability. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR
+   IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+9. Termination. Any rights granted under this License terminate
+   automatically if you fail to comply with any of its terms. The
+   copyright holder may also terminate this License by written notice in
+   the event of a breach.
+
+10. Governing Language. This License is provided in both Chinese and
+    English. The Chinese text in Part One is for explanatory purposes
+    only and has no independent legal effect. In the event of any
+    conflict or ambiguity between the Chinese explanation and the
+    English terms in Part Two, the English terms in Part Two shall
+    govern and control.
+
+END OF LICENSE
