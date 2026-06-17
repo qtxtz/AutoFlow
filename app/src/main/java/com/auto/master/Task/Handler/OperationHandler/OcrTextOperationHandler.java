@@ -21,6 +21,7 @@ import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.utils.AppStorage;
 import com.googlecode.tesseract.android.TessBaseAPI;
 
 import org.json.JSONArray;
@@ -683,13 +684,13 @@ public class OcrTextOperationHandler extends OperationHandler {
             return TessDataResult.ready(internalRoot.getAbsolutePath());
         }
 
-        File externalBase = context.getExternalFilesDir(null);
-        if (externalBase != null) {
-            File externalRoot = new File(externalBase, "tesseract");
-            File externalDir = new File(externalRoot, "tessdata");
-            if (externalDir.exists() && missingTrainedData(externalDir, options).isEmpty()) {
-                return TessDataResult.ready(externalRoot.getAbsolutePath());
-            }
+        File appRoot = AppStorage.getAppFilesRoot(context);
+        File externalRoot = new File(appRoot, "tesseract");
+        File externalDir = new File(externalRoot, "tessdata");
+        if (!externalRoot.equals(internalRoot)
+                && externalDir.exists()
+                && missingTrainedData(externalDir, options).isEmpty()) {
+            return TessDataResult.ready(externalRoot.getAbsolutePath());
         }
         String message = "缺少 OCR 训练数据: " + TextUtils.join(", ", missing)
                 + "。请将对应 *.traineddata 放入 assets/tessdata 后重新打包，或放到 "

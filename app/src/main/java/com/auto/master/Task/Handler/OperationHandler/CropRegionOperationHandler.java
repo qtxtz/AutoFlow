@@ -42,6 +42,7 @@ import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.floatwin.TemplateMaskEditorView;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.OpenCVHelper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -180,7 +181,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                          String saveFileName,
                          List<Integer> stdBbox,
                          @Nullable String targetScaleDir) {
-        File projectDir_ = new File(a.getExternalFilesDir(null),"projects");
+        File projectDir_ = AppStorage.getProjectsRoot(a);
         File projectDir = new File(projectDir_,projectName);
         File taskDir = new File(projectDir,taskName);
         File imgDir = new File(taskDir,"img");

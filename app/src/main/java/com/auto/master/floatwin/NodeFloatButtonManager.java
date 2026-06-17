@@ -2,6 +2,7 @@ package com.auto.master.floatwin;
 
 import android.content.Context;
 
+import com.auto.master.utils.AppStorage;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -37,9 +38,8 @@ public class NodeFloatButtonManager {
     private final Map<String, NodeFloatButtonConfig> configs = new HashMap<>();
 
     public NodeFloatButtonManager(Context context) {
-        File base = context.getExternalFilesDir(null);
-        if (base == null) base = context.getFilesDir();
-        projectsRoot = new File(base, "projects");
+        File base = AppStorage.getAppFilesRoot(context);
+        projectsRoot = AppStorage.getProjectsRoot(context);
         load();
         migrateLegacy(base);
     }

@@ -12,6 +12,7 @@ import com.auto.master.Template.Template;
 import com.auto.master.auto.ActivityHolder;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.auto.GestureOverlayView;
+import com.auto.master.utils.AppStorage;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -41,7 +42,7 @@ public class GestureOperationHandler extends OperationHandler {
     }
 
     public void saveGestureData(GestureOverlayView.GestureNode node, Context a, String projectName, String taskName, String saveFileName) {
-        File projectDir_ = new File(a.getExternalFilesDir(null), "projects");
+        File projectDir_ = AppStorage.getProjectsRoot(a);
         File projectDir = new File(projectDir_, projectName);
         File taskDir = new File(projectDir, taskName);
         File gestureDir = new File(taskDir, "gesture");
@@ -68,7 +69,7 @@ public class GestureOperationHandler extends OperationHandler {
         }
 
         try {
-            File projectDir_ = new File(context.getExternalFilesDir(null), "projects");
+            File projectDir_ = AppStorage.getProjectsRoot(context);
             File projectDir = new File(projectDir_, projectName);
             File taskDir = new File(projectDir, taskName);
             File gestureDir = new File(taskDir, "gesture");

@@ -30,6 +30,7 @@ import com.auto.master.auto.SelectionOverlayView;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.OpenCVHelper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -107,7 +108,7 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
 
         // 优先用 Service 自身 Context，避免依赖 Activity（Activity 可能为 null）
         final Context appCtx = svc.getApplicationContext();
-        File projectDir_ = new File(appCtx.getExternalFilesDir(null), "projects");
+        File projectDir_ = AppStorage.getProjectsRoot(appCtx);
         File projectDir = new File(projectDir_, projectName);
         File[] taskDirs = projectDir.listFiles();
         if (taskDirs == null || taskDirs.length == 0) {

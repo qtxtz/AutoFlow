@@ -12,10 +12,15 @@
 <!--    <uses-permission android:name="android.permission.CAMERA" />-->
 <!--    //OPENCV 的存储权限-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <!-- Android 11+ 推荐使用 scoped storage，但因为你用 getExternalFilesDir()，无需额外权限 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <!-- Android 11+ 使用 app 专属目录/SAF content URI，不申请全盘存储权限 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
 <!--    悬浮球权限 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>

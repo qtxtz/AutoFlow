@@ -1,9 +1,11 @@
 package com.auto.master;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -372,6 +374,9 @@ public class MainActivity extends AppCompatActivity {
                 refreshPermissionStatus();
             });
 
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> refreshPermissionStatus());
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -388,6 +393,7 @@ public class MainActivity extends AppCompatActivity {
         setupPanelList();
         setupReusableActionSheet();
         bindActions();
+        requestNotificationPermissionIfNeeded();
         syncFloatPanelState();
         maybeAutoStartFloatService();
         refreshPermissionStatus();
@@ -1012,6 +1018,17 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         projectionLauncher.launch(ScreenCapture.createProjectionIntent(this));
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
     }
 
     private void requestOverlayPermission() {

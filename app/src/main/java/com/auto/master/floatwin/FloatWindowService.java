@@ -134,6 +134,7 @@ import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.AdaptivePollingController;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.OpenCVHelper;
 import com.auto.master.utils.OperationGsonUtils;
 import com.auto.master.utils.SystemRuntimeConfig;
@@ -5256,7 +5257,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void installTemplate(com.auto.master.scheduler.ProjectTemplate template, String projectName) {
         try {
-            File root = new File(getExternalFilesDir(null), "projects");
+            File root = AppStorage.getProjectsRoot(this);
             File projectDir = new File(root, projectName);
             File taskDir = new File(projectDir, "Task_01");
             taskDir.mkdirs();
@@ -5414,11 +5415,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public File getProjectsRootDir() {
-        File root = new File(getExternalFilesDir(null), "projects");
-        if (!root.exists()) {
-            root.mkdirs();
-        }
-        return root;
+        return AppStorage.getProjectsRoot(this);
     }
 
     @Override

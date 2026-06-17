@@ -275,15 +275,8 @@ public final class CrashLogger {
         if (context == null) {
             return null;
         }
-        File base = context.getExternalFilesDir(null);
-        if (base == null) {
-            base = context.getFilesDir();
-        }
-        if (base == null) {
-            return null;
-        }
-        File dir = new File(base, "diagnostics");
-        if (!dir.exists() && !dir.mkdirs()) {
+        File dir = AppStorage.getAppDirectory(context, "diagnostics");
+        if (!dir.isDirectory()) {
             return null;
         }
         return dir;

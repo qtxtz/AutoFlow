@@ -3,6 +3,8 @@ package com.auto.master.homepanel;
 import android.content.Context;
 import android.text.TextUtils;
 
+import com.auto.master.utils.AppStorage;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -66,11 +68,7 @@ public class HomeProjectRepository {
     }
 
     public File getProjectRoot(Context context) {
-        File root = new File(context.getExternalFilesDir(null), "projects");
-        if (!root.exists()) {
-            root.mkdirs();
-        }
-        return root;
+        return AppStorage.getProjectsRoot(context);
     }
 
     public List<ProjectSummary> loadProjects(Context context) {

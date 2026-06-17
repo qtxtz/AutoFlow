@@ -36,6 +36,7 @@ import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.auto.master.R;
+import com.auto.master.utils.AppStorage;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -1543,10 +1544,7 @@ final class NodeFloatButtonUiHelper {
             }
         }
 
-        File base = host.getContext().getExternalFilesDir(null);
-        if (base == null) {
-            base = host.getContext().getFilesDir();
-        }
+        File base = AppStorage.getAppFilesRoot(host.getContext());
         if (base != null && projectName != null && !projectName.isEmpty()
                 && taskName != null && !taskName.isEmpty()) {
             File inTask = new File(base,

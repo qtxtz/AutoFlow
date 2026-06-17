@@ -1,6 +1,9 @@
 package com.auto.master;
 
 import android.content.Context;
+
+import com.auto.master.utils.AppStorage;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,27 +38,14 @@ public class ProjectDataUtil {
 
     public static boolean projectExists(Context ctx, String projectName) {
         if (ctx == null || projectName == null) return false;
-        File root = new File(ctx.getFilesDir(), "projects");
+        File root = getProjectsRoot(ctx);
         File projectDir = new File(root, projectName.trim());
         return projectDir.exists();
     }
 
-    // Returns the root directory for projects, using external storage when available
+    // Returns the root directory for projects, falling back to internal storage if needed.
     public static File getProjectsRoot(Context ctx) {
-        File ext = ctx.getExternalFilesDir(null);
-        if (ext != null) {
-            File root = new File(ext, "projects");
-            if (!root.exists()) {
-                root.mkdirs();
-            }
-            return root;
-        }
-        // Fallback to internal storage if external not available
-        File internal = new File(ctx.getFilesDir(), "projects");
-        if (!internal.exists()) {
-            internal.mkdirs();
-        }
-        return internal;
+        return AppStorage.getProjectsRoot(ctx);
     }
 
     // Ensure sample data exists under the appropriate root

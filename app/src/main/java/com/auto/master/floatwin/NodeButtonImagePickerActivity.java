@@ -8,6 +8,8 @@ import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.widget.Toast;
 
+import com.auto.master.utils.AppStorage;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -62,16 +64,12 @@ public class NodeButtonImagePickerActivity extends Activity {
     }
 
     private String copyPickedImage(Uri uri) throws Exception {
-        File base = getExternalFilesDir(null);
-        if (base == null) base = getFilesDir();
-        File dir = new File(base,
-                "projects" + File.separator
-                        + safeName(projectName) + File.separator
+        File dir = new File(AppStorage.getProjectsRoot(this),
+                safeName(projectName) + File.separator
                         + safeName(taskName) + File.separator
                         + "node_buttons" + File.separator
                         + "assets");
-        //noinspection ResultOfMethodCallIgnored
-        dir.mkdirs();
+        AppStorage.ensureDirectory(dir);
 
         String ext = extensionFromName(displayName(uri));
         if (ext.isEmpty()) ext = ".png";

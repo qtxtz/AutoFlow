@@ -40,11 +40,7 @@ public final class TaskScheduler {
 
         PendingIntent pi = buildPendingIntent(context, task.id, PendingIntent.FLAG_UPDATE_CURRENT);
         alarmManager.cancel(pi);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAtMs, pi);
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, task.triggerAtMs, pi);
-        }
+        scheduleAlarmCompat(alarmManager, task.triggerAtMs, pi);
         Log.d(TAG, "scheduled id=" + task.id + " at=" + task.triggerAtMs);
         return task.id;
     }
@@ -101,5 +97,27 @@ public final class TaskScheduler {
         int requestCode = scheduleId.hashCode();
         int allFlags = flags | PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getBroadcast(context, requestCode, intent, allFlags);
+    }
+
+    private static void scheduleAlarmCompat(AlarmManager alarmManager, long triggerAtMs, PendingIntent pi) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+                Log.w(TAG, "exact alarm permission unavailable, scheduled inexact alarm");
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+            }
+        } catch (SecurityException e) {
+            Log.w(TAG, "exact alarm rejected, falling back to inexact alarm", e);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
+            }
+        }
     }
 }

@@ -5,6 +5,8 @@ import android.content.Context;
 import android.net.Uri;
 import android.text.TextUtils;
 
+import com.auto.master.utils.AppStorage;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -41,15 +43,12 @@ public final class ScriptPackageManager {
      * imported with importFromUri without any changes.
      */
     public static File exportProject(Context context, String projectName) throws Exception {
-        File projectsRoot = new File(context.getExternalFilesDir(null), "projects");
+        File projectsRoot = AppStorage.getProjectsRoot(context);
         File projectDir = new File(projectsRoot, projectName);
         if (!projectDir.exists() || !projectDir.isDirectory()) {
             throw new IllegalArgumentException("项目不存在: " + projectName);
         }
-        File exportDir = new File(context.getExternalFilesDir(null), "exports");
-        if (!exportDir.exists()) {
-            exportDir.mkdirs();
-        }
+        File exportDir = AppStorage.getAppDirectory(context, "exports");
         String safeName = projectName.replaceAll("[^\\w\\-]", "_");
         String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         File outZip = new File(exportDir, safeName + "_" + ts + ".zip");
@@ -60,14 +59,8 @@ public final class ScriptPackageManager {
     }
 
     public static File exportAllProjects(Context context) throws Exception {
-        File projectsRoot = new File(context.getExternalFilesDir(null), "projects");
-        if (!projectsRoot.exists()) {
-            projectsRoot.mkdirs();
-        }
-        File exportDir = new File(context.getExternalFilesDir(null), "exports");
-        if (!exportDir.exists()) {
-            exportDir.mkdirs();
-        }
+        File projectsRoot = AppStorage.getProjectsRoot(context);
+        File exportDir = AppStorage.getAppDirectory(context, "exports");
 
         String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         File outZip = new File(exportDir, "scripts_" + ts + ".zip");
@@ -102,10 +95,7 @@ public final class ScriptPackageManager {
         File unzipDir = new File(tempDir, "unzipped");
         unzipSecure(tempZip, unzipDir);
 
-        File targetProjects = new File(context.getExternalFilesDir(null), "projects");
-        if (!targetProjects.exists()) {
-            targetProjects.mkdirs();
-        }
+        File targetProjects = AppStorage.getProjectsRoot(context);
 
         List<File> projectDirs = findImportProjectDirs(unzipDir);
         if (projectDirs.isEmpty()) {

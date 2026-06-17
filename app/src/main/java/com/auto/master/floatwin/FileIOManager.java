@@ -1,15 +1,18 @@
 package com.auto.master.floatwin;
 
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -53,21 +56,15 @@ public class FileIOManager {
      * 同步读取文件（仅在后台线程调用）
      */
     private String readFileSync(File file) throws IOException {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            byte[] bytes = Files.readAllBytes(file.toPath());
-            return new String(bytes, StandardCharsets.UTF_8);
-        } else {
-            // 兼容旧版本
-            StringBuilder sb = new StringBuilder();
-            java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.FileReader(file));
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 sb.append(line).append("\n");
             }
-            reader.close();
-            return sb.toString();
         }
+        return sb.toString();
     }
     
     /**
@@ -96,12 +93,13 @@ public class FileIOManager {
     private void writeFileSync(File file, String content) throws IOException {
         // 确保父目录存在
         File parent = file.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
+        if (parent != null && !parent.exists() && !parent.mkdirs() && !parent.isDirectory()) {
+            throw new IOException("Failed to create directory: " + parent.getAbsolutePath());
         }
         
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(content);
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            writer.write(content == null ? "" : content);
         }
     }
     

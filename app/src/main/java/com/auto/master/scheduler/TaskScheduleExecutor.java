@@ -11,6 +11,7 @@ import com.auto.master.Task.Task;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.auto.ScriptExecuteContext;
 import com.auto.master.auto.ScriptRunner;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.OperationGsonUtils;
 
 import java.io.File;
@@ -94,7 +95,7 @@ public final class TaskScheduleExecutor {
         if (context == null || TextUtils.isEmpty(projectName)) {
             return null;
         }
-        File baseDir = new File(context.getExternalFilesDir(null), "projects");
+        File baseDir = AppStorage.getProjectsRoot(context);
         File projectDir = new File(baseDir, projectName);
         if (!projectDir.exists() || !projectDir.isDirectory()) {
             return null;

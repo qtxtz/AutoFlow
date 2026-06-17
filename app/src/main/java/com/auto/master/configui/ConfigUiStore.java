@@ -2,6 +2,7 @@ package com.auto.master.configui;
 
 import android.content.Context;
 
+import com.auto.master.utils.AppStorage;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -33,9 +34,8 @@ public class ConfigUiStore {
     private final Map<String, ConfigUiSchema> schemaMap = new HashMap<>();
 
     public ConfigUiStore(Context context) {
-        File base = context.getExternalFilesDir(null);
-        if (base == null) base = context.getFilesDir();
-        projectsRoot = new File(base, "projects");
+        File base = AppStorage.getAppFilesRoot(context);
+        projectsRoot = AppStorage.getProjectsRoot(context);
         load();
         migrateLegacy(base);
     }

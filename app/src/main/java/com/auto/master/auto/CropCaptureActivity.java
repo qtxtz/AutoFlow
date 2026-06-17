@@ -17,6 +17,7 @@ import android.widget.Toast;
 
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.utils.AppStorage;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -137,9 +138,9 @@ public class CropCaptureActivity extends Activity {
 
                 // Save to scale-aware subdir: templates/scale_{key}/
                 float saveScale = ScreenCaptureManager.CAPTURE_SCALE;
-                File baseDir = new File(getExternalFilesDir(null), "templates");
+                File baseDir = AppStorage.getAppDirectory(this, "templates");
                 File dir = new File(baseDir, CaptureScaleHelper.getScaleDirName(saveScale));
-                dir.mkdirs();
+                AppStorage.ensureDirectory(dir);
 
                 // 自动补 .png
                 String finalName = base.endsWith(".png") ? base : (base + ".png");

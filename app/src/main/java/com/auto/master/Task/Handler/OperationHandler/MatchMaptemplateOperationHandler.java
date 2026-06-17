@@ -13,6 +13,7 @@ import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
 
@@ -482,8 +483,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         }
         try {
             File imgDir = new File(
-                    svc.getApplicationContext().getExternalFilesDir(null),
-                    "projects" + File.separator + projectName
+                    AppStorage.getProjectsRoot(svc.getApplicationContext()),
+                    projectName
                             + File.separator + taskName
                             + File.separator + "img");
 
@@ -544,8 +545,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         }
         try {
             File imgDir = new File(
-                    svc.getApplicationContext().getExternalFilesDir(null),
-                    "projects" + File.separator + projectName
+                    AppStorage.getProjectsRoot(svc.getApplicationContext()),
+                    projectName
                             + File.separator + taskName
                             + File.separator + "img");
             File maskFile = CaptureScaleHelper.resolveTemplateMaskFile(

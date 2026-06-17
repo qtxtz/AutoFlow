@@ -15,6 +15,7 @@ import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.utils.AppStorage;
 
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
@@ -519,16 +520,14 @@ public class AiDetectOperationHandler extends OperationHandler {
         String path = rawPath.trim();
         File direct = new File(path);
         if (direct.isAbsolute()) return direct;
-        File ext = context.getExternalFilesDir(null);
-        if (ext != null) {
-            File file = new File(ext, path);
-            if (file.exists()) return file;
-        }
+        File appRoot = AppStorage.getAppFilesRoot(context);
+        File file = new File(appRoot, path);
+        if (file.exists()) return file;
         File internal = new File(context.getFilesDir(), path);
         if (internal.exists()) return internal;
         File projects = ProjectDataUtil.getProjectsRoot(context);
         File projectFile = new File(projects, path);
-        return projectFile.exists() ? projectFile : (ext == null ? internal : new File(ext, path));
+        return projectFile.exists() ? projectFile : file;
     }
 
     private static List<String> loadLabels(File file) {

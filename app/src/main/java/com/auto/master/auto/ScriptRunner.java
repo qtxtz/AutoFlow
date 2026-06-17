@@ -64,6 +64,7 @@ import com.auto.master.Template.Template;
 
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
 
@@ -766,13 +767,19 @@ public final class ScriptRunner {
                     m = com.auto.master.capture.ScreenCapture.Method.MEDIA_PROJECTION;
                 }
                 String out = name + (m == com.auto.master.capture.ScreenCapture.Method.A11Y_DUMP ? ".json" : ".png");
+                if (a == null) {
+                    return false;
+                }
 //                获取当前图片
                 Mat latestMat = com.auto.master.capture.ScreenCapture.captureNow(a, m, out);
                 // region crop\  [553,139,727,176]
 //                bitmap = Bitmap.createBitmap(bitmap, 553, 139, 727 - 553, 176 - 139);
-                File file = new File(a.getExternalFilesDir(null), "temp.png");
-                file.getParentFile().mkdirs();
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
+                File file = new File(AppStorage.getAppFilesRoot(a), "temp.png");
+                try (FileOutputStream ignored = new FileOutputStream(file)) {
+                    // Keep placeholder creation behavior without leaking the stream.
+                } catch (Exception e) {
+                    Log.w(TAG, "create temp placeholder failed: " + file.getAbsolutePath(), e);
+                }
 //                boolean success = bitmap.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream);
                 boolean success = true;
                 if (success) {
@@ -942,9 +949,7 @@ public final class ScriptRunner {
                         // full 不再需要
                         full.recycle();
 
-                        File dir = new File(ctx.getExternalFilesDir(null), "templates");
-                        //noinspection ResultOfMethodCallIgnored
-                        dir.mkdirs();
+                        File dir = AppStorage.getAppDirectory(ctx, "templates");
 
                         File file = new File(dir, saveName + ".png");
                         try (FileOutputStream fos = new FileOutputStream(file)) {
