@@ -70,4 +70,16 @@
         android:textColor="#253244"
         android:textSize="14sp"
         android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/btn_permission_write_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/project_panel_row_bg"
+        android:padding="12dp"
+        android:text="修改系统设置(亮度)"
+        android:textColor="#253244"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 </LinearLayout>

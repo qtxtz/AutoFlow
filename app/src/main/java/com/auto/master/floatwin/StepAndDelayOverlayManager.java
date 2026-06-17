@@ -44,6 +44,11 @@ public class StepAndDelayOverlayManager {
     private String activeDelayOperationId;
     private long activeDelayDurationMs = 0L;
     private long activeDelayStartMs = 0L;
+    private Runnable pendingStopRunnable;
+
+    // 倒计时悬浮条至少可见这么久，避免主线程繁忙时"显示"和"隐藏"两个任务
+    // 背靠背执行、中间来不及渲染出一帧，导致倒计时看起来"没显示"。
+    private static final long MIN_VISIBLE_MS = 150L;
 
     public StepAndDelayOverlayManager(FloatWindowHost host) {
         this.host = host;
@@ -154,6 +159,7 @@ public class StepAndDelayOverlayManager {
 
     /** 如果 opItem 是带倒计时的延迟操作，则启动延迟进度显示。 */
     public void maybeStartDelay(@Nullable OperationItem opItem, @Nullable Runnable onFirstFrameReady) {
+        cancelPendingStop();
         stopDelay();
         if (opItem == null) return;
         long durationMs = opItem.nodePreDelayRandom
@@ -167,19 +173,39 @@ public class StepAndDelayOverlayManager {
         renderDelayProgress(true, 0L, activeDelayDurationMs, onFirstFrameReady);
     }
 
-    /** 如果 operationId 正是当前延迟操作，则停止延迟进度显示。 */
+    /**
+     * 如果 operationId 正是当前延迟操作，则停止延迟进度显示。
+     * 若悬浮条刚显示不久（小于 {@link #MIN_VISIBLE_MS}），延后到至少可见这么久再隐藏，
+     * 避免主线程繁忙时"显示"与"隐藏"背靠背执行导致用户完全看不到倒计时。
+     */
     public void stopDelayIfMatch(String operationId) {
-        if (android.text.TextUtils.equals(activeDelayOperationId, operationId)) {
+        if (!android.text.TextUtils.equals(activeDelayOperationId, operationId)) {
+            return;
+        }
+        long elapsed = SystemClock.uptimeMillis() - activeDelayStartMs;
+        if (activeDelayDurationMs > 0L && elapsed < MIN_VISIBLE_MS) {
+            cancelPendingStop();
+            pendingStopRunnable = this::stopDelay;
+            uiHandler.postDelayed(pendingStopRunnable, MIN_VISIBLE_MS - elapsed);
+        } else {
             stopDelay();
         }
     }
 
     /** 停止延迟进度显示并隐藏悬浮层。 */
     public void stopDelay() {
+        cancelPendingStop();
         activeDelayOperationId = null;
         activeDelayDurationMs = 0L;
         activeDelayStartMs = 0L;
         renderDelayProgress(false, 0L, 0L);
+    }
+
+    private void cancelPendingStop() {
+        if (pendingStopRunnable != null) {
+            uiHandler.removeCallbacks(pendingStopRunnable);
+            pendingStopRunnable = null;
+        }
     }
 
     /**
@@ -198,6 +224,7 @@ public class StepAndDelayOverlayManager {
 
     /** 销毁所有悬浮层（在 Service.onDestroy() 中调用）。 */
     public void destroy() {
+        cancelPendingStop();
         // hideStep() 通过 post() 异步执行，onDestroy 不等待；直接同步移除。
         if (stepOverlayView != null) {
             safeRemove(stepOverlayView);

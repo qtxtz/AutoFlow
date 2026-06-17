@@ -9,6 +9,7 @@ import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResp
 import com.auto.master.Task.Operation.AccessibilityNodeOperation;
 import com.auto.master.Task.Operation.AiDetectOperation;
 import com.auto.master.Task.Operation.PlayAudioOperation;
+import com.auto.master.Task.Operation.SetScreenBrightnessOperation;
 import com.auto.master.Task.Operation.SetSystemParamOperation;
 import com.auto.master.Task.Operation.AppCloseOperation;
 import com.auto.master.Task.Operation.AppLaunchOperation;
@@ -86,6 +87,8 @@ public class OperationHandlerManager {
                 "set_sys_param", "system_param", "sys_param");
         register(OperationType.LOG_OUTPUT, LogOutputOperation.class, LogOutputOperation::new, LogOutputOperationHandler::new,
                 "log_output", "log", "print_log");
+        register(OperationType.SET_SCREEN_BRIGHTNESS, SetScreenBrightnessOperation.class, SetScreenBrightnessOperation::new, SetScreenBrightnessOperationHandler::new,
+                "set_brightness", "brightness", "screen_brightness");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -119,6 +122,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.PLAY_AUDIO.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_SYSTEM_PARAM.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.LOG_OUTPUT.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.SET_SCREEN_BRIGHTNESS.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

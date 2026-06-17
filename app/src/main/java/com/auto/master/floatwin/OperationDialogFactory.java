@@ -9002,6 +9002,119 @@ public class OperationDialogFactory {
                 || "enable".equalsIgnoreCase(value)) ? "true" : "false";
     }
 
+    // ==================== 修改屏幕亮度操作 ====================
+
+    public void showAddSetBrightnessDialog() {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_set_brightness, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        bindSetBrightnessDialog(dialogView, null, null);
+    }
+
+    public void showEditSetBrightnessDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_set_brightness, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 430, null);
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+        bindSetBrightnessDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindSetBrightnessDialog(View dialogView, String operationId, JSONObject operationObject) {
+        android.widget.EditText edtName        = dialogView.findViewById(R.id.edt_name);
+        android.widget.SeekBar  seekBrightness = dialogView.findViewById(R.id.seek_brightness);
+        android.widget.TextView tvValue        = dialogView.findViewById(R.id.tv_brightness_value);
+        android.widget.AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+
+        int initialPercent = MetaOperation.DEFAULT_RESTORE_BRIGHTNESS_PERCENT;
+
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    initialPercent = im.optInt(MetaOperation.BRIGHTNESS_PERCENT, initialPercent);
+                    setOperationReferenceText(edtNext, im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载数据失败: " + e.getMessage());
+            }
+        } else {
+            edtName.setText("修改屏幕亮度");
+        }
+
+        initialPercent = Math.max(1, Math.min(100, initialPercent));
+        seekBrightness.setProgress(initialPercent - 1);
+        tvValue.setText(initialPercent + "%");
+        seekBrightness.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar sb, int progress, boolean fromUser) {
+                tvValue.setText((progress + 1) + "%");
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {}
+        });
+
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择下一节点", operationId, edtNext);
+        });
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name   = edtName.getText().toString().trim();
+            String nextOp = safeText(edtNext);
+            int percent   = seekBrightness.getProgress() + 1;
+
+            if (TextUtils.isEmpty(name)) { edtName.setError("请填写操作名称"); return; }
+
+            try {
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.BRIGHTNESS_PERCENT, percent);
+                if (!TextUtils.isEmpty(nextOp)) inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+
+                boolean isEdit = operationId != null;
+                if (isEdit) {
+                    JSONObject updated = new JSONObject();
+                    updated.put("id", operationId);
+                    updated.put("name", name);
+                    updated.put("type", 31);
+                    updated.put("responseType", 1);
+                    updated.put("inputMap", inputMap);
+                    if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) updateListener.onOperationUpdated();
+                    }
+                } else {
+                    JSONObject opObj = new JSONObject();
+                    if (idGenerator != null) opObj.put("id", idGenerator.generateId());
+                    opObj.put("name", name);
+                    opObj.put("type", 31);
+                    opObj.put("responseType", 1);
+                    opObj.put("inputMap", inputMap);
+                    JSONArray operations = crudHelper.readOperationsArray();
+                    operations.put(opObj);
+                    crudHelper.writeOperationsArray(operations, "已添加修改屏幕亮度节点", () -> {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (addListener != null) addListener.onOperationAdded();
+                    });
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {
         org.json.JSONArray arr = new org.json.JSONArray();
         for (int i = 0; i < container.getChildCount(); i++) {

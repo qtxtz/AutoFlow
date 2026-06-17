@@ -231,6 +231,10 @@ public abstract class MetaOperation {
     public static final String SYS_PARAM_GESTURE_COLOR = "gesture_color";
     public static final String SYS_PARAM_RUNTIME_LOG_ENABLED = "runtime_log_enabled";
 
+    // 修改屏幕亮度参数（百分比 1-100）
+    public static String BRIGHTNESS_PERCENT = "BRIGHTNESS_PERCENT";
+    public static final int DEFAULT_RESTORE_BRIGHTNESS_PERCENT = 50;
+
     // AI 目标检测参数
     public static String AI_MODEL_PATH = "AI_MODEL_PATH";
     public static String AI_LABELS_PATH = "AI_LABELS_PATH";

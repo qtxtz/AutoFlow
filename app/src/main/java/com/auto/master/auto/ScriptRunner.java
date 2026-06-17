@@ -51,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import com.auto.master.Task.Handler.OperationHandler.LoadImgToMatOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
+import com.auto.master.Task.Handler.OperationHandler.SetScreenBrightnessOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.RuntimeOperationLogFormatter;
 import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.ResponseHandlerManager;
@@ -82,7 +83,11 @@ public final class ScriptRunner {
     // 这里只保留完成事件的轻量节流，避免极短逻辑循环时频繁刷 UI。
     private static volatile long lastCompleteListenerNotifyMs = 0;
     private static final long COMPLETE_LISTENER_THROTTLE_MS = 50;
-    private static final long COUNTDOWN_READY_WAIT_MS = 120;
+    // 主线程繁忙时（如上一节点刚做完截图/OCR/列表刷新），倒计时悬浮条的 postAtFrontOfQueue
+    // 任务可能延迟超过原先的 120ms，导致后台线程提前超时进入真正的 sleep。若 sleep 时长很短，
+    // 等主线程恢复时"显示倒计时"和"隐藏倒计时"会背靠背执行、中间来不及渲染一帧，
+    // 表现为"倒计时有时不显示"。调大超时降低这种竞态出现的概率。
+    private static final long COUNTDOWN_READY_WAIT_MS = 400;
 
     /**
      * 脚本执行监听器接口
@@ -634,6 +639,10 @@ public final class ScriptRunner {
                         currentExecuteThread = null;
                         ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
                         OpenCVHelper.releaseCurrentThreadBuffers();
+                        AutoAccessibilityService brightnessSvc = AutoAccessibilityService.get();
+                        if (brightnessSvc != null) {
+                            SetScreenBrightnessOperationHandler.restoreDefaultBrightness(brightnessSvc.getApplicationContext());
+                        }
 //                        if (wakeLock != null && wakeLock.isHeld()) {
 //                            wakeLock.release();
 //                        }

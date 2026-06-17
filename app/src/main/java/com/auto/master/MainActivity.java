@@ -489,12 +489,13 @@ public class MainActivity extends AppCompatActivity {
         if (ScreenCapture.hasProjectionPermission()) readyCount++;
         if (canDrawOverlays()) readyCount++;
         if (BatteryHardeningHelper.isIgnoringBatteryOptimizations(this)) readyCount++;
-        tvPermissionStatus.setText(readyCount == 4
+        if (canWriteSystemSettings()) readyCount++;
+        tvPermissionStatus.setText(readyCount == 5
                 ? "权限已就绪"
-                : "权限 " + readyCount + "/4 已就绪");
-        btnPermissionQuick.setText(readyCount == 4 ? "已就绪" : "一键获取");
-        btnPermissionQuick.setEnabled(readyCount < 4);
-        btnPermissionQuick.setAlpha(readyCount == 4 ? 0.55f : 1f);
+                : "权限 " + readyCount + "/5 已就绪");
+        btnPermissionQuick.setText(readyCount == 5 ? "已就绪" : "一键获取");
+        btnPermissionQuick.setEnabled(readyCount < 5);
+        btnPermissionQuick.setAlpha(readyCount == 5 ? 0.55f : 1f);
         updateFloatToggleButton();
     }
 
@@ -544,11 +545,13 @@ public class MainActivity extends AppCompatActivity {
         TextView btnProjection = sheetView.findViewById(R.id.btn_permission_projection);
         TextView btnOverlay = sheetView.findViewById(R.id.btn_permission_overlay);
         TextView btnBattery = sheetView.findViewById(R.id.btn_permission_battery);
+        TextView btnWriteSettings = sheetView.findViewById(R.id.btn_permission_write_settings);
 
         btnAccessibility.setText(formatPermissionRow("无障碍", AutoAccessibilityService.isConnected()));
         btnProjection.setText(formatPermissionRow("录屏授权", ScreenCapture.hasProjectionPermission()));
         btnOverlay.setText(formatPermissionRow("悬浮窗", canDrawOverlays()));
         btnBattery.setText(formatPermissionRow("权限加固", BatteryHardeningHelper.isIgnoringBatteryOptimizations(this)));
+        btnWriteSettings.setText(formatPermissionRow("修改系统设置(亮度)", canWriteSystemSettings()));
         tvDesc.setText("这里统一处理主界面所需权限，不占用项目面板空间。");
 
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -570,6 +573,10 @@ public class MainActivity extends AppCompatActivity {
         btnBattery.setOnClickListener(v -> {
             dialog.dismiss();
             requestBatteryOptimizationExemption();
+        });
+        btnWriteSettings.setOnClickListener(v -> {
+            dialog.dismiss();
+            requestWriteSettingsPermission();
         });
         dialog.show();
     }
@@ -595,7 +602,26 @@ public class MainActivity extends AppCompatActivity {
             requestBatteryOptimizationExemption();
             return;
         }
+        if (!canWriteSystemSettings()) {
+            requestWriteSettingsPermission();
+            return;
+        }
         Toast.makeText(this, "所需权限都已经就绪", Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean canWriteSystemSettings() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.System.canWrite(this);
+    }
+
+    private void requestWriteSettingsPermission() {
+        if (canWriteSystemSettings()) {
+            Toast.makeText(this, "已拥有修改系统设置权限", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                Uri.parse("package:" + getPackageName()));
+        startActivity(intent);
+        Toast.makeText(this, "请在系统设置中允许“修改系统设置”，用于亮度修改 operation", Toast.LENGTH_LONG).show();
     }
 
     private void reloadCurrentLevel() {

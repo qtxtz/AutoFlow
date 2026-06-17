@@ -25,6 +25,9 @@
 <!--    悬浮球权限 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
+<!--    修改屏幕亮度等系统设置需要的特殊权限 -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions"/>
+
 <!--    http服务器               ！！！！！！！！！！！！需要在手机上开启后台服务 不然外网访问不了！！！-->
     <uses-permission android:name="android.permission.INTERNET"/>
 

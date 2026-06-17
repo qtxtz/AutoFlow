@@ -1903,6 +1903,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditLogOutputDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 31) {
+                dialogFactory.showEditSetBrightnessDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2819,7 +2823,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 "系统配置节点",
                 null,
                 Arrays.asList(
-                        new AddOperationMenuAdapter.MenuItem("set_sys_param", "修改系统参数", "运行时修改采集倍率、倒计时颜色或手势颜色", "参", R.color.op_set_sys_param, true)
+                        new AddOperationMenuAdapter.MenuItem("set_sys_param", "修改系统参数", "运行时修改采集倍率、倒计时颜色或手势颜色", "参", R.color.op_set_sys_param, true),
+                        new AddOperationMenuAdapter.MenuItem("set_brightness", "修改屏幕亮度", "通过无障碍修改系统屏幕亮度，脚本停止后自动恢复50%", "亮", R.color.op_set_brightness, true)
                 )));
 
         return sections;
@@ -2908,6 +2913,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "log_output":
                 dialogFactory.showAddLogOutputDialog();
+                return;
+            case "set_brightness":
+                dialogFactory.showAddSetBrightnessDialog();
                 return;
             default:
                 Toast.makeText(this, "暂不支持该节点类型", Toast.LENGTH_SHORT).show();
