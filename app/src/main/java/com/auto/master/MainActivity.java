@@ -4,11 +4,17 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Dialog;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -46,14 +52,23 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String SUPPORT_ASSET_NAME = "support.jpg";
+    private static final String SUPPORT_PREFS = "AutoMasterSupport";
+    private static final String PREF_SUPPORT_PROMPT_SEEN = "support_prompt_seen";
 
     private interface ActionSheetHandler {
         void onAction(ActionSheetItem item);
@@ -336,6 +351,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView navHomeProjects;
     private TextView navHomePermissions;
     private TextView navHomeLab;
+    private TextView navHomeSupport;
     private ImageView btnPanelBack;
     private ImageView btnPanelAdd;
     private ImageView btnPanelRefresh;
@@ -361,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
     private File currentProjectDir;
     private File currentTaskDir;
     private EntryAdapter entryAdapter;
+    private boolean pendingSupportImageSave;
 
     private final ActivityResultLauncher<Intent> projectionLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -376,6 +393,17 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<String> notificationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> refreshPermissionStatus());
+
+    private final ActivityResultLauncher<String> storagePermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted && pendingSupportImageSave) {
+                    pendingSupportImageSave = false;
+                    saveSupportImageToGallery();
+                } else {
+                    pendingSupportImageSave = false;
+                    Toast.makeText(this, "未获得存储权限，无法保存收款码", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -398,6 +426,7 @@ public class MainActivity extends AppCompatActivity {
         maybeAutoStartFloatService();
         refreshPermissionStatus();
         showProjects();
+        maybeShowSupportPrompt();
     }
 
     @Override
@@ -423,6 +452,7 @@ public class MainActivity extends AppCompatActivity {
         navHomeProjects = findViewById(R.id.nav_home_projects);
         navHomePermissions = findViewById(R.id.nav_home_permissions);
         navHomeLab = findViewById(R.id.nav_home_lab);
+        navHomeSupport = findViewById(R.id.nav_home_support);
         btnPanelBack = findViewById(R.id.btn_panel_back);
         btnPanelAdd = findViewById(R.id.btn_panel_add);
         btnPanelRefresh = findViewById(R.id.btn_panel_refresh);
@@ -476,6 +506,10 @@ public class MainActivity extends AppCompatActivity {
         navHomeLab.setOnClickListener(v -> {
             selectHomeProjects();
             Toast.makeText(this, "扩展入口已预留，后续功能会放在这里", Toast.LENGTH_SHORT).show();
+        });
+        navHomeSupport.setOnClickListener(v -> {
+            selectHomeSupport();
+            showSupportDialog();
         });
         btnPanelBack.setOnClickListener(v -> navigatePanelBack());
         btnPanelAdd.setOnClickListener(v -> handlePrimaryCreateAction());
@@ -742,6 +776,14 @@ public class MainActivity extends AppCompatActivity {
         setSidebarSelected(navHomeProjects, true);
         setSidebarSelected(navHomePermissions, false);
         setSidebarSelected(navHomeLab, false);
+        setSidebarSelected(navHomeSupport, false);
+    }
+
+    private void selectHomeSupport() {
+        setSidebarSelected(navHomeProjects, false);
+        setSidebarSelected(navHomePermissions, false);
+        setSidebarSelected(navHomeLab, false);
+        setSidebarSelected(navHomeSupport, true);
     }
 
     private void setSidebarSelected(TextView view, boolean selected) {
@@ -1036,6 +1078,120 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
         floatEnabled = true;
         refreshPermissionStatus();
+    }
+
+    private void maybeShowSupportPrompt() {
+        SharedPreferences prefs = getSharedPreferences(SUPPORT_PREFS, MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_SUPPORT_PROMPT_SEEN, false)) {
+            return;
+        }
+        prefs.edit().putBoolean(PREF_SUPPORT_PROMPT_SEEN, true).apply();
+        rvProjects.postDelayed(() -> {
+            if (!isFinishing() && !isDestroyed()) {
+                showSupportDialog();
+            }
+        }, 700L);
+    }
+
+    private void showSupportDialog() {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_support, null, false);
+        ImageView qrView = view.findViewById(R.id.iv_support_qr);
+        TextView btnClose = view.findViewById(R.id.btn_support_close);
+        TextView btnSave = view.findViewById(R.id.btn_support_save);
+
+        try (InputStream in = getAssets().open(SUPPORT_ASSET_NAME)) {
+            qrView.setImageBitmap(BitmapFactory.decodeStream(in));
+        } catch (Exception e) {
+            qrView.setImageResource(R.drawable.ic_file_image);
+            Toast.makeText(this, "收款码加载失败", Toast.LENGTH_SHORT).show();
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> saveSupportImageWithPermission());
+        dialog.setOnDismissListener(d -> selectHomeProjects());
+        dialog.show();
+    }
+
+    private void saveSupportImageWithPermission() {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            pendingSupportImageSave = true;
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            return;
+        }
+        saveSupportImageToGallery();
+    }
+
+    private void saveSupportImageToGallery() {
+        String fileName = "AutoMaster_support_"
+                + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date())
+                + ".jpg";
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                saveSupportImageWithMediaStore(fileName);
+            } else {
+                saveSupportImageLegacy(fileName);
+            }
+            Toast.makeText(this, "收款码已保存到相册", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "保存失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void saveSupportImageWithMediaStore(String fileName) throws Exception {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/AutoMaster");
+        values.put(MediaStore.Images.Media.IS_PENDING, 1);
+
+        Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        if (uri == null) {
+            throw new IllegalStateException("无法创建相册文件");
+        }
+        try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+            if (out == null) {
+                throw new IllegalStateException("无法写入相册文件");
+            }
+            copySupportAsset(out);
+        }
+        values.clear();
+        values.put(MediaStore.Images.Media.IS_PENDING, 0);
+        getContentResolver().update(uri, values, null, null);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void saveSupportImageLegacy(String fileName) throws Exception {
+        File dir = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                "AutoMaster");
+        if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
+            throw new IllegalStateException("无法创建目录: " + dir.getAbsolutePath());
+        }
+        File outFile = new File(dir, fileName);
+        try (OutputStream out = new FileOutputStream(outFile)) {
+            copySupportAsset(out);
+        }
+        MediaScannerConnection.scanFile(
+                this,
+                new String[]{outFile.getAbsolutePath()},
+                new String[]{"image/jpeg"},
+                null);
+    }
+
+    private void copySupportAsset(OutputStream out) throws Exception {
+        try (InputStream in = getAssets().open(SUPPORT_ASSET_NAME)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+        }
     }
 
     private void requestMediaProjection() {
