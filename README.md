@@ -77,11 +77,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 普通手机用户通常安装 `arm64-v8a` 版本即可。
 
-## 支持作者
 
-应用主界面左侧提供“支持”入口，首次打开主界面也会温和提示一次。用户可以查看内置支付宝收款码，并将图片保存到系统相册后自行识别。
-
-收款码资源位于 `app/src/main/assets/support.jpg`。Android 10 及以上通过 `MediaStore` 保存到相册；Android 9 及以下会按需请求写入存储权限。
 
 ## GitHub 发布
 
@@ -124,3 +120,10 @@ app/src/main/java/com/auto/master/
 - 正式签名配置
 - 发布截图和演示素材
 - 隐私说明与权限说明文档
+
+## 支持作者
+
+如果你喜欢的话，给我点杯奶茶呗！
+
+![support](assets/support.jpg)
+
